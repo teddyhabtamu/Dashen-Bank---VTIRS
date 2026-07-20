@@ -27,7 +27,6 @@ async function checkDuplicates(
   input: VehicleInput,
   excludeId?: string
 ): Promise<void> {
-  const where: any = { OR: [] as any[] };
   const or: any[] = [];
   or.push({ plateNumber: input.plateNumber });
   or.push({ engineNo: input.engineNo });
