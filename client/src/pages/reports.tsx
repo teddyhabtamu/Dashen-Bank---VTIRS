@@ -1,0 +1,302 @@
+
+import { useEffect, useMemo, useState } from "react";
+import ReactECharts from "echarts-for-react";
+import { Download, FileSpreadsheet, Printer, Filter, CalendarRange } from "lucide-react";
+import { Select } from "@/components/ui/select";
+import { DatePicker } from "@/components/ui/datepicker";
+import { BrandLoader } from "@/components/ui/brand-loader";
+import { useAuth } from "@/components/auth-context";
+import { VEHICLE_STATUS_OPTIONS, label } from "@/lib/constants";
+import { formatCurrency, formatDate } from "@/lib/format";
+import { exportCsv, exportXlsx, exportPdf, rowsToHtmlTable } from "@/lib/export";
+
+const PALETTE = ["#273274", "#012169", "#e8941a", "#f59e0b", "#698dcf", "#10b981", "#ec4899", "#64748b"];
+
+interface Meta { key: string; title: string; type: string; icon: string }
+interface ReportResp {
+  reports: Record<string, any>;
+  meta: Meta[];
+  branches: { id: string; name: string }[];
+  departments: { id: string; name: string }[];
+}
+
+const TABS: { key: string; label: string }[] = [
+  { key: "inventory", label: "Inventory" },
+  { key: "registrationStatus", label: "Reg. Status" },
+  { key: "registrationExpiry", label: "Reg. Expiry" },
+  { key: "insuranceExpiry", label: "Ins. Expiry" },
+  { key: "byBranch", label: "By Branch" },
+  { key: "byDepartment", label: "By Dept" },
+  { key: "age", label: "Age" },
+  { key: "cost", label: "Cost" },
+];
+
+export default function ReportsPage() {
+  const { can } = useAuth();
+  const [data, setData] = useState<ReportResp | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [branchId, setBranchId] = useState("");
+  const [departmentId, setDepartmentId] = useState("");
+  const [status, setStatus] = useState("");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const [active, setActive] = useState("inventory");
+
+  useEffect(() => {
+    const qs = new URLSearchParams();
+    if (branchId) qs.set("branchId", branchId);
+    if (departmentId) qs.set("departmentId", departmentId);
+    if (status) qs.set("status", status);
+    if (from) qs.set("from", from);
+    if (to) qs.set("to", to);
+    if (active) qs.set("report", active);
+    setLoading(true);
+    fetch(`/api/reports?${qs.toString()}`)
+      .then((r) => r.json())
+      .then((d) => setData(d))
+      .finally(() => setLoading(false));
+  }, [branchId, departmentId, status, from, to, active]);
+
+  const activeMeta = data?.meta.find((m) => m.key === active);
+  const payload = data?.reports?.[active];
+  const rows = useMemo(() => flattenRows(active, payload), [active, payload]);
+
+  function exportAll(kind: "csv" | "excel" | "pdf") {
+    if (!activeMeta) return;
+    const title = activeMeta.title;
+    const stamp = new Date().toISOString().slice(0, 10);
+    const totals = active === "cost" && payload?.summary
+      ? { vehicleCode: "TOTAL", purchaseCost: formatCurrency(payload.summary.total) }
+      : undefined;
+    if (kind === "csv") exportCsv(`${title}_${stamp}.csv`, rows);
+    else if (kind === "excel") exportXlsx(`${title}_${stamp}.xlsx`, rows);
+    else exportPdf(rowsToHtmlTable(title, rows, totals), title);
+  }
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h2 className="text-xl font-semibold text-slate-800">Reports</h2>
+        <p className="text-sm text-slate-500">Fleet analytics &amp; compliance reporting</p>
+      </div>
+
+      <div className="card p-4">
+        <div className="flex flex-col flex-wrap gap-2 sm:flex-row sm:items-center">
+          <div className="flex items-center gap-1.5 text-sm font-medium text-slate-500"><Filter className="h-4 w-4" /> Filters:</div>
+          <Select className="w-full sm:w-auto" value={branchId} onChange={setBranchId} placeholder="All branches"
+            options={[{ value: "", label: "All branches" }, ...(data?.branches ?? []).map((b) => ({ value: b.id, label: b.name }))]} />
+          <Select className="w-full sm:w-auto" value={departmentId} onChange={setDepartmentId} placeholder="All departments"
+            options={[{ value: "", label: "All departments" }, ...(data?.departments ?? []).map((d) => ({ value: d.id, label: d.name }))]} />
+          <Select className="w-full sm:w-auto" value={status} onChange={setStatus} placeholder="All statuses"
+            options={[{ value: "", label: "All statuses" }, ...VEHICLE_STATUS_OPTIONS.map((s) => ({ value: s, label: label(s) }))]} />
+          <div className="flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1">
+            <CalendarRange className="h-4 w-4 shrink-0 text-slate-400" />
+            <DatePicker value={from} onChange={(v) => setFrom(v)} placeholder="Acq. from" />
+            <span className="text-slate-300">–</span>
+            <DatePicker value={to} onChange={(v) => setTo(v)} placeholder="to" />
+          </div>
+          {(branchId || departmentId || status || from || to) && (
+            <button className="text-xs text-slate-400 underline hover:text-slate-600"
+              onClick={() => { setBranchId(""); setDepartmentId(""); setStatus(""); setFrom(""); setTo(""); }}>Clear</button>
+          )}
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        {TABS.map((t) => (
+          <button key={t.key} onClick={() => setActive(t.key)}
+            className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+              active === t.key ? "bg-primary text-white" : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+            }`}>{t.label}</button>
+        ))}
+      </div>
+
+      {loading ? (
+        <BrandLoader />
+      ) : !data ? (
+        <div className="card py-12 text-center text-slate-400">Failed to load reports.</div>
+      ) : (
+        <div className="card p-5">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-lg font-semibold text-slate-800">{activeMeta?.title}</h2>
+            {can("report:export") && (
+              <div className="flex gap-1">
+                <button className="btn-outline px-2.5 py-1 text-xs" onClick={() => exportAll("csv")}><Download className="h-3.5 w-3.5" /> CSV</button>
+                <button className="btn-outline px-2.5 py-1 text-xs" onClick={() => exportAll("excel")}><FileSpreadsheet className="h-3.5 w-3.5" /> Excel</button>
+                <button className="btn-outline px-2.5 py-1 text-xs" onClick={() => exportAll("pdf")}><Printer className="h-3.5 w-3.5" /> PDF</button>
+              </div>
+            )}
+          </div>
+
+          <ReportView active={active} payload={payload} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ReportView({ active, payload }: { active: string; payload: any }) {
+  if (active === "inventory") return <InventoryTable rows={payload ?? []} />;
+  if (active === "registrationStatus") return <PieChart rows={payload ?? []} nameKey="status" valueKey="count" />;
+  if (active === "registrationExpiry") return <ExpiryTable rows={payload ?? []} kind="registration" />;
+  if (active === "insuranceExpiry") return <ExpiryTable rows={payload ?? []} kind="insurance" />;
+  if (active === "byBranch") return <BarChart rows={payload ?? []} nameKey="branch" valueKey="count" />;
+  if (active === "byDepartment") return <BarChart rows={payload ?? []} nameKey="department" valueKey="count" />;
+  if (active === "age") return <BarChart rows={payload ?? []} nameKey="range" valueKey="count" horizontal />;
+  if (active === "cost") return <CostReport data={payload} />;
+  return null;
+}
+
+function flattenRows(key: string, payload: any): Record<string, unknown>[] {
+  if (!payload) return [];
+  if (key === "cost") return payload.top ?? [];
+  if (Array.isArray(payload)) return payload;
+  return [];
+}
+
+function InventoryTable({ rows }: { rows: any[] }) {
+  if (!rows?.length) return <Empty />;
+  const headers = ["vehicleCode", "plateNumber", "make", "model", "year", "category", "type", "status", "branch", "department", "driver", "registrations", "documents"];
+  const disp = { vehicleCode: "Code", plateNumber: "Plate", make: "Make", model: "Model", year: "Year", category: "Category", type: "Type", status: "Status", branch: "Branch", department: "Dept", driver: "Driver", registrations: "Regs", documents: "Docs" };
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+          <tr>{headers.map((h) => <th key={h} className="px-3 py-2">{disp[h as keyof typeof disp]}</th>)}</tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {rows.map((r, i) => (
+            <tr key={i} className="hover:bg-slate-50">
+              {headers.map((h) => (
+                <td key={h} className={`px-3 py-2 ${h === "vehicleCode" ? "font-medium text-slate-800" : ""} ${["status"].includes(h) ? "" : ""}`}>
+                  {h === "status"
+                    ? <span className="badge bg-slate-100 text-slate-600">{r[h]}</span>
+                    : r[h]}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function ExpiryTable({ rows, kind }: { rows: any[]; kind: "registration" | "insurance" }) {
+  if (!rows?.length) return <Empty />;
+  const cols = kind === "registration"
+    ? ["regNumber", "plateNumber", "vehicleCode", "branch", "expiryDate", "daysLeft", "status"]
+    : ["policyNo", "company", "plateNumber", "vehicleCode", "branch", "endDate", "daysLeft", "status"];
+  const disp: Record<string, string> = { regNumber: "Reg No", policyNo: "Policy No", company: "Company", plateNumber: "Plate", vehicleCode: "Vehicle", branch: "Branch", expiryDate: "Expiry", endDate: "End Date", daysLeft: "Days Left", status: "Status" };
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+          <tr>{cols.map((c) => <th key={c} className="px-3 py-2">{disp[c]}</th>)}</tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {rows.map((r, i) => {
+            const days = r.daysLeft;
+            const dcls = days === null || days < 0 ? "bg-red-100 text-red-700" : days <= 30 ? "bg-orange-100 text-orange-700" : days <= 90 ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-600";
+            return (
+              <tr key={i} className="hover:bg-slate-50">
+                {cols.map((c) => (
+                  <td key={c} className="px-3 py-2">
+                    {c === "status" ? <span className="badge bg-slate-100 text-slate-600">{r[c]}</span>
+                      : c === "daysLeft" ? <span className={`badge ${dcls}`}>{days !== null && days >= 0 ? `${days}d` : "expired"}</span>
+                      : c === "expiryDate" || c === "endDate" ? formatDate(r[c])
+                      : r[c]}
+                  </td>
+                ))}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function PieChart({ rows, nameKey, valueKey }: any) {
+  if (!rows?.length) return <Empty />;
+  const option = {
+    tooltip: { trigger: "item" },
+    legend: { bottom: 0 },
+    series: [{
+      type: "pie", radius: ["42%", "70%"], center: ["50%", "44%"],
+      itemStyle: { borderColor: "#fff", borderWidth: 2 },
+      label: { formatter: "{b}: {c}" },
+      data: rows.map((r: any, i: number) => ({ name: r[nameKey], value: r[valueKey], itemStyle: { color: PALETTE[i % PALETTE.length] } })),
+    }],
+  };
+  return <ReactECharts option={option} style={{ height: 360 }} />;
+}
+
+function BarChart({ rows, nameKey, valueKey, horizontal }: any) {
+  if (!rows?.length) return <Empty />;
+  const cats = rows.map((r: any) => r[nameKey]);
+  const vals = rows.map((r: any) => r[valueKey]);
+  const option = {
+    tooltip: { trigger: "axis" },
+    grid: { left: 8, right: 24, top: 16, bottom: 8, containLabel: true },
+    xAxis: horizontal
+      ? { type: "value" }
+      : { type: "category", data: cats, axisLabel: { rotate: 25, fontSize: 10, interval: 0, width: 90, overflow: "truncate" } },
+    yAxis: horizontal
+      ? { type: "category", data: cats, axisLabel: { fontSize: 10, interval: 0, width: 140, overflow: "truncate" } }
+      : { type: "value" },
+    series: [{ type: "bar", data: vals, itemStyle: { color: "#273274", borderRadius: 4 }, barWidth: "55%" }],
+  };
+  return <ReactECharts option={option} style={{ height: 360 }} />;
+}
+
+function CostReport({ data }: { data: { summary: { total: number; average: number; count: number }; top: any[]; byBranch?: any[] } }) {
+  if (!data) return <Empty />;
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-3 gap-3">
+        <Stat label="Total Fleet Cost" value={formatCurrency(data.summary.total)} />
+        <Stat label="Average / Vehicle" value={formatCurrency(data.summary.average)} />
+        <Stat label="Valued Vehicles" value={String(data.summary.count)} />
+      </div>
+      {data.byBranch?.length ? (
+        <div>
+          <h3 className="mb-2 text-sm font-semibold text-slate-700">Cost by Branch</h3>
+          <BarChart rows={data.byBranch} nameKey="branch" valueKey="total" horizontal />
+        </div>
+      ) : null}
+      <h3 className="text-sm font-semibold text-slate-700">Top 20 by Purchase Cost</h3>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+            <tr><th className="px-3 py-2">Code</th><th className="px-3 py-2">Plate</th><th className="px-3 py-2">Make/Model</th><th className="px-3 py-2">Branch</th><th className="px-3 py-2 text-right">Cost</th></tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {data.top.map((r, i) => (
+              <tr key={i} className="hover:bg-slate-50">
+                <td className="px-3 py-2 font-medium text-slate-800">{r.vehicleCode}</td>
+                <td className="px-3 py-2">{r.plateNumber}</td>
+                <td className="px-3 py-2">{r.make} {r.model}</td>
+                <td className="px-3 py-2">{r.branch}</td>
+                <td className="px-3 py-2 text-right font-medium">{formatCurrency(r.purchaseCost)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
+      <div className="text-xs uppercase tracking-wide text-slate-400">{label}</div>
+      <div className="mt-1 text-xl font-semibold text-slate-800">{value}</div>
+    </div>
+  );
+}
+
+function Empty() {
+  return <div className="py-12 text-center text-sm text-slate-400">No data for the current filters.</div>;
+}

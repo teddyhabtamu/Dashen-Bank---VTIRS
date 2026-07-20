@@ -1,0 +1,340 @@
+// VTIRS — Vehicle Technical Identification & Registration System
+// Database schema (Prisma / SQLite dev, PostgreSQL production-ready)
+// Source: spec section 6 "Suggested Database Tables" + domain model
+//
+// NOTE: Dev uses SQLite (zero-setup). For production, switch the datasource
+// block to postgresql and convert String-enum fields back to native enums
+// (a PostgreSQL variant is kept in prisma/schema.postgres.prisma).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Shared string-enum values are centralized in src/lib/constants.ts
+// (SQLite has no native enums). Fields below are plain strings.
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// RBAC: roles, permissions, users
+// ---------------------------------------------------------------------------
+
+model Role {
+  id          String       @id @default(cuid())
+  name        String       @unique
+  slug        String       @unique
+  description String?
+  permissions Permission[]
+  users       User[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+model Permission {
+  id          String   @id @default(cuid())
+  code        String   @unique // e.g. "vehicle:create"
+  name        String
+  category    String
+  description String?
+  roles       Role[]
+  createdAt   DateTime @default(now())
+}
+
+model User {
+  id           String   @id @default(cuid())
+  username     String   @unique
+  email        String   @unique
+  passwordHash String
+  fullName     String
+  status       String   @default("ACTIVE") // UserStatus
+  roleId       String
+  role         Role     @relation(fields: [roleId], references: [id])
+  branchId     String?
+  branch       Branch?  @relation(fields: [branchId], references: [id])
+  lastLoginAt  DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  auditLogs    AuditLog[]
+  notifications Notification[]
+
+  @@index([roleId])
+  @@index([branchId])
+}
+
+// ---------------------------------------------------------------------------
+// Reference / lookup data
+// ---------------------------------------------------------------------------
+
+model Branch {
+  id          String              @id @default(cuid())
+  code        String              @unique
+  name        String
+  region      String?
+  address     String?
+  isActive    Boolean             @default(true)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  users       User[]
+  vehicles    Vehicle[]
+  assignments VehicleAssignment[]
+}
+
+model Department {
+  id        String    @id @default(cuid())
+  code      String    @unique
+  name      String
+  isActive  Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  vehicles  Vehicle[]
+  drivers   Driver[]
+}
+
+model Driver {
+  id           String       @id @default(cuid())
+  employeeId   String?      @unique
+  fullName     String
+  licenseNo    String?
+  phone        String?
+  departmentId String?
+  department   Department?  @relation(fields: [departmentId], references: [id])
+  isActive     Boolean      @default(true)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  assignments  VehicleAssignment[]
+  vehicles     Vehicle[]
+}
+
+model Manufacturer {
+  id        String         @id @default(cuid())
+  name      String         @unique
+  country   String?
+  isActive  Boolean        @default(true)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+  models    VehicleModel[]
+}
+
+model VehicleModel {
+  id             String       @id @default(cuid())
+  manufacturerId String
+  manufacturer   Manufacturer @relation(fields: [manufacturerId], references: [id])
+  name           String
+  category       String?
+  isActive       Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([manufacturerId, name])
+  @@index([manufacturerId])
+}
+
+// ---------------------------------------------------------------------------
+// Core: Vehicle master record
+// ---------------------------------------------------------------------------
+
+model Vehicle {
+  id           String    @id @default(cuid())
+  vehicleCode  String    @unique // e.g. VB-2024-00001
+  plateNumber  String    @unique
+  prevPlateNo  String?
+  category     String
+  type         String
+  make         String
+  model        String
+  trim         String?
+  year         Int
+  color        String?
+
+  engineNo     String    @unique
+  chassisNo    String    @unique // VIN
+  engineCC     Int?
+  fuelType     String    @default("PETROL") // FuelType
+  transmission String    @default("MANUAL") // Transmission
+  driveType    String?   @default("FWD") // DriveType
+  odometer     Int       @default(0)
+
+  ownerName       String
+  departmentId    String?
+  department      Department?  @relation(fields: [departmentId], references: [id])
+  branchId        String?
+  branch          Branch?      @relation(fields: [branchId], references: [id])
+  currentDriverId String?
+  currentDriver   Driver?      @relation(fields: [currentDriverId], references: [id])
+  acquisitionDate DateTime?
+  purchaseCost    Float?
+  supplier        String?
+
+  status          String    @default("ACTIVE") // VehicleStatus
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  createdById     String?
+
+  registrations VehicleRegistration[]
+  insurances   VehicleInsurance[]
+  documents    VehicleDocument[]
+  images       VehicleImage[]
+  assignments  VehicleAssignment[]
+  auditLogs    AuditLog[]
+
+  @@index([branchId])
+  @@index([departmentId])
+  @@index([status])
+  @@index([fuelType])
+  @@index([year])
+}
+
+model VehicleRegistration {
+  id          String   @id @default(cuid())
+  vehicleId   String
+  vehicle     Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  regNumber   String
+  regDate     DateTime
+  expiryDate  DateTime
+  office      String?
+  status      String   @default("ACTIVE") // RegistrationStatus
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdById String?
+  history     VehicleRegistrationHistory[]
+
+  @@index([vehicleId])
+  @@index([expiryDate])
+}
+
+model VehicleRegistrationHistory {
+  id             String   @id @default(cuid())
+  registrationId String
+  registration   VehicleRegistration @relation(fields: [registrationId], references: [id], onDelete: Cascade)
+  vehicleId      String
+  action         String // RENEW, SUSPEND, ARCHIVE
+  prevStatus     String?
+  newStatus      String?
+  prevExpiry     DateTime?
+  newExpiry      DateTime?
+  note           String?
+  performedById  String?
+  createdAt      DateTime @default(now())
+
+  @@index([vehicleId])
+  @@index([registrationId])
+}
+
+model VehicleInsurance {
+  id          String   @id @default(cuid())
+  vehicleId   String
+  vehicle     Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  company     String
+  policyNo    String
+  coverage    String
+  startDate   DateTime
+  endDate     DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdById String?
+
+  @@index([vehicleId])
+  @@index([endDate])
+}
+
+model VehicleDocument {
+  id           String   @id @default(cuid())
+  vehicleId    String
+  vehicle      Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  category     String // DocumentCategory
+  title        String
+  fileName     String
+  originalName String
+  mimeType     String
+  sizeBytes    Int
+  path         String
+  version      Int      @default(1)
+  uploadedById String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([vehicleId])
+  @@index([category])
+}
+
+model VehicleImage {
+  id           String   @id @default(cuid())
+  vehicleId    String
+  vehicle      Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  category     String // ImageCategory
+  fileName     String
+  originalName String
+  mimeType     String
+  sizeBytes    Int
+  path         String
+  uploadedById String?
+  createdAt    DateTime @default(now())
+
+  @@index([vehicleId])
+}
+
+model VehicleAssignment {
+  id          String   @id @default(cuid())
+  vehicleId   String
+  vehicle     Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  driverId    String?
+  driver      Driver?  @relation(fields: [driverId], references: [id])
+  branchId    String?
+  branch      Branch?  @relation(fields: [branchId], references: [id])
+  assignedAt  DateTime @default(now())
+  returnedAt  DateTime?
+  note        String?
+
+  @@index([vehicleId])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String // NotificationType
+  title     String
+  message   String
+  link      String?
+  isRead    Boolean  @default(false)
+  meta      String? // JSON stringified
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([isRead])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  vehicleId String?
+  vehicle   Vehicle? @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  action    String
+  entity    String
+  entityId  String?
+  oldValue  String? // JSON stringified
+  newValue  String? // JSON stringified
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([vehicleId])
+  @@index([entity])
+  @@index([createdAt])
+}
+
+model Setting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String
+  group     String?
+  label     String?
+  updatedAt DateTime @updatedAt
+}
