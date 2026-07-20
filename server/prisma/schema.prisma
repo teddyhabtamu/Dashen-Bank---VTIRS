@@ -1,23 +1,19 @@
 // VTIRS — Vehicle Technical Identification & Registration System
-// Database schema (Prisma / SQLite dev, PostgreSQL production-ready)
+// Database schema (Prisma / PostgreSQL)
 // Source: spec section 6 "Suggested Database Tables" + domain model
-//
-// NOTE: Dev uses SQLite (zero-setup). For production, switch the datasource
-// block to postgresql and convert String-enum fields back to native enums
-// (a PostgreSQL variant is kept in prisma/schema.postgres.prisma).
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
 // ---------------------------------------------------------------------------
-// Shared string-enum values are centralized in src/lib/constants.ts
-// (SQLite has no native enums). Fields below are plain strings.
+// Shared string-enum values are centralized in src/lib/constants.ts.
+// Fields below are plain strings.
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------

@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:16-alpine
+    image: postgres:15
     container_name: vtirs-postgres
     restart: unless-stopped
     environment:
@@ -8,7 +8,7 @@ services:
       POSTGRES_PASSWORD: vtirs_dev_password
       POSTGRES_DB: vtirs
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - vtirs_pgdata:/var/lib/postgresql/data
 
