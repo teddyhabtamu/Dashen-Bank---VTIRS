@@ -122,6 +122,36 @@ export default function DashboardPage() {
         </form>
       </div>
 
+      {(kpis.expiredRegistrations + kpis.expiredInsurance > 0) && (
+        <div className="flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-600">
+              <AlertTriangle className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-amber-900">Compliance attention needed</p>
+              <p className="text-sm text-amber-700">
+                {kpis.expiredRegistrations > 0 && (
+                  <>{kpis.expiredRegistrations} registration{kpis.expiredRegistrations > 1 ? "s" : ""}</>
+                )}
+                {kpis.expiredRegistrations > 0 && kpis.expiredInsurance > 0 && " and "}
+                {kpis.expiredInsurance > 0 && (
+                  <>{kpis.expiredInsurance} insurance polic{kpis.expiredInsurance > 1 ? "ies" : "y"}</>
+                )}
+                {" "}have expired and should be renewed.
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-shrink-0 gap-2">
+            {kpis.expiredRegistrations > 0 && (
+              <Link to="/registrations" className="btn-outline whitespace-nowrap border-amber-300 text-amber-800 hover:bg-amber-100">
+                Review registrations
+              </Link>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard icon={Car} label="Total Vehicles" value={kpis.totalVehicles} sub={`${kpis.registeredVehicles} registered`} tone="primary" />
         <StatCard icon={Gauge} label="Active Vehicles" value={kpis.activeVehicles} sub={`${kpis.assignedVehicles} assigned`} tone="green" />
@@ -215,35 +245,6 @@ export default function DashboardPage() {
         )}
       </div>
 
-      {(kpis.expiredRegistrations + kpis.expiredInsurance > 0) && (
-        <div className="flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-start gap-3">
-            <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-600">
-              <AlertTriangle className="h-5 w-5" />
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-amber-900">Compliance attention needed</p>
-              <p className="text-sm text-amber-700">
-                {kpis.expiredRegistrations > 0 && (
-                  <>{kpis.expiredRegistrations} registration{kpis.expiredRegistrations > 1 ? "s" : ""}</>
-                )}
-                {kpis.expiredRegistrations > 0 && kpis.expiredInsurance > 0 && " and "}
-                {kpis.expiredInsurance > 0 && (
-                  <>{kpis.expiredInsurance} insurance polic{kpis.expiredInsurance > 1 ? "ies" : "y"}</>
-                )}
-                {" "}have expired and should be renewed.
-              </p>
-            </div>
-          </div>
-          <div className="flex flex-shrink-0 gap-2">
-            {kpis.expiredRegistrations > 0 && (
-              <Link to="/registrations" className="btn-outline whitespace-nowrap border-amber-300 text-amber-800 hover:bg-amber-100">
-                Review registrations
-              </Link>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
