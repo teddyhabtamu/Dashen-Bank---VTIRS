@@ -113,7 +113,7 @@ export function Select({
         createPortal(
           <div
             ref={menuRef}
-            className="fixed z-[60] max-h-64 overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-lg"
+            className="fixed z-[80] max-h-64 overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-lg"
             style={coords ? { top: coords.top, left: coords.left, width: coords.width } : undefined}
             role="listbox"
           >

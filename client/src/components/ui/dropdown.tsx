@@ -83,7 +83,7 @@ export function Dropdown({
           <div
             ref={menuRef}
             className={cn(
-              "fixed z-[60] min-w-[10rem] max-w-[16rem] overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-lg",
+              "fixed z-[80] min-w-[10rem] max-w-[16rem] overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-lg",
               menuClassName
             )}
             style={coords ? { top: coords.top, left: coords.left } : undefined}
