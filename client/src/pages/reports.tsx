@@ -6,6 +6,7 @@ import { Select } from "@/components/ui/select";
 import { DatePicker } from "@/components/ui/datepicker";
 import { BrandLoader } from "@/components/ui/brand-loader";
 import { useAuth } from "@/components/auth-context";
+import { useBrand } from "@/lib/brand-context";
 import { VEHICLE_STATUS_OPTIONS, label } from "@/lib/constants";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { exportCsv, exportXlsx, exportPdf, rowsToHtmlTable } from "@/lib/export";
@@ -33,6 +34,7 @@ const TABS: { key: string; label: string }[] = [
 
 export default function ReportsPage() {
   const { can } = useAuth();
+  const { companyName } = useBrand();
   const [data, setData] = useState<ReportResp | null>(null);
   const [loading, setLoading] = useState(true);
   const [branchId, setBranchId] = useState("");
@@ -70,7 +72,7 @@ export default function ReportsPage() {
       : undefined;
     if (kind === "csv") exportCsv(`${title}_${stamp}.csv`, rows);
     else if (kind === "excel") exportXlsx(`${title}_${stamp}.xlsx`, rows);
-    else exportPdf(rowsToHtmlTable(title, rows, totals), title);
+    else exportPdf(rowsToHtmlTable(title, rows, totals), title, companyName);
   }
 
   return (

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Bell, Menu, PanelLeftClose, PanelLeftOpen, Check, BellDot } from "lucide-react";
 import { useAuth } from "./auth-context";
+import { useBrand } from "@/lib/brand-context";
 import { formatDateTime } from "@/lib/format";
 
 const TITLES: Record<string, string> = {
@@ -39,6 +40,7 @@ export function Topbar({
 }) {
   const { pathname } = useLocation();
   const { user } = useAuth();
+  const { companyName, systemName } = useBrand();
   const [unread, setUnread] = useState(0);
   const [panelOpen, setPanelOpen] = useState(false);
   const [notifs, setNotifs] = useState<Notif[]>([]);
@@ -47,7 +49,7 @@ export function Topbar({
   const title =
     TITLES[pathname] ??
     Object.entries(TITLES).find(([k]) => pathname.startsWith(k))?.[1] ??
-    "VTIRS";
+    systemName;
 
   useEffect(() => {
     fetch("/api/notifications/unread-count")
@@ -117,7 +119,7 @@ export function Topbar({
         </button>
         <div className="min-w-0">
           <h1 className="truncate text-base font-semibold text-slate-800 sm:text-lg">{title}</h1>
-          <p className="hidden text-xs text-slate-400 sm:block">Dashen Bank — Facilities Department</p>
+          <p className="hidden text-xs text-slate-400 sm:block">{companyName} — Facilities Department</p>
         </div>
       </div>
 

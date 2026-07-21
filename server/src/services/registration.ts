@@ -3,6 +3,7 @@ import { registrationSchema, RegistrationInput } from "../validation/registratio
 import { REGISTRATION_STATUS } from "../lib/constants.js";
 import { writeAudit, type AuditReq } from "../lib/audit.js";
 import { DuplicateRegistrationError } from "./errors.js";
+import { defaultPageSize } from "./setting.js";
 
 export { DuplicateRegistrationError };
 
@@ -235,7 +236,8 @@ export async function listRegistrations(opts: {
   page?: number;
   pageSize?: number;
 }) {
-  const { search, status, page = 1, pageSize = 15 } = opts;
+  const { search, status, page = 1, pageSize } = opts;
+  const ps = pageSize ?? await defaultPageSize();
   const where: any = {};
   if (status) where.status = status;
   if (search) {
@@ -252,13 +254,13 @@ export async function listRegistrations(opts: {
       where,
       include: { vehicle: { include: { branch: true } } },
       orderBy: { expiryDate: "asc" },
-      skip: (page - 1) * pageSize,
-      take: pageSize,
+      skip: (page - 1) * ps,
+      take: ps,
     }),
     prisma.vehicleRegistration.count({ where }),
   ]);
 
-  return { items, total, page, pageSize, totalPages: Math.ceil(total / pageSize) };
+  return { items, total, page, pageSize: ps, totalPages: Math.ceil(total / ps) };
 }
 
 export async function getRegistration(id: string) {

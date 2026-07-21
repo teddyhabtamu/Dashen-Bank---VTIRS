@@ -24,7 +24,7 @@ router.get(
       search: (q.search as string) ?? undefined,
       status: (q.status as string) ?? undefined,
       page: Number(q.page ?? "1"),
-      pageSize: Number(q.pageSize ?? "15"),
+      pageSize: q.pageSize ? Number(q.pageSize) : undefined,
     });
     res.json(result);
   }

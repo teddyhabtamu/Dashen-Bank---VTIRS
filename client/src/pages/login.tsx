@@ -1,10 +1,12 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/components/auth-context";
+import { useBrand } from "@/lib/brand-context";
 
 export default function LoginPage() {
   const navigate = useNavigate();
   const { refresh } = useAuth();
+  const { companyName, systemName } = useBrand();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -36,19 +38,18 @@ export default function LoginPage() {
 
   return (
     <main className="flex min-h-screen flex-col md:flex-row">
-      {/* Brand panel — white so the logo text stays readable */}
       <section className="flex flex-col items-center justify-center gap-6 bg-white px-8 py-10 md:w-1/2 md:py-16">
         <img
           src="/dashen-logo.svg"
-          alt="Dashen Bank"
+          alt={companyName}
           className="h-24 w-auto md:h-40"
         />
         <div className="max-w-sm text-center">
           <h1 className="text-2xl font-bold tracking-tight text-primary md:text-3xl">
-            Dashen Bank
+            {companyName}
           </h1>
           <p className="mt-2 text-sm font-semibold uppercase tracking-widest text-secondary">
-            VTIRS
+            {systemName}
           </p>
           <p className="mt-3 text-sm text-slate-500">
             Vehicle Technical Identification &amp; Registration System
@@ -57,12 +58,11 @@ export default function LoginPage() {
         </div>
       </section>
 
-      {/* Form panel — brand gradient */}
       <section className="flex flex-1 items-center justify-center bg-gradient-to-br from-primary via-primary-600 to-secondary px-6 py-10 md:w-1/2">
         <div className="w-full max-w-md">
           <div className="mb-6 text-white">
             <h2 className="text-xl font-semibold">Welcome back</h2>
-            <p className="mt-1 text-sm text-white/70">Sign in to continue to VTIRS.</p>
+            <p className="mt-1 text-sm text-white/70">Sign in to continue to {systemName}.</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">

@@ -34,6 +34,7 @@ export function VehicleTable() {
   const [loading, setLoading] = useState(true);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [pageSize, setPageSize] = useState(15);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -45,6 +46,7 @@ export function VehicleTable() {
     const data = await res.json();
     setRows(data.items ?? []);
     setTotal(data.total ?? 0);
+    if (data.pageSize) setPageSize(data.pageSize);
     setLoading(false);
   }, [page, search, status]);
 
@@ -68,7 +70,7 @@ export function VehicleTable() {
     }
   }
 
-  const totalPages = Math.max(1, Math.ceil(total / 15));
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   return (
     <div className="space-y-4">

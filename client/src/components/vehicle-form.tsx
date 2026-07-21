@@ -59,7 +59,7 @@ const EMPTY: VehicleFormData = {
   transmission: "MANUAL",
   driveType: "FWD",
   odometer: "0",
-  ownerName: "Dashen Bank",
+  ownerName: "",
   departmentId: "",
   branchId: "",
   currentDriverId: "",
@@ -95,6 +95,14 @@ export function VehicleForm({ vehicleId }: { vehicleId?: string }) {
         setDepartments(d.departments ?? []);
         setDrivers(d.drivers ?? []);
       });
+    if (!vehicleId) {
+      fetch("/api/settings/public")
+        .then((r) => r.json())
+        .then((d) => {
+          if (d.defaultOwnerName) setData((prev) => ({ ...prev, ownerName: d.defaultOwnerName }));
+        })
+        .catch(() => {});
+    }
     if (vehicleId) {
       setLoading(true);
       fetch(`/api/vehicles/${vehicleId}`)

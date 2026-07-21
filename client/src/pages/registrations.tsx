@@ -44,6 +44,7 @@ export default function RegistrationsPage() {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(true);
+  const [pageSize, setPageSize] = useState(15);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [renewId, setRenewId] = useState<string | null>(null);
@@ -61,6 +62,7 @@ export default function RegistrationsPage() {
     const data = await res.json();
     setRows(data.items ?? []);
     setTotal(data.total ?? 0);
+    if (data.pageSize) setPageSize(data.pageSize);
     setLoading(false);
   }, [page, search, status]);
 
@@ -78,7 +80,7 @@ export default function RegistrationsPage() {
   async function openCreate() {
     setErr(null);
     setForm({ vehicleId: "", regNumber: "", regDate: "", expiryDate: "", office: "", status: "ACTIVE" });
-    const res = await fetch("/api/vehicles?pageSize=200");
+    const res = await fetch("/api/vehicles?pageSize=9999");
     const data = await res.json();
     setVehicles((data.items ?? []).map((v: any) => ({ value: v.id, label: `${v.plateNumber} (${v.vehicleCode})` })));
     setCreateOpen(true);
@@ -119,7 +121,7 @@ export default function RegistrationsPage() {
     } finally { setBusy(false); }
   }
 
-  const totalPages = Math.max(1, Math.ceil(total / 15));
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   const chips: { key: string; label: string; clear: () => void }[] = [];
   if (search) chips.push({ key: "q", label: `“${search}”`, clear: () => setSearch("") });

@@ -2,12 +2,11 @@ import { prisma } from "../lib/prisma.js";
 import { hashPassword } from "../lib/password.js";
 import { writeAudit, type AuditReq } from "../lib/audit.js";
 import type { Prisma } from "@prisma/client";
-
-const PAGE_SIZE = 20;
+import { defaultPageSize, getSetting } from "./setting.js";
 
 export async function listUsers({
   page = 1,
-  pageSize = PAGE_SIZE,
+  pageSize,
   search,
   roleSlug,
   status,
@@ -20,6 +19,7 @@ export async function listUsers({
   status?: string;
   branchId?: string;
 }) {
+  const ps = pageSize ?? await defaultPageSize();
   const where: Prisma.UserWhereInput = {};
 
   if (search) {
@@ -37,8 +37,8 @@ export async function listUsers({
     prisma.user.findMany({
       where,
       orderBy: { createdAt: "desc" },
-      skip: (page - 1) * pageSize,
-      take: pageSize,
+      skip: (page - 1) * ps,
+      take: ps,
       select: {
         id: true,
         username: true,
@@ -66,8 +66,8 @@ export async function listUsers({
     })),
     total,
     page,
-    pageSize,
-    totalPages: Math.ceil(total / pageSize),
+    pageSize: ps,
+    totalPages: Math.ceil(total / ps),
   };
 }
 
@@ -98,6 +98,17 @@ export async function getUser(id: string) {
   };
 }
 
+export class ValidationError extends Error {
+  constructor(message: string) { super(message); this.name = "ValidationError"; }
+}
+
+async function validatePassword(password: string) {
+  const minLen = Number(await getSetting("password_min_length", "8")) || 8;
+  if (password.length < minLen) {
+    throw new ValidationError(`Password must be at least ${minLen} characters long`);
+  }
+}
+
 export async function createUser(
   data: {
     username: string;
@@ -110,6 +121,7 @@ export async function createUser(
   },
   ctx: { userId?: string | null; req?: AuditReq }
 ) {
+  await validatePassword(data.password);
   const hash = await hashPassword(data.password);
   const user = await prisma.user.create({
     data: {
@@ -152,7 +164,10 @@ export async function updateUser(
   if (data.roleId !== undefined) patch.role = { connect: { id: data.roleId } };
   if (data.branchId !== undefined) patch.branch = data.branchId ? { connect: { id: data.branchId } } : { disconnect: true };
   if (data.status !== undefined) patch.status = data.status;
-  if (data.password) patch.passwordHash = await hashPassword(data.password);
+  if (data.password) {
+    await validatePassword(data.password);
+    patch.passwordHash = await hashPassword(data.password);
+  }
 
   const user = await prisma.user.update({ where: { id }, data: patch });
 

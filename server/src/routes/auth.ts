@@ -5,7 +5,9 @@ import { setSessionCookie, clearSessionCookie } from "../lib/auth.js";
 import { ROLE_PERMISSIONS } from "../lib/rbac.js";
 import { writeAudit } from "../lib/audit.js";
 import { requireAuth } from "../lib/guard.js";
+import { getSetting } from "../services/setting.js";
 
+const failedAttempts = new Map<string, { count: number; last: number }>();
 const router = Router();
 
 router.post("/login", async (req, res) => {
@@ -14,9 +16,14 @@ router.post("/login", async (req, res) => {
   const password = body.password;
 
   if (!username || !password) {
-    return res
-      .status(400)
-      .json({ error: "Username and password are required" });
+    return res.status(400).json({ error: "Username and password are required" });
+  }
+
+  const maxAttempts = Number(await getSetting("max_login_attempts", "5")) || 5;
+  const record = failedAttempts.get(username);
+  if (record && record.count >= maxAttempts && Date.now() - record.last < 15 * 60 * 1000) {
+    const minutes = Math.ceil(15 - (Date.now() - record.last) / 60000);
+    return res.status(429).json({ error: `Account temporarily locked. Try again in ${minutes} minute(s).` });
   }
 
   const user = await prisma.user.findUnique({
@@ -25,8 +32,16 @@ router.post("/login", async (req, res) => {
   });
 
   if (!user || !(await verifyPassword(password, user.passwordHash))) {
-    return res.status(401).json({ error: "Invalid username or password" });
+    const prev = failedAttempts.get(username) ?? { count: 0, last: 0 };
+    failedAttempts.set(username, { count: prev.count + 1, last: Date.now() });
+    const remaining = maxAttempts - (prev.count + 1);
+    const msg = remaining > 0
+      ? `Invalid username or password. ${remaining} attempt(s) remaining.`
+      : "Account locked due to too many failed attempts. Try again later.";
+    return res.status(401).json({ error: msg });
   }
+
+  failedAttempts.delete(username);
 
   if (user.status !== "ACTIVE") {
     return res.status(403).json({

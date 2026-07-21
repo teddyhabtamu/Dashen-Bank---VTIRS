@@ -18,6 +18,7 @@ import { useAuth } from "./auth-context";
 import { PERMISSIONS } from "@/lib/rbac";
 import { cn } from "@/lib/format";
 import { ConfirmModal } from "./ui/confirm-modal";
+import { useBrand } from "@/lib/brand-context";
 
 const NAV = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, perm: null, ready: true },
@@ -44,6 +45,7 @@ export function Sidebar({
 }) {
   const { pathname } = useLocation();
   const { user, can, logout } = useAuth();
+  const { companyName, systemName } = useBrand();
   const [confirmSignOut, setConfirmSignOut] = useState(false);
 
   return (
@@ -73,12 +75,12 @@ export function Sidebar({
         >
           <img
             src="/logo-sidebar.png"
-            alt="Dashen Bank"
+            alt={companyName}
             className="h-10 w-10 shrink-0 object-contain"
           />
           <div className={cn("leading-tight", collapsed && "lg:hidden")}>
-            <div className="text-sm font-bold tracking-wide text-white">Dashen Bank</div>
-            <div className="text-[11px] font-medium text-white/60">VTIRS</div>
+            <div className="text-sm font-bold tracking-wide text-white">{companyName}</div>
+            <div className="text-[11px] font-medium text-white/60">{systemName}</div>
           </div>
         </div>
 
@@ -165,7 +167,7 @@ export function Sidebar({
         onClose={() => setConfirmSignOut(false)}
         onConfirm={() => { setConfirmSignOut(false); logout(); }}
         title="Sign Out"
-        message="Are you sure you want to sign out of VTIRS?"
+        message={`Are you sure you want to sign out of ${systemName}?`}
         confirmLabel="Sign Out"
       />
     </>

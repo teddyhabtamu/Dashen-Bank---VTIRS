@@ -12,7 +12,7 @@ router.get(
     const q = req.query;
     const result = await listAuditLogs({
       page: Number(q.page ?? "1"),
-      pageSize: Number(q.pageSize ?? "20"),
+      pageSize: q.pageSize ? Number(q.pageSize) : undefined,
       action: (q.action as string) ?? undefined,
       entity: (q.entity as string) ?? undefined,
       userId: (q.userId as string) ?? undefined,

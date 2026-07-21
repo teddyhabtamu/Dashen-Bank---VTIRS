@@ -20,7 +20,7 @@ router.get(
     const q = req.query;
     const result = await listUsers({
       page: Number(q.page ?? "1"),
-      pageSize: Number(q.pageSize ?? "20"),
+      pageSize: q.pageSize ? Number(q.pageSize) : undefined,
       search: (q.search as string) ?? undefined,
       roleSlug: (q.role as string) ?? undefined,
       status: (q.status as string) ?? undefined,

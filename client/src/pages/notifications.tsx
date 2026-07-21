@@ -22,8 +22,8 @@ export default function NotificationsPage() {
   const [typeFilter, setTypeFilter] = useState("");
   const [loading, setLoading] = useState(true);
   const [types, setTypes] = useState<string[]>([]);
+  const [pageSize, setPageSize] = useState(20);
 
-  const pageSize = 20;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   useEffect(() => {
@@ -34,12 +34,12 @@ export default function NotificationsPage() {
     setLoading(true);
     const qs = new URLSearchParams();
     qs.set("page", String(page));
-    qs.set("pageSize", String(pageSize));
     if (typeFilter) qs.set("type", typeFilter);
     const res = await fetch(`/api/notifications?${qs.toString()}`);
     const data = await res.json();
     setRows(data.items ?? []);
     setTotal(data.total ?? 0);
+    if (data.pageSize) setPageSize(data.pageSize);
     setLoading(false);
   }, [page, typeFilter]);
 

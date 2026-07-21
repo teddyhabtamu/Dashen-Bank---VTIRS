@@ -1,8 +1,9 @@
 import { SignJWT, jwtVerify } from "jose";
 import type { Response } from "express";
+import { getSetting } from "../services/setting.js";
 
 export const SESSION_COOKIE = "vtirs_session";
-const MAX_AGE = 60 * 60 * 8; // 8 hours
+const MAX_JWT_AGE = 60 * 60 * 24 * 30; // 30 days (safety bound — actual timeout is dynamic)
 
 function getSecret(): Uint8Array {
   const secret = process.env.JWT_SECRET;
@@ -23,7 +24,7 @@ export async function signSession(payload: SessionPayload): Promise<string> {
   return new SignJWT({ ...payload })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
-    .setExpirationTime(`${MAX_AGE}s`)
+    .setExpirationTime(`${MAX_JWT_AGE}s`)
     .sign(getSecret());
 }
 
@@ -32,14 +33,22 @@ export async function verifySession(
 ): Promise<SessionPayload | null> {
   try {
     const { payload } = await jwtVerify(token, getSecret());
-    return {
-      userId: payload.userId as string,
-      username: payload.username as string,
-      roleSlug: payload.roleSlug as string,
-      roleName: payload.roleName as string,
-      fullName: payload.fullName as string,
-      permissions: (payload.permissions as string[]) ?? [],
-    };
+    const userId = payload.userId as string;
+    const username = payload.username as string;
+    const roleSlug = payload.roleSlug as string;
+    const roleName = payload.roleName as string;
+    const fullName = payload.fullName as string;
+    const permissions = (payload.permissions as string[]) ?? [];
+    const iat = payload.iat as number | undefined;
+
+    // Dynamic session timeout: check elapsed time against the DB setting.
+    const timeoutMinutes = await getSetting("session_timeout_minutes", "480");
+    const timeoutMs = Number(timeoutMinutes) * 60 * 1000;
+    if (timeoutMinutes !== "0" && iat && Date.now() - iat * 1000 > timeoutMs) {
+      return null; // session expired per current setting
+    }
+
+    return { userId, username, roleSlug, roleName, fullName, permissions };
   } catch {
     return null;
   }
@@ -47,7 +56,7 @@ export async function verifySession(
 
 export async function setSessionCookie(
   res: Response,
-  payload: SessionPayload
+  payload: SessionPayload,
 ): Promise<void> {
   const token = await signSession(payload);
   res.cookie(SESSION_COOKIE, token, {
@@ -55,7 +64,7 @@ export async function setSessionCookie(
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/",
-    maxAge: MAX_AGE * 1000,
+    maxAge: MAX_JWT_AGE * 1000,
   });
 }
 

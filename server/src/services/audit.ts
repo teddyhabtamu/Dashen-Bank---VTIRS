@@ -1,11 +1,10 @@
 import { prisma } from "../lib/prisma.js";
 import type { Prisma } from "@prisma/client";
-
-const PAGE_SIZE = 20;
+import { defaultPageSize } from "./setting.js";
 
 export async function listAuditLogs({
   page = 1,
-  pageSize = PAGE_SIZE,
+  pageSize,
   action,
   entity,
   userId,
@@ -20,6 +19,7 @@ export async function listAuditLogs({
   from?: string;
   to?: string;
 }) {
+  const ps = pageSize ?? await defaultPageSize();
   const where: Prisma.AuditLogWhereInput = {};
   if (action) where.action = action;
   if (entity) where.entity = entity;
@@ -34,8 +34,8 @@ export async function listAuditLogs({
     prisma.auditLog.findMany({
       where,
       orderBy: { createdAt: "desc" },
-      skip: (page - 1) * pageSize,
-      take: pageSize,
+      skip: (page - 1) * ps,
+      take: ps,
       include: {
         user: { select: { fullName: true, username: true } },
         vehicle: { select: { plateNumber: true, vehicleCode: true } },
@@ -61,8 +61,8 @@ export async function listAuditLogs({
     })),
     total,
     page,
-    pageSize,
-    totalPages: Math.ceil(total / pageSize),
+    pageSize: ps,
+    totalPages: Math.ceil(total / ps),
   };
 }
 

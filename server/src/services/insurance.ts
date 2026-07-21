@@ -2,6 +2,7 @@ import { prisma } from "../lib/prisma.js";
 import { insuranceSchema, InsuranceInput } from "../validation/registration.js";
 import { writeAudit, type AuditReq } from "../lib/audit.js";
 import { DuplicateInsuranceError } from "./errors.js";
+import { defaultPageSize } from "./setting.js";
 
 export { DuplicateInsuranceError };
 
@@ -114,7 +115,8 @@ export async function listInsurances(opts: {
   page?: number;
   pageSize?: number;
 }) {
-  const { search, page = 1, pageSize = 15 } = opts;
+  const { search, page = 1, pageSize } = opts;
+  const ps = pageSize ?? await defaultPageSize();
   const where: any = {};
   if (search) {
     where.OR = [
@@ -131,13 +133,13 @@ export async function listInsurances(opts: {
       where,
       include: { vehicle: { include: { branch: true } } },
       orderBy: { endDate: "asc" },
-      skip: (page - 1) * pageSize,
-      take: pageSize,
+      skip: (page - 1) * ps,
+      take: ps,
     }),
     prisma.vehicleInsurance.count({ where }),
   ]);
 
-  return { items, total, page, pageSize, totalPages: Math.ceil(total / pageSize) };
+  return { items, total, page, pageSize: ps, totalPages: Math.ceil(total / ps) };
 }
 
 export async function getInsurance(id: string) {

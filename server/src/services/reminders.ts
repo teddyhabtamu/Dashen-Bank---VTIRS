@@ -1,9 +1,21 @@
+import { getSetting } from "./setting.js";
 import { REGISTRATION_STATUS } from "../lib/constants.js";
 
-// Reminder windows (days before expiry) from the spec.
-export const REMINDER_WINDOWS = [90, 60, 30, 7] as const;
-
 export type ExpiryState = "EXPIRED" | "CRITICAL" | "WARNING" | "OK";
+
+export async function getReminderWindows(): Promise<[number, number, number, number]> {
+  const w90 = Number(await getSetting("reminder_days_90", "90")) || 90;
+  const w60 = Number(await getSetting("reminder_days_60", "60")) || 60;
+  const w30 = Number(await getSetting("reminder_days_30", "30")) || 30;
+  const w7 = Number(await getSetting("reminder_days_7", "7")) || 7;
+  return [w90, w60, w30, w7];
+}
+
+// Shortcut for the max horizon window (used by notification generation).
+export async function getReminderHorizonDays(): Promise<number> {
+  const [w90] = await getReminderWindows();
+  return w90;
+}
 
 // Days from today until `date` (negative = already past).
 export function daysUntil(date: Date | string | null | undefined): number | null {

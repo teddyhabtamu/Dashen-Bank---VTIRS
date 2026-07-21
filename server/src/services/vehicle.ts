@@ -2,6 +2,7 @@ import { prisma } from "../lib/prisma.js";
 import { generateVehicleCode } from "../lib/ids.js";
 import { vehicleSchema, VehicleInput } from "../validation/vehicle.js";
 import { writeAudit, type AuditReq } from "../lib/audit.js";
+import { defaultPageSize } from "./setting.js";
 
 export class DuplicateVehicleError extends Error {
   field: string;
@@ -192,7 +193,8 @@ export async function listVehicles(opts: {
   page?: number;
   pageSize?: number;
 }) {
-  const { search, status, branchId, page = 1, pageSize = 15 } = opts;
+  const { search, status, branchId, page = 1, pageSize } = opts;
+  const ps = pageSize ?? await defaultPageSize();
   const where: any = {};
   if (status) where.status = status;
   if (branchId) where.branchId = branchId;
@@ -213,11 +215,11 @@ export async function listVehicles(opts: {
       where,
       include: { branch: true, department: true, currentDriver: true },
       orderBy: { createdAt: "desc" },
-      skip: (page - 1) * pageSize,
-      take: pageSize,
+      skip: (page - 1) * ps,
+      take: ps,
     }),
     prisma.vehicle.count({ where }),
   ]);
 
-  return { items, total, page, pageSize, totalPages: Math.ceil(total / pageSize) };
+  return { items, total, page, pageSize: ps, totalPages: Math.ceil(total / ps) };
 }

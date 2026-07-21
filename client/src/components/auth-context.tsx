@@ -31,6 +31,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(data.user);
       } else {
         setUser(null);
+        if (window.location.pathname !== "/login") {
+          window.location.href = "/login";
+        }
       }
     } catch {
       setUser(null);
@@ -41,6 +44,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     refresh();
+  }, []);
+
+  // Periodically validate the session to catch expired JWTs.
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      const res = await fetch("/api/auth/me");
+      if (!res.ok && window.location.pathname !== "/login") {
+        setUser(null);
+        window.location.href = "/login";
+      }
+    }, 30_000);
+    return () => clearInterval(interval);
   }, []);
 
   async function logout() {

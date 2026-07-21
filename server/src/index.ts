@@ -72,6 +72,9 @@ app.use((_req, res) => {
 app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
   console.error("[error]", err);
   if (res.headersSent) return;
+  if (err && typeof err === "object" && "name" in err && (err as any).name === "ValidationError") {
+    return res.status(422).json({ error: (err as Error).message });
+  }
   res.status(500).json({ error: "Internal server error" });
 });
 

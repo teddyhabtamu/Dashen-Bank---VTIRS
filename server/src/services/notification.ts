@@ -1,12 +1,17 @@
 import { prisma } from "../lib/prisma.js";
-import { daysUntil } from "./reminders.js";
-
-const PAGE_SIZE = 20;
+import { daysUntil, getReminderHorizonDays } from "./reminders.js";
+import { defaultPageSize, getSetting } from "./setting.js";
 
 // ---------- generation ----------
 
 export async function generateNotifications(userId: string) {
-  const horizon = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
+  const horizonDays = await getReminderHorizonDays();
+  const horizon = new Date(Date.now() + horizonDays * 24 * 60 * 60 * 1000);
+
+  const [enableReg, enableIns] = await Promise.all([
+    getSetting("notify_registration", "true"),
+    getSetting("notify_insurance", "true"),
+  ]);
 
   const [expiringRegs, expiringIns] = await Promise.all([
     prisma.vehicleRegistration.findMany({
@@ -28,35 +33,39 @@ export async function generateNotifications(userId: string) {
 
   let count = 0;
 
-  for (const reg of expiringRegs) {
-    const days = daysUntil(reg.expiryDate);
-    const expired = days !== null && days < 0;
-    const title = expired ? "Registration Expired" : "Registration Expiring Soon";
-    const message = expired
-      ? `${reg.vehicle.plateNumber} (${reg.vehicle.vehicleCode}) registration expired on ${reg.expiryDate.toLocaleDateString("en-GB")}. Renew immediately.`
-      : `${reg.vehicle.plateNumber} (${reg.vehicle.vehicleCode}) registration expires in ${days} day${days === 1 ? "" : "s"}.`;
-    const link = `/vehicles/${reg.vehicle.id}`;
-    const meta = JSON.stringify({ vehicleId: reg.vehicle.id, plateNumber: reg.vehicle.plateNumber, vehicleCode: reg.vehicle.vehicleCode });
+  if (enableReg !== "false") {
+    for (const reg of expiringRegs) {
+      const days = daysUntil(reg.expiryDate);
+      const expired = days !== null && days < 0;
+      const title = expired ? "Registration Expired" : "Registration Expiring Soon";
+      const message = expired
+        ? `${reg.vehicle.plateNumber} (${reg.vehicle.vehicleCode}) registration expired on ${reg.expiryDate.toLocaleDateString("en-GB")}. Renew immediately.`
+        : `${reg.vehicle.plateNumber} (${reg.vehicle.vehicleCode}) registration expires in ${days} day${days === 1 ? "" : "s"}.`;
+      const link = `/vehicles/${reg.vehicle.id}`;
+      const meta = JSON.stringify({ vehicleId: reg.vehicle.id, plateNumber: reg.vehicle.plateNumber, vehicleCode: reg.vehicle.vehicleCode });
 
-    if (await shouldCreate(userId, "REGISTRATION_REMINDER", link)) {
-      await create(userId, "REGISTRATION_REMINDER", title, message, link, meta);
-      count++;
+      if (await shouldCreate(userId, "REGISTRATION_REMINDER", link)) {
+        await create(userId, "REGISTRATION_REMINDER", title, message, link, meta);
+        count++;
+      }
     }
   }
 
-  for (const ins of expiringIns) {
-    const days = daysUntil(ins.endDate);
-    const expired = days !== null && days < 0;
-    const title = expired ? "Insurance Expired" : "Insurance Expiring Soon";
-    const message = expired
-      ? `${ins.vehicle.plateNumber} (${ins.vehicle.vehicleCode}) insurance expired on ${ins.endDate.toLocaleDateString("en-GB")}. Renew immediately.`
-      : `${ins.vehicle.plateNumber} (${ins.vehicle.vehicleCode}) insurance expires in ${days} day${days === 1 ? "" : "s"}.`;
-    const link = `/vehicles/${ins.vehicle.id}`;
-    const meta = JSON.stringify({ vehicleId: ins.vehicle.id, plateNumber: ins.vehicle.plateNumber, vehicleCode: ins.vehicle.vehicleCode });
+  if (enableIns !== "false") {
+    for (const ins of expiringIns) {
+      const days = daysUntil(ins.endDate);
+      const expired = days !== null && days < 0;
+      const title = expired ? "Insurance Expired" : "Insurance Expiring Soon";
+      const message = expired
+        ? `${ins.vehicle.plateNumber} (${ins.vehicle.vehicleCode}) insurance expired on ${ins.endDate.toLocaleDateString("en-GB")}. Renew immediately.`
+        : `${ins.vehicle.plateNumber} (${ins.vehicle.vehicleCode}) insurance expires in ${days} day${days === 1 ? "" : "s"}.`;
+      const link = `/vehicles/${ins.vehicle.id}`;
+      const meta = JSON.stringify({ vehicleId: ins.vehicle.id, plateNumber: ins.vehicle.plateNumber, vehicleCode: ins.vehicle.vehicleCode });
 
-    if (await shouldCreate(userId, "INSURANCE_REMINDER", link)) {
-      await create(userId, "INSURANCE_REMINDER", title, message, link, meta);
-      count++;
+      if (await shouldCreate(userId, "INSURANCE_REMINDER", link)) {
+        await create(userId, "INSURANCE_REMINDER", title, message, link, meta);
+        count++;
+      }
     }
   }
 
@@ -90,7 +99,7 @@ export async function listNotifications(
   userId: string,
   {
     page = 1,
-    pageSize = PAGE_SIZE,
+    pageSize,
     type,
     unreadOnly,
   }: {
@@ -98,8 +107,9 @@ export async function listNotifications(
     pageSize?: number;
     type?: string;
     unreadOnly?: boolean;
-  },
+  }
 ) {
+  const ps = pageSize ?? await defaultPageSize();
   await generateNotifications(userId).catch(() => {});
 
   const where: Record<string, unknown> = { userId };
@@ -110,8 +120,8 @@ export async function listNotifications(
     prisma.notification.findMany({
       where: where as any,
       orderBy: { createdAt: "desc" },
-      skip: (page - 1) * pageSize,
-      take: pageSize,
+      skip: (page - 1) * ps,
+      take: ps,
     }),
     prisma.notification.count({ where: where as any }),
   ]);
@@ -129,8 +139,8 @@ export async function listNotifications(
     })),
     total,
     page,
-    pageSize,
-    totalPages: Math.ceil(total / pageSize),
+    pageSize: ps,
+    totalPages: Math.ceil(total / ps),
   };
 }
 

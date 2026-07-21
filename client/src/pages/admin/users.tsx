@@ -50,6 +50,7 @@ export default function UsersPage() {
   const [editId, setEditId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [pageSize, setPageSize] = useState(20);
 
   const [form, setForm] = useState({
     username: "",
@@ -82,12 +83,13 @@ export default function UsersPage() {
     const data = await res.json();
     setRows(data.items ?? []);
     setTotal(data.total ?? 0);
+    if (data.pageSize) setPageSize(data.pageSize);
     setLoading(false);
   }, [page, search, roleFilter, statusFilter]);
 
   useEffect(() => { load(); }, [load]);
 
-  const totalPages = Math.max(1, Math.ceil(total / 20));
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   function resetForm() {
     setForm({ username: "", email: "", fullName: "", password: "", roleId: "", branchId: "", status: "ACTIVE" });

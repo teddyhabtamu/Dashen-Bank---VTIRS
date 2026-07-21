@@ -14,7 +14,7 @@ router.get("/", requireAuth(), async (req, res) => {
   const q = req.query;
   const result = await listNotifications(req.session!.userId, {
     page: Number(q.page ?? "1"),
-    pageSize: Number(q.pageSize ?? "20"),
+    pageSize: q.pageSize ? Number(q.pageSize) : undefined,
     type: (q.type as string) ?? undefined,
     unreadOnly: q.unreadOnly === "true",
   });

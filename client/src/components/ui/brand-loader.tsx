@@ -1,3 +1,4 @@
+import { useBrand } from "@/lib/brand-context";
 import { cn } from "@/lib/format";
 
 export function BrandLoader({
@@ -9,6 +10,8 @@ export function BrandLoader({
   label?: string;
   className?: string;
 }) {
+  const { companyName } = useBrand();
+
   return (
     <div
       className={cn(
@@ -19,13 +22,13 @@ export function BrandLoader({
     >
       <img
         src="/dashen-logo.svg"
-        alt="Dashen Bank"
+        alt={companyName}
         className="h-12 w-12 object-contain animate-bounce"
       />
 
       <div className="text-center">
         <div className="text-sm font-bold tracking-wide text-primary">
-          Dashen Bank SC
+          {companyName}
         </div>
         <div className="mt-0.5 text-xs font-medium italic text-secondary/80">
           Always One Step Ahead

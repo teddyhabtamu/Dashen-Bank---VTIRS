@@ -145,9 +145,10 @@ export function exportXlsx(filename: string, rows: Record<string, unknown>[]) {
 
 /* ------------------------------- PDF print ------------------------------- */
 
-export function exportPdf(html: string, title: string) {
+export function exportPdf(html: string, title: string, orgName?: string) {
   const base = window.location.origin;
   const stamp = new Date().toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" });
+  const company = orgName || BRAND.name;
   const doc = `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title><style>
     @page { size: A4 landscape; margin: 14mm; }
     @media print { .noprint { display: none !important; } }
@@ -170,12 +171,12 @@ export function exportPdf(html: string, title: string) {
     .page-break { page-break-before: always; }
   </style></head><body>
     <div class="brand">
-      <div class="left"><img src="${base}/dashen-logo.svg" alt="Dashen Bank"><div><h1>${BRAND.name}</h1><div class="motto">Always One Step Ahead</div><div class="sub">${BRAND.system}</div></div></div>
+      <div class="left"><img src="${base}/dashen-logo.svg" alt="${company}"><div><h1>${company}</h1><div class="motto">Always One Step Ahead</div><div class="sub">${BRAND.system}</div></div></div>
       <div class="meta">Generated: ${stamp}<br/>Confidential — Internal Use</div>
     </div>
     <div class="report-title">${escapeHtml(title)}</div>
     ${html}
-    <div class="foot"><span>&copy; ${new Date().getFullYear()} ${BRAND.name} — ${BRAND.short}</span><span>Page 1</span></div>
+    <div class="foot"><span>&copy; ${new Date().getFullYear()} ${company} — ${BRAND.short}</span><span>Page 1</span></div>
   </body></html>`;
 
   // Use a hidden iframe instead of window.open so we don't open a new tab.

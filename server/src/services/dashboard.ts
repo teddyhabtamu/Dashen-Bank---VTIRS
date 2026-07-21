@@ -1,7 +1,7 @@
 import { prisma } from "../lib/prisma.js";
 import { REGISTRATION_STATUS } from "../lib/constants.js";
 import { label } from "../lib/constants.js";
-import { daysUntil, REMINDER_WINDOWS } from "./reminders.js";
+import { daysUntil, getReminderWindows } from "./reminders.js";
 
 export interface DashboardKpis {
   totalVehicles: number;
@@ -23,9 +23,9 @@ export interface DashboardKpis {
   };
 }
 
-// Returns registrations expiring (or already expired) within `withinDays`,
-// ordered by soonest expiry first. Used for the "Upcoming Expirations" panel.
-export async function getUpcomingRegistrations(withinDays = 90, limit = 8) {
+export async function getUpcomingRegistrations(_withinDays?: number, limit = 8) {
+  const [w90] = await getReminderWindows();
+  const withinDays = _withinDays ?? w90;
   const horizon = new Date(Date.now() + withinDays * 24 * 60 * 60 * 1000);
   const rows = await prisma.vehicleRegistration.findMany({
     where: { expiryDate: { lte: horizon } },
@@ -43,7 +43,9 @@ export async function getUpcomingRegistrations(withinDays = 90, limit = 8) {
   }));
 }
 
-export async function getUpcomingInsurances(withinDays = 90, limit = 8) {
+export async function getUpcomingInsurances(_withinDays?: number, limit = 8) {
+  const [w90] = await getReminderWindows();
+  const withinDays = _withinDays ?? w90;
   const horizon = new Date(Date.now() + withinDays * 24 * 60 * 60 * 1000);
   const rows = await prisma.vehicleInsurance.findMany({
     where: { endDate: { lte: horizon } },
@@ -61,7 +63,6 @@ export async function getUpcomingInsurances(withinDays = 90, limit = 8) {
   }));
 }
 
-// Spec §4.1 + §7: distributions used for dashboard charts.
 export async function getVehicleDistributions() {
   const [byType, byStatus, byBranch, byMake, byModel, byYear, byFuel] = await Promise.all([
     prisma.vehicle.groupBy({ by: ["type"], _count: { _all: true } }),
@@ -88,7 +89,6 @@ export async function getVehicleDistributions() {
   };
 }
 
-// Spec §4.1 "Recent Activity" — latest audit logs.
 export async function getRecentActivity(limit = 8) {
   const rows = await prisma.auditLog.findMany({
     orderBy: { createdAt: "desc" },
@@ -138,10 +138,10 @@ export async function getDashboardKpis(): Promise<DashboardKpis> {
 
   const avgAge = ages.length ? Math.round(ages.reduce((s, v) => s + (now - (v.year ?? now)), 0) / ages.length) : 0;
 
-  // Count registrations/insurances expiring within each reminder window.
+  const windows = await getReminderWindows();
   const regWindowCounts: Record<number, number> = {};
   const insWindowCounts: Record<number, number> = {};
-  for (const w of REMINDER_WINDOWS) {
+  for (const w of windows) {
     const from = new Date();
     const to = new Date(Date.now() + w * 24 * 60 * 60 * 1000);
     regWindowCounts[w] = await prisma.vehicleRegistration.count({

@@ -34,7 +34,7 @@ export default function AuditLogsPage() {
   const [rows, setRows] = useState<AuditRow[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const [pageSize] = useState(20);
+  const [pageSize, setPageSize] = useState(20);
   const [action, setAction] = useState("");
   const [entity, setEntity] = useState("");
   const [userSearch, setUserSearch] = useState("");
@@ -54,7 +54,6 @@ export default function AuditLogsPage() {
     setLoading(true);
     const qs = new URLSearchParams();
     qs.set("page", String(page));
-    qs.set("pageSize", String(pageSize));
     if (action) qs.set("action", action);
     if (entity) qs.set("entity", entity);
     if (userSearch) qs.set("userId", userSearch);
@@ -64,8 +63,9 @@ export default function AuditLogsPage() {
     const data = await res.json();
     setRows(data.items ?? []);
     setTotal(data.total ?? 0);
+    if (data.pageSize) setPageSize(data.pageSize);
     setLoading(false);
-  }, [page, pageSize, action, entity, userSearch, from, to]);
+  }, [page, action, entity, userSearch, from, to]);
 
   useEffect(() => { load(); }, [load]);
 

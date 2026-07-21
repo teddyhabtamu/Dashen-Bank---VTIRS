@@ -20,7 +20,7 @@ router.get("/", requireAuth(PERMISSIONS.VEHICLE_VIEW), async (req, res) => {
     status: (q.status as string) ?? undefined,
     branchId: (q.branchId as string) ?? undefined,
     page: Number(q.page ?? "1"),
-    pageSize: Number(q.pageSize ?? "15"),
+    pageSize: q.pageSize ? Number(q.pageSize) : undefined,
   });
   res.json(result);
 });
