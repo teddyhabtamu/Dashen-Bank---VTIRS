@@ -8,6 +8,7 @@ import NewVehiclePage from "@/pages/vehicles/new";
 import EditVehiclePage from "@/pages/vehicles/edit";
 import VehicleDetailPage from "@/pages/vehicles/detail";
 import RegistrationsPage from "@/pages/registrations";
+import InsurancesPage from "@/pages/insurances";
 import DocumentsPage from "@/pages/documents";
 import SearchPage from "@/pages/search";
 import ReportsPage from "@/pages/reports";
@@ -30,6 +31,7 @@ export default function App() {
           <Route path="/vehicles/:id/edit" element={<EditVehiclePage />} />
           <Route path="/registrations" element={<RegistrationsPage />} />
           <Route path="/documents" element={<DocumentsPage />} />
+          <Route path="/insurances" element={<InsurancesPage />} />
           <Route path="/search" element={<SearchPage />} />
           <Route path="/reports" element={<ReportsPage />} />
           <Route path="/audit" element={<AuditLogsPage />} />

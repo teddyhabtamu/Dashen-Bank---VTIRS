@@ -76,6 +76,13 @@ export const IMAGE_CATEGORY = {
 } as const;
 export const IMAGE_CATEGORY_OPTIONS = Object.values(IMAGE_CATEGORY);
 
+export const COVERAGE_TYPE = {
+  COMPREHENSIVE: "Comprehensive",
+  THIRD_PARTY: "Third Party",
+  THIRD_PARTY_FIRE_THEFT: "Third Party, Fire & Theft",
+} as const;
+export const COVERAGE_OPTIONS = Object.values(COVERAGE_TYPE);
+
 export const NOTIFICATION_TYPE = {
   REGISTRATION_REMINDER: "REGISTRATION_REMINDER",
   INSURANCE_REMINDER: "INSURANCE_REMINDER",

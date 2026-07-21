@@ -6,6 +6,7 @@ import { DatePicker } from "@/components/ui/datepicker";
 import { Dropdown } from "@/components/ui/dropdown";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { formatDate, daysUntil } from "@/lib/format";
+import { COVERAGE_OPTIONS } from "@/lib/constants";
 
 interface Ins {
   id: string;
@@ -23,11 +24,7 @@ const EXPIRY_BADGE: Record<string, string> = {
   OK: "bg-slate-100 text-slate-600",
 };
 
-const COVERAGE_OPTIONS = [
-  { value: "Comprehensive", label: "Comprehensive" },
-  { value: "Third Party", label: "Third Party" },
-  { value: "Third Party, Fire & Theft", label: "Third Party, Fire & Theft" },
-];
+
 
 export function InsurancePanel({ vehicleId, initial, canManage }: {
   vehicleId: string;
@@ -188,7 +185,7 @@ export function InsurancePanel({ vehicleId, initial, canManage }: {
           </label>
           <label className="text-sm">Coverage Type *
             <div className="mt-1">
-              <Select className="w-full" value={form.coverage} onChange={(v) => setForm({ ...form, coverage: v })} options={COVERAGE_OPTIONS} />
+              <Select className="w-full" value={form.coverage} onChange={(v) => setForm({ ...form, coverage: v })} options={COVERAGE_OPTIONS.map((s) => ({ value: s, label: s }))} />
             </div>
           </label>
           <label className="text-sm">Start Date *
