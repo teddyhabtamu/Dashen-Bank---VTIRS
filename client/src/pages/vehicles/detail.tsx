@@ -4,11 +4,11 @@ import { ArrowLeft, Pencil, Car, FileText, ShieldCheck, User, MapPin, Fuel } fro
 import { StatusBadge } from "@/components/ui/badge";
 import { BrandLoader } from "@/components/ui/brand-loader";
 import { RegistrationPanel } from "@/components/registration-panel";
+import { InsurancePanel } from "@/components/insurance-panel";
 import { DocumentManager } from "@/components/document-manager";
 import { useAuth } from "@/components/auth-context";
 import { label } from "@/lib/constants";
-import { formatCurrency, formatDate, daysUntil } from "@/lib/format";
-import { expiryState } from "@/lib/services/reminders";
+import { formatCurrency, formatDate } from "@/lib/format";
 import { PERMISSIONS } from "@/lib/rbac";
 
 function Section({ title, icon, children }: { title: string; icon: React.ReactNode; children: React.ReactNode }) {
@@ -140,31 +140,11 @@ export default function VehicleDetailPage() {
         </Section>
 
         <Section title="Insurance" icon={<ShieldCheck className="h-4 w-4" />}>
-          {v.insurances.length === 0 ? (
-            <p className="text-sm text-slate-400">No insurance policy recorded yet.</p>
-          ) : (
-            <div className="space-y-3">
-              {v.insurances.map((ins: any) => {
-                const state = expiryState(ins.endDate);
-                const days = daysUntil(ins.endDate);
-                const badge = state === "EXPIRED" ? "bg-red-100 text-red-700" : state === "CRITICAL" ? "bg-orange-100 text-orange-700" : state === "WARNING" ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-600";
-                return (
-                  <div key={ins.id} className="rounded-lg border border-slate-100 p-3">
-                    <div className="flex items-center justify-between">
-                      <div className="font-medium text-slate-800">{ins.company}</div>
-                      <span className={`badge ${badge}`}>{days !== null && days >= 0 ? `${days}d left` : "expired"}</span>
-                    </div>
-                    <div className="mt-2 grid grid-cols-1 gap-x-4 gap-y-1 text-sm text-slate-600 sm:grid-cols-2">
-                      <div>Policy No: <span className="text-slate-800">{ins.policyNo}</span></div>
-                      <div>Coverage: <span className="text-slate-800">{ins.coverage}</span></div>
-                      <div>Start: <span className="text-slate-800">{formatDate(ins.startDate)}</span></div>
-                      <div>End: <span className="text-slate-800">{formatDate(ins.endDate)}</span></div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+          <InsurancePanel
+            vehicleId={v.id}
+            initial={v.insurances ?? []}
+            canManage={can(PERMISSIONS.INSURANCE_MANAGE)}
+          />
         </Section>
 
         <Section title="Documents & Images" icon={<FileText className="h-4 w-4" />}>
