@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
-import { Users, Search, Plus, Pencil, Trash2 } from "lucide-react";
+import { Users, Search, Plus, MoreVertical, Pencil, Trash2 } from "lucide-react";
 import { BrandLoader } from "@/components/ui/brand-loader";
 import { Select } from "@/components/ui/select";
 import { Modal } from "@/components/ui/modal";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
+import { Dropdown } from "@/components/ui/dropdown";
 import { useAuth } from "@/components/auth-context";
 import { formatDateTime } from "@/lib/format";
 
@@ -245,12 +246,18 @@ export default function UsersPage() {
                     {row.lastLoginAt ? formatDateTime(row.lastLoginAt) : "—"}
                   </td>
                   <td className="px-4 py-3 text-right">
-                    <button className="btn-outline px-2 py-1 text-xs" onClick={() => openEdit(row)}>
-                      <Pencil className="mr-1 h-3 w-3" /> Edit
-                    </button>
-                    <button className="ml-2 rounded-lg border border-red-200 px-2 py-1 text-xs text-red-600 hover:bg-red-50" onClick={() => setDeleteId(row.id)}>
-                      <Trash2 className="mr-1 h-3 w-3 inline" /> Delete
-                    </button>
+                    <Dropdown
+                      align="right"
+                      trigger={({ toggle }) => (
+                        <button onClick={toggle} className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100" title="Actions">
+                          <MoreVertical className="h-4 w-4" />
+                        </button>
+                      )}
+                      items={[
+                        { label: "Edit", icon: <Pencil className="h-4 w-4" />, onClick: () => openEdit(row) },
+                        { label: "Delete", icon: <Trash2 className="h-4 w-4" />, danger: true, onClick: () => setDeleteId(row.id) },
+                      ]}
+                    />
                   </td>
                 </tr>
               ))}
@@ -280,11 +287,19 @@ export default function UsersPage() {
                 <span className="text-slate-500">Last Login:</span>
                 <span className="text-slate-400">{row.lastLoginAt ? formatDateTime(row.lastLoginAt) : "—"}</span>
               </div>
-              <div className="flex gap-2 pt-1">
-                <button className="btn-outline px-2 py-1 text-xs" onClick={() => openEdit(row)}><Pencil className="mr-1 h-3 w-3 inline" /> Edit</button>
-                <button className="rounded-lg border border-red-200 px-2 py-1 text-xs text-red-600 hover:bg-red-50" onClick={() => setDeleteId(row.id)}>
-                  <Trash2 className="mr-1 h-3 w-3 inline" /> Delete
-                </button>
+              <div className="flex justify-end pt-1">
+                <Dropdown
+                  align="right"
+                  trigger={({ toggle }) => (
+                    <button onClick={toggle} className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100" title="Actions">
+                      <MoreVertical className="h-4 w-4" />
+                    </button>
+                  )}
+                  items={[
+                    { label: "Edit", icon: <Pencil className="h-4 w-4" />, onClick: () => openEdit(row) },
+                    { label: "Delete", icon: <Trash2 className="h-4 w-4" />, danger: true, onClick: () => setDeleteId(row.id) },
+                  ]}
+                />
               </div>
             </div>
           ))}
