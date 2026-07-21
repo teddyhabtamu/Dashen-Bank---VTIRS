@@ -11,6 +11,7 @@ import RegistrationsPage from "@/pages/registrations";
 import DocumentsPage from "@/pages/documents";
 import SearchPage from "@/pages/search";
 import ReportsPage from "@/pages/reports";
+import AuditLogsPage from "@/pages/audit";
 
 export default function App() {
   return (
@@ -27,6 +28,7 @@ export default function App() {
           <Route path="/documents" element={<DocumentsPage />} />
           <Route path="/search" element={<SearchPage />} />
           <Route path="/reports" element={<ReportsPage />} />
+          <Route path="/audit" element={<AuditLogsPage />} />
         </Route>
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />

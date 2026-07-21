@@ -25,7 +25,7 @@ const NAV = [
   { href: "/search", label: "Search", icon: Search, perm: PERMISSIONS.VEHICLE_VIEW, ready: true },
   { href: "/reports", label: "Reports", icon: BarChart3, perm: PERMISSIONS.REPORT_VIEW, ready: true },
   { href: "/notifications", label: "Notifications", icon: Bell, perm: null, ready: false },
-  { href: "/audit", label: "Audit Logs", icon: History, perm: PERMISSIONS.AUDIT_VIEW, ready: false },
+  { href: "/audit", label: "Audit Logs", icon: History, perm: PERMISSIONS.AUDIT_VIEW, ready: true },
   { href: "/admin/users", label: "Users", icon: Users, perm: PERMISSIONS.USER_MANAGE, ready: false },
   { href: "/admin/roles", label: "Roles & Permissions", icon: Shield, perm: PERMISSIONS.ROLE_MANAGE, ready: false },
   { href: "/admin/settings", label: "Settings", icon: Settings, perm: PERMISSIONS.SETTING_MANAGE, ready: false },
