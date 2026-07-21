@@ -86,7 +86,6 @@ export default function AuditLogsPage() {
           <History className="h-5 w-5 text-primary" />
           Audit Trail
         </h2>
-        {loading && <BrandLoader />}
       </div>
 
       <div className="flex flex-wrap items-end gap-3 rounded-lg border bg-white p-4">
@@ -137,6 +136,15 @@ export default function AuditLogsPage() {
       </div>
 
       <div className="overflow-hidden rounded-lg border bg-white">
+        {loading ? (
+          <div className="flex justify-center py-16"><BrandLoader /></div>
+        ) : rows.length === 0 ? (
+          <div className="flex flex-col items-center py-16 text-slate-400">
+            <History className="mb-2 h-10 w-10" />
+            <p>No audit logs found</p>
+          </div>
+        ) : (
+<>
         {/* Desktop table */}
         <div className="hidden min-w-0 sm:block">
           <table className="w-full">
@@ -248,11 +256,7 @@ export default function AuditLogsPage() {
           </div>
         )}
 
-        {!loading && rows.length === 0 && (
-          <div className="flex flex-col items-center py-16 text-slate-400">
-            <History className="mb-2 h-10 w-10" />
-            <p>No audit logs found</p>
-          </div>
+          </>
         )}
       </div>
 
