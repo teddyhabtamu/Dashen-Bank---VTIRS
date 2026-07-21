@@ -146,41 +146,52 @@ export function exportXlsx(filename: string, rows: Record<string, unknown>[]) {
 /* ------------------------------- PDF print ------------------------------- */
 
 export function exportPdf(html: string, title: string) {
-  const w = window.open("", "_blank", "width=960,height=720");
-  if (!w) return;
+  const base = window.location.origin;
   const stamp = new Date().toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" });
-  w.document.write(
-    `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title><style>
-      @page { size: A4; margin: 16mm; }
-      * { box-sizing: border-box; }
-      body { font-family: "Helvetica Neue", Arial, sans-serif; color: #1f2937; margin: 0; font-size: 11px; }
-      .brand { display: flex; align-items: center; justify-content: space-between; border-bottom: 3px solid #273274; padding-bottom: 10px; margin-bottom: 14px; }
-      .brand .left { display: flex; align-items: center; gap: 10px; }
-      .logo { width: 38px; height: 38px; border-radius: 8px; background: #273274; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 18px; }
-      .brand h1 { font-size: 16px; margin: 0; color: #273274; }
-      .brand .sub { font-size: 10px; color: #6b7280; }
-      .meta { text-align: right; font-size: 10px; color: #6b7280; }
-      .report-title { font-size: 14px; font-weight: 700; margin: 0 0 10px; }
-      table { width: 100%; border-collapse: collapse; font-size: 10px; }
-      thead th { background: #273274; color: #fff; text-align: left; padding: 6px 8px; }
-      tbody td { border: 1px solid #e5e7eb; padding: 5px 8px; }
-      tbody tr:nth-child(even) td { background: #f9fafb; }
-      tfoot td { border-top: 2px solid #273274; font-weight: 700; padding: 6px 8px; }
-      .foot { margin-top: 16px; border-top: 1px solid #e5e7eb; padding-top: 8px; font-size: 9px; color: #9ca3af; display: flex; justify-content: space-between; }
-      .page-break { page-break-before: always; }
-    </style></head><body>
-      <div class="brand">
-        <div class="left"><div class="logo">D</div><div><h1>${BRAND.name}</h1><div class="sub">${BRAND.system}</div></div></div>
-        <div class="meta">Generated: ${stamp}<br/>Confidential — Internal Use</div>
-      </div>
-      <div class="report-title">${escapeHtml(title)}</div>
-      ${html}
-      <div class="foot"><span>${BRAND.short} • ${BRAND.name}</span><span>Page <span class="pageNumber"></span></span></div>
-      <script>window.onload = () => { document.querySelectorAll('.pageNumber').forEach(e=>e.textContent='1'); setTimeout(()=>window.print(), 350); };</script>
-    </body></html>`
-  );
-  w.document.close();
-  w.focus();
+  const doc = `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title><style>
+    @page { size: A4 landscape; margin: 14mm; }
+    @media print { .noprint { display: none !important; } }
+    * { box-sizing: border-box; }
+    body { font-family: "Helvetica Neue", Arial, sans-serif; color: #1f2937; margin: 0; font-size: 11px; }
+    .brand { display: flex; align-items: center; justify-content: space-between; border-bottom: 3px solid #273274; padding-bottom: 8px; margin-bottom: 12px; }
+    .brand .left { display: flex; align-items: center; gap: 12px; }
+    .brand .left img { height: 36px; width: auto; }
+    .brand h1 { font-size: 15px; margin: 0; color: #273274; line-height: 1.2; }
+    .brand .motto { font-size: 10px; color: #e8941a; font-style: italic; letter-spacing: 0.3px; }
+    .brand .sub { font-size: 9px; color: #6b7280; }
+    .meta { text-align: right; font-size: 9px; color: #6b7280; line-height: 1.5; }
+    .report-title { font-size: 13px; font-weight: 700; margin: 0 0 8px; color: #012169; padding-left: 4px; border-left: 3px solid #e8941a; }
+    table { width: 100%; border-collapse: collapse; font-size: 9px; }
+    thead th { background: #273274; color: #fff; text-align: left; padding: 5px 6px; font-size: 9px; letter-spacing: 0.3px; }
+    tbody td { border: 1px solid #e5e7eb; padding: 4px 6px; }
+    tbody tr:nth-child(even) td { background: #f9fafb; }
+    tfoot td { border-top: 2px solid #273274; font-weight: 700; padding: 4px 6px; }
+    .foot { margin-top: 12px; border-top: 1px solid #e5e7eb; padding-top: 6px; font-size: 8px; color: #9ca3af; display: flex; justify-content: space-between; }
+    .page-break { page-break-before: always; }
+  </style></head><body>
+    <div class="brand">
+      <div class="left"><img src="${base}/dashen-logo.svg" alt="Dashen Bank"><div><h1>${BRAND.name}</h1><div class="motto">Always One Step Ahead</div><div class="sub">${BRAND.system}</div></div></div>
+      <div class="meta">Generated: ${stamp}<br/>Confidential — Internal Use</div>
+    </div>
+    <div class="report-title">${escapeHtml(title)}</div>
+    ${html}
+    <div class="foot"><span>&copy; ${new Date().getFullYear()} ${BRAND.name} — ${BRAND.short}</span><span>Page 1</span></div>
+  </body></html>`;
+
+  // Use a hidden iframe instead of window.open so we don't open a new tab.
+  const iframe = document.createElement("iframe");
+  iframe.className = "noprint";
+  iframe.style.cssText = "position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;opacity:0";
+  document.body.appendChild(iframe);
+  const fDoc = iframe.contentWindow?.document;
+  if (!fDoc) { document.body.removeChild(iframe); return; }
+  fDoc.open();
+  fDoc.write(doc);
+  fDoc.close();
+  setTimeout(() => {
+    iframe.contentWindow?.focus();
+    iframe.contentWindow?.print();
+  }, 500);
 }
 
 function escapeHtml(v: unknown): string {
