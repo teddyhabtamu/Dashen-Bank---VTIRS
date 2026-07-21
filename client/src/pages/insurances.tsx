@@ -87,7 +87,7 @@ export default function InsurancesPage() {
 
   async function openEdit(r: InsRow) {
     setErr(null);
-    setForm({ vehicleId: r.vehicle.id, company: r.company, policyNo: r.policyNo, coverage: r.coverage, startDate: r.startDate, endDate: r.endDate });
+    setForm({ vehicleId: r.vehicle.id, company: r.company, policyNo: r.policyNo, coverage: r.coverage, startDate: r.startDate.slice(0, 10), endDate: r.endDate.slice(0, 10) });
     setEditId(r.id);
   }
 

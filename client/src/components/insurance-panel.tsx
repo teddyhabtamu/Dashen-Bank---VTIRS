@@ -68,8 +68,8 @@ export function InsurancePanel({ vehicleId, initial, canManage }: {
       company: ins.company,
       policyNo: ins.policyNo,
       coverage: ins.coverage,
-      startDate: typeof ins.startDate === "string" ? ins.startDate : ins.startDate.toISOString().slice(0, 10),
-      endDate: typeof ins.endDate === "string" ? ins.endDate : ins.endDate.toISOString().slice(0, 10),
+      startDate: typeof ins.startDate === "string" ? ins.startDate.slice(0, 10) : ins.startDate.toISOString().slice(0, 10),
+      endDate: typeof ins.endDate === "string" ? ins.endDate.slice(0, 10) : ins.endDate.toISOString().slice(0, 10),
     });
     setEditId(ins.id);
     setErr(null);
