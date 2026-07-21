@@ -59,6 +59,6 @@ body {
     @apply mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500;
   }
   .badge {
-    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium;
+    @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium;
   }
 }
