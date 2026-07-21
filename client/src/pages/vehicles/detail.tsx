@@ -74,25 +74,25 @@ export default function VehicleDetailPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Link to="/vehicles" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex items-start gap-3">
+          <Link to="/vehicles" className="mt-0.5 rounded-lg p-2 text-slate-500 hover:bg-slate-100">
             <ArrowLeft className="h-5 w-5" />
           </Link>
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-xl font-semibold text-slate-800">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="truncate text-lg font-semibold text-slate-800 sm:text-xl">
                 {v.make} {v.model} {v.trim}
               </h2>
               <StatusBadge status={v.status} />
             </div>
-            <p className="font-mono text-xs text-slate-400">
+            <p className="truncate font-mono text-xs text-slate-400">
               {v.vehicleCode} · {v.plateNumber}
             </p>
           </div>
         </div>
         {can(PERMISSIONS.VEHICLE_EDIT) && (
-          <Link to={`/vehicles/${v.id}/edit`} className="btn-primary">
+          <Link to={`/vehicles/${v.id}/edit`} className="btn-primary flex-shrink-0">
             <Pencil className="h-4 w-4" /> Edit
           </Link>
         )}
@@ -154,7 +154,7 @@ export default function VehicleDetailPage() {
                       <div className="font-medium text-slate-800">{ins.company}</div>
                       <span className={`badge ${badge}`}>{days !== null && days >= 0 ? `${days}d left` : "expired"}</span>
                     </div>
-                    <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-sm text-slate-600">
+                    <div className="mt-2 grid grid-cols-1 gap-x-4 gap-y-1 text-sm text-slate-600 sm:grid-cols-2">
                       <div>Policy No: <span className="text-slate-800">{ins.policyNo}</span></div>
                       <div>Coverage: <span className="text-slate-800">{ins.coverage}</span></div>
                       <div>Start: <span className="text-slate-800">{formatDate(ins.startDate)}</span></div>
