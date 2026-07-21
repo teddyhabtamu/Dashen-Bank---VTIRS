@@ -45,9 +45,19 @@ export function DatePicker({ value, onChange, placeholder = "Select date", disab
   useLayoutEffect(() => {
     if (!open || !triggerRef.current) return;
     const rect = triggerRef.current.getBoundingClientRect();
+    const POPUP_H = 310;
     const w = Math.max(rect.width, 280);
     let left = Math.max(8, Math.min(rect.left, window.innerWidth - w - 8));
-    const top = Math.min(rect.bottom + 4, window.innerHeight - 8);
+    const spaceBelow = window.innerHeight - rect.bottom - 4;
+    const spaceAbove = rect.top - 4;
+    let top: number;
+    if (spaceBelow >= POPUP_H) {
+      top = rect.bottom + 4;
+    } else if (spaceAbove >= POPUP_H) {
+      top = rect.top - POPUP_H - 4;
+    } else {
+      top = Math.max(4, spaceBelow > spaceAbove ? rect.bottom + 4 : rect.top - POPUP_H - 4);
+    }
     setCoords({ top, left, width: w });
   }, [open]);
 
