@@ -159,61 +159,121 @@ function InventoryTable({ rows }: { rows: any[] }) {
   const headers = ["vehicleCode", "plateNumber", "make", "model", "year", "category", "type", "status", "branch", "department", "driver", "registrations", "documents"];
   const disp = { vehicleCode: "Code", plateNumber: "Plate", make: "Make", model: "Model", year: "Year", category: "Category", type: "Type", status: "Status", branch: "Branch", department: "Dept", driver: "Driver", registrations: "Regs", documents: "Docs" };
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
-          <tr>{headers.map((h) => <th key={h} className="px-3 py-2">{disp[h as keyof typeof disp]}</th>)}</tr>
-        </thead>
-        <tbody className="divide-y divide-slate-100">
-          {rows.map((r, i) => (
-            <tr key={i} className="hover:bg-slate-50">
-              {headers.map((h) => (
-                <td key={h} className={`px-3 py-2 ${h === "vehicleCode" ? "font-medium text-slate-800" : ""} ${["status"].includes(h) ? "" : ""}`}>
-                  {h === "status"
-                    ? <span className="badge bg-slate-100 text-slate-600">{r[h]}</span>
-                    : r[h]}
-                </td>
+    <>
+      <div className="space-y-3 sm:hidden">
+        {rows.map((r, i) => (
+          <div key={i} className="card p-4">
+            <div className="mb-2 flex items-start justify-between gap-2">
+              <span className="truncate text-sm font-semibold text-slate-800">{r.plateNumber}</span>
+              <span className="badge flex-shrink-0 bg-slate-100 text-slate-600">{r.status}</span>
+            </div>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-slate-500">
+              <div><span className="font-medium text-slate-600">Code:</span> {r.vehicleCode}</div>
+              <div><span className="font-medium text-slate-600">Make:</span> {r.make} {r.model}</div>
+              <div><span className="font-medium text-slate-600">Year:</span> {r.year}</div>
+              <div><span className="font-medium text-slate-600">Cat:</span> {r.category}</div>
+              <div className="truncate"><span className="font-medium text-slate-600">Branch:</span> {r.branch}</div>
+              <div className="truncate"><span className="font-medium text-slate-600">Dept:</span> {r.department}</div>
+            </div>
+            {r.driver && <div className="mt-1 text-xs text-slate-400">Driver: {r.driver}</div>}
+            <div className="mt-1 flex gap-3 text-xs text-slate-400">
+              <span>Regs: {r.registrations}</span>
+              <span>Docs: {r.documents}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="hidden sm:block">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+              <tr>{headers.map((h) => <th key={h} className="px-3 py-2">{disp[h as keyof typeof disp]}</th>)}</tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {rows.map((r, i) => (
+                <tr key={i} className="hover:bg-slate-50">
+                  {headers.map((h) => (
+                    <td key={h} className="px-3 py-2">{h === "status" ? <span className="badge bg-slate-100 text-slate-600">{r[h]}</span> : r[h]}</td>
+                  ))}
+                </tr>
               ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </>
   );
 }
 
 function ExpiryTable({ rows, kind }: { rows: any[]; kind: "registration" | "insurance" }) {
   if (!rows?.length) return <Empty />;
-  const cols = kind === "registration"
+  const isReg = kind === "registration";
+  const cols = isReg
     ? ["regNumber", "plateNumber", "vehicleCode", "branch", "expiryDate", "daysLeft", "status"]
     : ["policyNo", "company", "plateNumber", "vehicleCode", "branch", "endDate", "daysLeft", "status"];
   const disp: Record<string, string> = { regNumber: "Reg No", policyNo: "Policy No", company: "Company", plateNumber: "Plate", vehicleCode: "Vehicle", branch: "Branch", expiryDate: "Expiry", endDate: "End Date", daysLeft: "Days Left", status: "Status" };
+
+  function DaysBadge({ days }: { days: number | null }) {
+    const dcls = days === null || days < 0 ? "bg-red-100 text-red-700" : days <= 30 ? "bg-orange-100 text-orange-700" : days <= 90 ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-600";
+    return <span className={`badge ${dcls}`}>{days !== null && days >= 0 ? `${days}d` : "expired"}</span>;
+  }
+
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
-          <tr>{cols.map((c) => <th key={c} className="px-3 py-2">{disp[c]}</th>)}</tr>
-        </thead>
-        <tbody className="divide-y divide-slate-100">
-          {rows.map((r, i) => {
-            const days = r.daysLeft;
-            const dcls = days === null || days < 0 ? "bg-red-100 text-red-700" : days <= 30 ? "bg-orange-100 text-orange-700" : days <= 90 ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-600";
-            return (
-              <tr key={i} className="hover:bg-slate-50">
-                {cols.map((c) => (
-                  <td key={c} className="px-3 py-2">
-                    {c === "status" ? <span className="badge bg-slate-100 text-slate-600">{r[c]}</span>
-                      : c === "daysLeft" ? <span className={`badge ${dcls}`}>{days !== null && days >= 0 ? `${days}d` : "expired"}</span>
-                      : c === "expiryDate" || c === "endDate" ? formatDate(r[c])
-                      : r[c]}
-                  </td>
-                ))}
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
+    <>
+      <div className="space-y-3 sm:hidden">
+        {rows.map((r, i) => {
+          const days = r.daysLeft;
+          return (
+            <div key={i} className="card p-4">
+              <div className="mb-2 flex items-start justify-between gap-2">
+                <span className="truncate text-sm font-semibold text-slate-800">
+                  {isReg ? r.regNumber : r.policyNo}
+                </span>
+                <div className="flex flex-shrink-0 items-center gap-2">
+                  {r.status && <span className="badge bg-slate-100 text-slate-600">{r.status}</span>}
+                  <DaysBadge days={days} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-slate-500">
+                <div><span className="font-medium text-slate-600">Plate:</span> {r.plateNumber}</div>
+                <div className="truncate"><span className="font-medium text-slate-600">Veh:</span> {r.vehicleCode}</div>
+                <div className="truncate col-span-2"><span className="font-medium text-slate-600">Branch:</span> {r.branch}</div>
+                <div className="col-span-2">
+                  <span className="font-medium text-slate-600">{isReg ? "Expiry" : "End"}:</span> {formatDate(r.expiryDate || r.endDate)}
+                </div>
+                {!isReg && <div className="col-span-2 truncate"><span className="font-medium text-slate-600">Company:</span> {r.company}</div>}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div className="hidden sm:block">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+              <tr>{cols.map((c) => <th key={c} className="px-3 py-2">{disp[c]}</th>)}</tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {rows.map((r, i) => {
+                const days = r.daysLeft;
+                return (
+                  <tr key={i} className="hover:bg-slate-50">
+                    {cols.map((c) => (
+                      <td key={c} className="px-3 py-2">
+                        {c === "status" ? <span className="badge bg-slate-100 text-slate-600">{r[c]}</span>
+                          : c === "daysLeft" ? <DaysBadge days={days} />
+                          : c === "expiryDate" || c === "endDate" ? formatDate(r[c])
+                          : r[c]}
+                      </td>
+                    ))}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -254,7 +314,7 @@ function CostReport({ data }: { data: { summary: { total: number; average: numbe
   if (!data) return <Empty />;
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <Stat label="Total Fleet Cost" value={formatCurrency(data.summary.total)} />
         <Stat label="Average / Vehicle" value={formatCurrency(data.summary.average)} />
         <Stat label="Valued Vehicles" value={String(data.summary.count)} />
@@ -266,23 +326,36 @@ function CostReport({ data }: { data: { summary: { total: number; average: numbe
         </div>
       ) : null}
       <h3 className="text-sm font-semibold text-slate-700">Top 20 by Purchase Cost</h3>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
-            <tr><th className="px-3 py-2">Code</th><th className="px-3 py-2">Plate</th><th className="px-3 py-2">Make/Model</th><th className="px-3 py-2">Branch</th><th className="px-3 py-2 text-right">Cost</th></tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {data.top.map((r, i) => (
-              <tr key={i} className="hover:bg-slate-50">
-                <td className="px-3 py-2 font-medium text-slate-800">{r.vehicleCode}</td>
-                <td className="px-3 py-2">{r.plateNumber}</td>
-                <td className="px-3 py-2">{r.make} {r.model}</td>
-                <td className="px-3 py-2">{r.branch}</td>
-                <td className="px-3 py-2 text-right font-medium">{formatCurrency(r.purchaseCost)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="space-y-2 sm:hidden">
+        {data.top.map((r, i) => (
+          <div key={i} className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2">
+            <div className="min-w-0">
+              <div className="truncate text-sm font-medium text-slate-800">{r.plateNumber}</div>
+              <div className="truncate text-xs text-slate-400">{r.vehicleCode} · {r.make} {r.model}</div>
+            </div>
+            <div className="flex-shrink-0 text-right text-sm font-medium text-slate-800">{formatCurrency(r.purchaseCost)}</div>
+          </div>
+        ))}
+      </div>
+      <div className="hidden sm:block">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+              <tr><th className="px-3 py-2">Code</th><th className="px-3 py-2">Plate</th><th className="px-3 py-2">Make/Model</th><th className="px-3 py-2">Branch</th><th className="px-3 py-2 text-right">Cost</th></tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {data.top.map((r, i) => (
+                <tr key={i} className="hover:bg-slate-50">
+                  <td className="px-3 py-2 font-medium text-slate-800">{r.vehicleCode}</td>
+                  <td className="px-3 py-2">{r.plateNumber}</td>
+                  <td className="px-3 py-2">{r.make} {r.model}</td>
+                  <td className="px-3 py-2">{r.branch}</td>
+                  <td className="px-3 py-2 text-right font-medium">{formatCurrency(r.purchaseCost)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
