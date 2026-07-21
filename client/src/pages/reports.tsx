@@ -89,11 +89,11 @@ export default function ReportsPage() {
             options={[{ value: "", label: "All departments" }, ...(data?.departments ?? []).map((d) => ({ value: d.id, label: d.name }))]} />
           <Select className="w-full sm:w-auto" value={status} onChange={setStatus} placeholder="All statuses"
             options={[{ value: "", label: "All statuses" }, ...VEHICLE_STATUS_OPTIONS.map((s) => ({ value: s, label: label(s) }))]} />
-          <div className="flex flex-wrap items-center gap-1 rounded-lg border border-slate-200 px-2 py-1">
+          <div className="flex flex-shrink-0 flex-wrap items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 sm:flex-nowrap">
             <CalendarRange className="h-4 w-4 shrink-0 text-slate-400" />
-            <DatePicker value={from} onChange={(v) => setFrom(v)} placeholder="Acq. from" />
+            <div className="min-w-0 flex-1 sm:flex-initial"><DatePicker value={from} onChange={(v) => setFrom(v)} placeholder="Acq. from" /></div>
             <span className="text-slate-300">–</span>
-            <DatePicker value={to} onChange={(v) => setTo(v)} placeholder="to" />
+            <div className="min-w-0 flex-1 sm:flex-initial"><DatePicker value={to} onChange={(v) => setTo(v)} placeholder="to" /></div>
           </div>
           {(branchId || departmentId || status || from || to) && (
             <button className="text-xs text-slate-400 underline hover:text-slate-600"
