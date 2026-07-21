@@ -9,6 +9,7 @@ import { DatePicker } from "@/components/ui/datepicker";
 import { Modal } from "@/components/ui/modal";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { useAuth } from "@/components/auth-context";
+import { useToast } from "@/lib/toast-context";
 import { COVERAGE_OPTIONS } from "@/lib/constants";
 import { daysUntil, formatDate } from "@/lib/format";
 
@@ -40,6 +41,7 @@ function ExpiryPill({ date }: { date: string }) {
 
 export default function InsurancesPage() {
   const { can } = useAuth();
+  const { toast } = useToast();
   const [rows, setRows] = useState<InsRow[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -100,6 +102,7 @@ export default function InsurancesPage() {
         method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(form),
       });
       if (!res.ok) { const d = await res.json(); setErr(d.error ?? "Failed to save"); return; }
+      toast("success", editId ? "Insurance policy updated" : "Insurance policy created");
       await afterAction();
     } finally { setBusy(false); }
   }
@@ -108,6 +111,7 @@ export default function InsurancesPage() {
     if (!deleteId) return; setBusy(true);
     try {
       await fetch(`/api/insurances/${deleteId}`, { method: "DELETE" });
+      toast("success", "Insurance policy deleted");
       await afterAction();
     } finally { setBusy(false); }
   }

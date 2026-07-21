@@ -12,6 +12,7 @@ import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { useAuth } from "@/components/auth-context";
 import { REGISTRATION_STATUS_OPTIONS, label } from "@/lib/constants";
 import { daysUntil } from "@/lib/format";
+import { useToast } from "@/lib/toast-context";
 import { expiryState, effectiveRegistrationStatus } from "@/lib/services/reminders";
 
 interface RegRow {
@@ -38,6 +39,7 @@ function ExpiryPill({ date }: { date: string }) {
 
 export default function RegistrationsPage() {
   const { can } = useAuth();
+  const { toast } = useToast();
   const [rows, setRows] = useState<RegRow[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -93,6 +95,7 @@ export default function RegistrationsPage() {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form),
       });
       if (!res.ok) { const d = await res.json(); setErr(d.error ?? "Failed to create"); return; }
+      toast("success", "Registration created");
       await afterAction();
     } finally { setBusy(false); }
   }
@@ -101,6 +104,7 @@ export default function RegistrationsPage() {
     if (!renewId) return; setBusy(true);
     try {
       await fetch(`/api/registrations/${renewId}/renew`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ expiryDate }) });
+      toast("success", "Registration renewed");
       await afterAction();
     } finally { setBusy(false); }
   }
@@ -109,6 +113,7 @@ export default function RegistrationsPage() {
     if (!suspendId) return; setBusy(true);
     try {
       await fetch(`/api/registrations/${suspendId}/suspend`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ note }) });
+      toast("warning", "Registration suspended");
       await afterAction();
     } finally { setBusy(false); }
   }
@@ -117,6 +122,7 @@ export default function RegistrationsPage() {
     if (!deleteId) return; setBusy(true);
     try {
       await fetch(`/api/registrations/${deleteId}`, { method: "DELETE" });
+      toast("success", "Registration deleted");
       await afterAction();
     } finally { setBusy(false); }
   }

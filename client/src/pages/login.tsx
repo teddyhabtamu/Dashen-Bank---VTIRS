@@ -2,11 +2,13 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/components/auth-context";
 import { useBrand } from "@/lib/brand-context";
+import { useToast } from "@/lib/toast-context";
 
 export default function LoginPage() {
   const navigate = useNavigate();
   const { refresh } = useAuth();
   const { companyName, systemName } = useBrand();
+  const { toast } = useToast();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -25,9 +27,11 @@ export default function LoginPage() {
       const data = await res.json();
       if (!res.ok) {
         setError(data.error ?? "Login failed");
+        toast("error", data.error ?? "Login failed");
         return;
       }
       await refresh();
+      toast("success", "Signed in successfully");
       navigate("/dashboard");
     } catch {
       setError("Network error. Please try again.");

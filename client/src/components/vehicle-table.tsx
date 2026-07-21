@@ -9,6 +9,7 @@ import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { label } from "@/lib/constants";
 import { formatCurrency } from "@/lib/format";
 import { useAuth } from "@/components/auth-context";
+import { useToast } from "@/lib/toast-context";
 
 interface VehicleRow {
   id: string;
@@ -25,6 +26,7 @@ interface VehicleRow {
 
 export function VehicleTable() {
   const { can } = useAuth();
+  const { toast } = useToast();
 
   const [rows, setRows] = useState<VehicleRow[]>([]);
   const [total, setTotal] = useState(0);
@@ -64,6 +66,7 @@ export function VehicleTable() {
     try {
       await fetch(`/api/vehicles/${deleteId}`, { method: "DELETE" });
       setDeleteId(null);
+      toast("success", "Vehicle deleted");
       load();
     } finally {
       setDeleting(false);

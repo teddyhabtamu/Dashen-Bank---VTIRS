@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Settings as SettingsIcon, Save, Building2, Bell, Monitor, ShieldCheck } from "lucide-react";
 import { BrandLoader } from "@/components/ui/brand-loader";
+import { useToast } from "@/lib/toast-context";
 
 interface SettingItem {
   id: string;
@@ -52,6 +53,7 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const { toast } = useToast();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -98,14 +100,13 @@ export default function SettingsPage() {
         body: JSON.stringify({ updates }),
       });
       if (!res.ok) {
-        setMessage({ type: "error", text: "Failed to save settings" });
+        toast("error", "Failed to save settings");
         return;
       }
       const data = await res.json();
       setGrouped(data ?? {});
       setDirty(false);
-      setMessage({ type: "success", text: "Settings saved successfully." });
-      setTimeout(() => setMessage(null), 3000);
+      toast("success", "Settings saved");
     } finally {
       setSaving(false);
     }

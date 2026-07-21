@@ -6,6 +6,7 @@ import { Modal } from "@/components/ui/modal";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { Dropdown } from "@/components/ui/dropdown";
 import { useAuth } from "@/components/auth-context";
+import { useToast } from "@/lib/toast-context";
 import { formatDateTime } from "@/lib/format";
 
 interface UserRow {
@@ -36,6 +37,7 @@ const STATUS_OPTIONS = [
 
 export default function UsersPage() {
   const { can } = useAuth();
+  const { toast } = useToast();
   const [rows, setRows] = useState<UserRow[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -154,6 +156,7 @@ export default function UsersPage() {
         return;
       }
       setFormOpen(false);
+      toast("success", editId ? "User updated" : "User created");
       await load();
     } finally {
       setBusy(false);
@@ -167,6 +170,7 @@ export default function UsersPage() {
       const res = await fetch(`/api/users/${deleteId}`, { method: "DELETE" });
       if (!res.ok) return;
       setDeleteId(null);
+      toast("success", "User deleted");
       await load();
     } finally {
       setBusy(false);
