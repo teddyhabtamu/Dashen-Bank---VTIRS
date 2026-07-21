@@ -13,6 +13,7 @@ import SearchPage from "@/pages/search";
 import ReportsPage from "@/pages/reports";
 import AuditLogsPage from "@/pages/audit";
 import UsersPage from "@/pages/admin/users";
+import NotificationsPage from "@/pages/notifications";
 
 export default function App() {
   return (
@@ -31,6 +32,7 @@ export default function App() {
           <Route path="/reports" element={<ReportsPage />} />
           <Route path="/audit" element={<AuditLogsPage />} />
           <Route path="/admin/users" element={<UsersPage />} />
+          <Route path="/notifications" element={<NotificationsPage />} />
         </Route>
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
