@@ -221,17 +221,17 @@ export default function SearchPage() {
                       <Icon className="h-5 w-5" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="truncate text-sm font-semibold text-slate-800">{r.title}</span>
-                        <span className={`badge ${meta.pill}`}>{meta.label}</span>
-                        {r.badges}
-                      </div>
-                      <div className="truncate text-xs text-slate-400">{r.sub}</div>
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <span className="truncate text-sm font-semibold text-slate-800">{r.title}</span>
+                      <span className={`badge flex-shrink-0 ${meta.pill}`}>{meta.label}</span>
+                      {r.badges}
                     </div>
-                    <div className="flex flex-shrink-0 items-center gap-3">
-                      {r.meta}
-                      <ArrowRight className="h-4 w-4 text-slate-300" />
-                    </div>
+                    <div className="truncate text-xs text-slate-400">{r.sub}</div>
+                  </div>
+                  <div className="flex flex-shrink-0 items-center gap-2 sm:gap-3">
+                    {r.meta}
+                    <ArrowRight className="h-4 w-4 flex-shrink-0 text-slate-300" />
+                  </div>
                   </Link>
                 </li>
               );

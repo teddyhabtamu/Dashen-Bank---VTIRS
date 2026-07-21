@@ -80,10 +80,10 @@ export function RegistrationPanel({ vehicleId, initial, canRenew, canSuspend }: 
                 )}
               </div>
             </div>
-            <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-sm text-slate-600">
+            <div className="mt-2 grid grid-cols-1 gap-x-4 gap-y-1 text-sm text-slate-600 sm:grid-cols-2">
               <div>Reg Date: <span className="text-slate-800">{formatDate(r.regDate)}</span></div>
               <div>Office: <span className="text-slate-800">{r.office ?? "-"}</span></div>
-              <div className="col-span-2">
+              <div className="sm:col-span-2">
                 Expiry: <span className={`badge ${EXPIRY_BADGE[state]}`}>{formatDate(r.expiryDate)} · {days !== null && days >= 0 ? `${days}d left` : "expired"}</span>
               </div>
             </div>
