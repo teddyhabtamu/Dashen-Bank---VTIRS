@@ -29,7 +29,7 @@ const NAV = [
   { href: "/notifications", label: "Notifications", icon: Bell, perm: null, ready: true },
   { href: "/audit", label: "Audit Logs", icon: History, perm: PERMISSIONS.AUDIT_VIEW, ready: true },
   { href: "/admin/users", label: "Users", icon: Users, perm: PERMISSIONS.USER_MANAGE, ready: true },
-  { href: "/admin/roles", label: "Roles & Permissions", icon: Shield, perm: PERMISSIONS.ROLE_MANAGE, ready: false },
+  { href: "/admin/roles", label: "Roles & Permissions", icon: Shield, perm: PERMISSIONS.ROLE_MANAGE, ready: true },
   { href: "/admin/settings", label: "Settings", icon: Settings, perm: PERMISSIONS.SETTING_MANAGE, ready: false },
 ];
 
