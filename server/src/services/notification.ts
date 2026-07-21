@@ -75,7 +75,7 @@ export async function generateNotifications(userId: string) {
 // Only create if no unread notification exists for the same user + type + link.
 async function shouldCreate(userId: string, type: string, link: string): Promise<boolean> {
   const existing = await prisma.notification.findFirst({
-    where: { userId, type, link, isRead: false },
+    where: { userId, type, link },
   });
   return !existing;
 }
