@@ -394,6 +394,11 @@ async function seedSampleFleet() {
   } else {
     console.log("  • sample vehicles already present (skipped)");
   }
+
+  // 7. Default settings
+  const { seedDefaultSettings } = await import("../src/services/setting.js");
+  await seedDefaultSettings();
+  console.log("  • default settings ensured");
 }
 
 main()

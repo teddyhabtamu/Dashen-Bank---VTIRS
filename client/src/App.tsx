@@ -15,6 +15,7 @@ import AuditLogsPage from "@/pages/audit";
 import UsersPage from "@/pages/admin/users";
 import NotificationsPage from "@/pages/notifications";
 import RolesPage from "@/pages/admin/roles";
+import SettingsPage from "@/pages/admin/settings";
 
 export default function App() {
   return (
@@ -35,6 +36,7 @@ export default function App() {
           <Route path="/admin/users" element={<UsersPage />} />
           <Route path="/notifications" element={<NotificationsPage />} />
           <Route path="/admin/roles" element={<RolesPage />} />
+          <Route path="/admin/settings" element={<SettingsPage />} />
         </Route>
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
