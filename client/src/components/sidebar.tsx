@@ -13,9 +13,11 @@ import {
   History,
   LogOut,
 } from "lucide-react";
+import { useState } from "react";
 import { useAuth } from "./auth-context";
 import { PERMISSIONS } from "@/lib/rbac";
 import { cn } from "@/lib/format";
+import { ConfirmModal } from "./ui/confirm-modal";
 
 const NAV = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, perm: null, ready: true },
@@ -42,6 +44,7 @@ export function Sidebar({
 }) {
   const { pathname } = useLocation();
   const { user, can, logout } = useAuth();
+  const [confirmSignOut, setConfirmSignOut] = useState(false);
 
   return (
     <>
@@ -144,7 +147,7 @@ export function Sidebar({
             <div>{user?.roleName}</div>
           </div>
           <button
-            onClick={logout}
+            onClick={() => setConfirmSignOut(true)}
             title={collapsed ? "Sign out" : undefined}
             className={cn(
               "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-white/70 transition-colors hover:bg-white/10 hover:text-white",
@@ -156,6 +159,15 @@ export function Sidebar({
           </button>
         </div>
       </aside>
+
+      <ConfirmModal
+        open={confirmSignOut}
+        onClose={() => setConfirmSignOut(false)}
+        onConfirm={() => { setConfirmSignOut(false); logout(); }}
+        title="Sign Out"
+        message="Are you sure you want to sign out of VTIRS?"
+        confirmLabel="Sign Out"
+      />
     </>
   );
 }
