@@ -144,6 +144,36 @@ async function main() {
     });
   }
 
+  // 5b. Sample users for each role
+  const roles = await prisma.role.findMany();
+  const hqBranch = await prisma.branch.findUnique({ where: { code: "HQ" } });
+  const branchId = hqBranch?.id ?? null;
+  const sampleUsers = [
+    { username: "abebe.admin",  email: "abebe.admin@dashenbank.com.vtirs", fullName: "Abebe Kebede",      role: "facilities_admin",  branch: branchId, pass: "Pass1234" },
+    { username: "alemu.officer", email: "alemu.officer@dashenbank.com.vtirs", fullName: "Alemu Worku",      role: "facilities_officer", branch: branchId, pass: "Pass1234" },
+    { username: "biruk.mgmt",    email: "biruk.mgmt@dashenbank.com.vtirs",    fullName: "Biruk Tadesse",     role: "management",        branch: branchId, pass: "Pass1234" },
+    { username: "sara.sysadmin", email: "sara.sysadmin@dashenbank.com.vtirs", fullName: "Sara Hailu",        role: "system_admin",      branch: branchId, pass: "Pass1234" },
+  ];
+  for (const su of sampleUsers) {
+    const role = roles.find((r) => r.slug === su.role);
+    if (!role) continue;
+    const existingUser = await prisma.user.findUnique({ where: { username: su.username } });
+    if (!existingUser) {
+      await prisma.user.create({
+        data: {
+          username: su.username,
+          email: su.email,
+          passwordHash: await hashPassword(su.pass),
+          fullName: su.fullName,
+          status: "ACTIVE",
+          roleId: role.id,
+          branchId: su.branch,
+        },
+      });
+    }
+  }
+  console.log(`  • ${sampleUsers.length} sample users ensured`);
+
   console.log("  • reference data ensured (branches, departments, manufacturers, drivers)");
 
   // 6. Sample fleet data (vehicles + registrations + insurance)

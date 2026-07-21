@@ -19,6 +19,7 @@ import reportRoutes from "./routes/reports.js";
 import searchRoutes from "./routes/search.js";
 import referenceRoutes from "./routes/reference.js";
 import auditRoutes from "./routes/audit.js";
+import userRoutes from "./routes/users.js";
 
 const PORT = Number(process.env.PORT ?? 4000);
 const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN ?? "http://localhost:5173";
@@ -52,6 +53,7 @@ app.use("/api/reports", reportRoutes);
 app.use("/api/search", searchRoutes);
 app.use("/api/reference", referenceRoutes);
 app.use("/api/audit", auditRoutes);
+app.use("/api/users", userRoutes);
 
 // Serve uploaded files (documents/images) statically.
 app.use("/uploads", express.static(uploadRoot()));
