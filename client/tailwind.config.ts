@@ -52,6 +52,15 @@ const config: Config = {
         xl: "0.875rem",
         "2xl": "1.125rem",
       },
+      keyframes: {
+        "fade-in-up": {
+          "0%": { opacity: "0", transform: "translateY(12px)" },
+          "100%": { opacity: "1", transform: "translateY(0)" },
+        },
+      },
+      animation: {
+        "fade-in-up": "fade-in-up 0.35s ease-out",
+      },
     },
   },
   plugins: [],

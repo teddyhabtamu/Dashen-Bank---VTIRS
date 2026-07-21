@@ -4,6 +4,7 @@ import { useAuth } from "./auth-context";
 import { Sidebar } from "./sidebar";
 import { Topbar } from "./topbar";
 import { BrandLoader } from "./ui/brand-loader";
+import { PageTransition } from "./page-transition";
 
 export function ProtectedLayout() {
   const { user, loading } = useAuth();
@@ -37,7 +38,9 @@ export function ProtectedLayout() {
           onOpenMobile={() => setMobileOpen(true)}
         />
         <main className="flex-1 overflow-y-auto bg-slate-50 p-4 sm:p-6">
-          <Outlet />
+          <PageTransition key={location.pathname}>
+            <Outlet />
+          </PageTransition>
         </main>
       </div>
     </div>

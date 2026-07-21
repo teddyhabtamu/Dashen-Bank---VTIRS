@@ -64,7 +64,10 @@ export default function UsersPage() {
 
   useEffect(() => {
     fetch("/api/users/roles").then((r) => r.json()).then(setRoles).catch(() => {});
-    fetch("/api/reference/branches").then((r) => r.json()).then(setBranches).catch(() => {});
+    fetch("/api/reference/lookups")
+      .then((r) => r.json())
+      .then((d) => setBranches((d.branches ?? []).map((b: { value: string; label: string }) => ({ id: b.value, name: b.label }))))
+      .catch(() => setBranches([]));
   }, []);
 
   const load = useCallback(async () => {
