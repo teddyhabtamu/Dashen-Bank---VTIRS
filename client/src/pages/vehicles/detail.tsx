@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { useCallback, useEffect, useState } from "react";
+import { Link, useParams, useBlocker } from "react-router-dom";
 import { ArrowLeft, Pencil, Car, FileText, ShieldCheck, User, MapPin, Fuel } from "lucide-react";
 import { StatusBadge } from "@/components/ui/badge";
 import { BrandLoader } from "@/components/ui/brand-loader";
+import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { RegistrationPanel } from "@/components/registration-panel";
 import { InsurancePanel } from "@/components/insurance-panel";
 import { DocumentManager } from "@/components/document-manager";
@@ -38,6 +39,25 @@ export default function VehicleDetailPage() {
   const [v, setV] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [pendingUploads, setPendingUploads] = useState(false);
+  const [blockConfirm, setBlockConfirm] = useState(false);
+  const blocker = useBlocker(pendingUploads);
+
+  const resetBlocker = useCallback(() => {
+    if (blocker.state === "blocked") {
+      blocker.reset();
+      setBlockConfirm(false);
+    }
+  }, [blocker]);
+
+  useEffect(() => {
+    if (blocker.state === "blocked") setBlockConfirm(true);
+  }, [blocker.state]);
+
+  function proceed() {
+    if (blocker.state === "blocked") blocker.proceed();
+    setBlockConfirm(false);
+  }
 
   useEffect(() => {
     if (!id) return;
@@ -161,6 +181,7 @@ export default function VehicleDetailPage() {
             }))}
             canUpload={can(PERMISSIONS.DOCUMENT_UPLOAD)}
             canDelete={can(PERMISSIONS.DOCUMENT_DELETE)}
+            onPendingChange={setPendingUploads}
           />
         </Section>
 
@@ -170,6 +191,15 @@ export default function VehicleDetailPage() {
           <Row label="Address" value={v.branch?.address} />
         </Section>
       </div>
+
+      <ConfirmModal
+        open={blockConfirm}
+        onClose={resetBlocker}
+        onConfirm={proceed}
+        title="Unsaved files"
+        message="You have files selected but not uploaded. Leave anyway?"
+        confirmLabel="Leave"
+      />
     </div>
   );
 }

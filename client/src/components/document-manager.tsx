@@ -1,5 +1,5 @@
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Upload, FileText, Image as ImageIcon, Trash2, Download, Eye, X } from "lucide-react";
 import { Select } from "@/components/ui/select";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
@@ -33,12 +33,14 @@ export function DocumentManager({
   initialImages,
   canUpload,
   canDelete,
+  onPendingChange,
 }: {
   vehicleId: string;
   initialDocs: DocItem[];
   initialImages: ImgItem[];
   canUpload: boolean;
   canDelete: boolean;
+  onPendingChange?: (pending: boolean) => void;
 }) {
   const [docs, setDocs] = useState<DocItem[]>(initialDocs);
   const [images, setImages] = useState<ImgItem[]>(initialImages);
@@ -51,6 +53,9 @@ export function DocumentManager({
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+
+  const hasPending = selectedFiles.length > 0;
+  useEffect(() => { onPendingChange?.(hasPending); }, [hasPending, onPendingChange]);
 
   const refresh = useCallback(async () => {
     const res = await fetch(`/api/vehicles/${vehicleId}`, { cache: "no-store" });
