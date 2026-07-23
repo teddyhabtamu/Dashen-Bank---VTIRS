@@ -98,7 +98,7 @@ export function Select({
         className={cn(
           "input flex items-center justify-between text-left",
           disabled && "cursor-not-allowed opacity-50",
-          open && "border-primary ring-2 ring-primary/20",
+          open && "border-slate-400 ring-2 ring-slate-200",
           className
         )}
       >
@@ -124,7 +124,7 @@ export function Select({
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   placeholder="Search…"
-                  className="w-full rounded-md border border-slate-200 px-2 py-1.5 text-sm outline-none focus:border-primary"
+                  className="w-full rounded-md border border-slate-200 px-2 py-1.5 text-sm outline-none focus:border-slate-400"
                 />
               </div>
             )}

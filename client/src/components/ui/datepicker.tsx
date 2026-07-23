@@ -113,7 +113,7 @@ export function DatePicker({ value, onChange, placeholder = "Select date", disab
         className={cn(
           "input flex items-center justify-between text-left",
           disabled && "cursor-not-allowed opacity-50",
-          open && "border-primary ring-2 ring-primary/20"
+          open && "border-slate-400 ring-2 ring-slate-200"
         )}
       >
         <span className={cn("truncate", !selected && "text-slate-400")}>
@@ -151,14 +151,14 @@ export function DatePicker({ value, onChange, placeholder = "Select date", disab
                 <select
                   value={view.m}
                   onChange={(e) => setView((v) => ({ ...v, m: Number(e.target.value) }))}
-                  className="rounded-md border border-slate-200 bg-white px-2 py-1 text-sm font-medium outline-none focus:border-primary"
+                  className="rounded-md border border-slate-200 bg-white px-2 py-1 text-sm font-medium outline-none focus:border-slate-400"
                 >
                   {MONTHS.map((mn, i) => (<option key={i} value={i}>{mn}</option>))}
                 </select>
                 <select
                   value={view.y}
                   onChange={(e) => setView((v) => ({ ...v, y: Number(e.target.value) }))}
-                  className="rounded-md border border-slate-200 bg-white px-2 py-1 text-sm font-medium outline-none focus:border-primary"
+                  className="rounded-md border border-slate-200 bg-white px-2 py-1 text-sm font-medium outline-none focus:border-slate-400"
                 >
                   {years.map((y) => (<option key={y} value={y}>{y}</option>))}
                 </select>

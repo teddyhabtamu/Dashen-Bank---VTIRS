@@ -82,7 +82,7 @@ export function Modal({
             </div>
             <button
               onClick={onClose}
-              className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-primary/30"
+              className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-200"
               aria-label="Close"
             >
               <X className="h-5 w-5" />

@@ -24,6 +24,13 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+*:focus { outline: none; }
+*:focus-visible {
+  outline: 2px solid #aab2d9;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
 *::-webkit-scrollbar {
   width: 10px;
   height: 10px;
@@ -41,7 +48,7 @@ body {
     @apply rounded-2xl bg-white shadow-card border border-slate-100;
   }
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed outline-none;
   }
   .btn-primary {
     @apply btn bg-primary text-white hover:bg-primary-600;
@@ -53,7 +60,7 @@ body {
     @apply btn border border-slate-300 text-slate-700 hover:bg-slate-50;
   }
   .input {
-    @apply w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20;
+    @apply w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-400 focus:ring-2 focus:ring-slate-200;
   }
   .label {
     @apply mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500;

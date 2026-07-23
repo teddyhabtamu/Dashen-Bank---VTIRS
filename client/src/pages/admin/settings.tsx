@@ -179,7 +179,7 @@ export default function SettingsPage() {
                         </div>
                         <div className="flex items-center gap-2 sm:w-48 sm:shrink-0">
                           {isNumericKey(item.key) ? (
-                            <div className="flex w-full items-center rounded-md border border-slate-200 bg-white focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/20">
+                            <div className="flex w-full items-center rounded-md border border-slate-200 bg-white focus-within:border-slate-400 focus-within:ring-1 focus-within:ring-slate-200">
                               <button
                                 type="button"
                                 className="flex h-9 w-9 items-center justify-center text-slate-400 hover:text-slate-600 transition-colors border-r border-slate-200"
@@ -208,7 +208,7 @@ export default function SettingsPage() {
                               type="button"
                               role="switch"
                               aria-checked={values[item.id] === "true"}
-                              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary/20 ${values[item.id] === "true" ? "bg-primary" : "bg-slate-200"}`}
+                              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-slate-300 ${values[item.id] === "true" ? "bg-primary" : "bg-slate-200"}`}
                               onClick={() => setValue(item.id, values[item.id] === "true" ? "false" : "true")}
                             >
                               <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-0 transition-transform ${values[item.id] === "true" ? "translate-x-6" : "translate-x-1"}`} />
