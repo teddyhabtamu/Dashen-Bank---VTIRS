@@ -125,17 +125,14 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center gap-3 rounded-lg bg-white p-5 shadow-sm ring-1 ring-slate-200">
-        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-          <SettingsIcon className="h-5 w-5 text-primary" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <h2 className="text-base font-semibold text-slate-800">System Settings</h2>
-          <p className="text-xs text-slate-500">Configure application behavior and preferences</p>
+    <div className="mx-auto max-w-2xl space-y-5">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-semibold text-slate-800">System Settings</h2>
+          <p className="text-sm text-slate-500">Configure application behavior and preferences</p>
         </div>
         <button className="btn-primary" onClick={save} disabled={saving || !dirty}>
-          <Save className="mr-1.5 h-4 w-4" /> {saving ? "Saving…" : "Save Changes"}
+          <Save className="h-4 w-4" /> {saving ? "Saving…" : "Save"}
         </button>
       </div>
 
@@ -151,14 +148,14 @@ export default function SettingsPage() {
           <p>No settings configured</p>
         </div>
       ) : (
-        <div className="space-y-5">
+        <div className="space-y-3">
           {Object.entries(grouped).map(([group, items]) => {
             const Icon = GROUP_ICONS[group] ?? SettingsIcon;
             return (
-              <div key={group} className="overflow-hidden rounded-lg bg-white shadow-sm ring-1 ring-slate-200">
-                <div className="flex items-center gap-3 border-b border-slate-100 px-5 py-4">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-md bg-slate-100">
-                    <Icon className="h-4 w-4 text-slate-600" />
+              <div key={group} className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+                <div className="flex items-center gap-3 border-b border-slate-100 px-4 py-3">
+                  <div className="flex h-7 w-7 items-center justify-center rounded-md bg-slate-100">
+                    <Icon className="h-3.5 w-3.5 text-slate-500" />
                   </div>
                   <div>
                     <h3 className="text-sm font-semibold text-slate-800">{group}</h3>
@@ -167,22 +164,22 @@ export default function SettingsPage() {
                 </div>
                 <div className="divide-y divide-slate-100">
                   {items.map((item) => (
-                    <div key={item.id} className="px-5 py-4 transition-colors hover:bg-slate-50/50">
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div key={item.id} className="px-4 py-3 transition-colors hover:bg-slate-50/50">
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                         <div className="flex-1 min-w-0">
                           <label htmlFor={`setting-${item.id}`} className="text-sm font-medium text-slate-700">
                             {item.label ?? item.key}
                           </label>
                           {helps(item.key) && (
-                            <p className="mt-0.5 text-xs text-slate-400">{helps(item.key)}</p>
+                            <p className="text-xs text-slate-400">{helps(item.key)}</p>
                           )}
                         </div>
-                        <div className="flex items-center gap-2 sm:w-48 sm:shrink-0">
+                        <div className="flex items-center gap-2 sm:w-44 sm:shrink-0">
                           {isNumericKey(item.key) ? (
                             <div className="flex w-full items-center rounded-md border border-slate-200 bg-white focus-within:border-slate-400 focus-within:ring-1 focus-within:ring-slate-200">
                               <button
                                 type="button"
-                                className="flex h-9 w-9 items-center justify-center text-slate-400 hover:text-slate-600 transition-colors border-r border-slate-200"
+                                className="flex h-8 w-8 shrink-0 items-center justify-center text-slate-400 hover:text-slate-600 transition-colors border-r border-slate-200"
                                 onClick={() => setValue(item.id, String(Math.max(0, Number(values[item.id] ?? 0) - (item.key === "session_timeout_minutes" ? 30 : 1))))}
                               >
                                 −
@@ -191,13 +188,13 @@ export default function SettingsPage() {
                                 id={`setting-${item.id}`}
                                 type="number"
                                 min="0"
-                                className="h-9 w-full min-w-0 border-0 bg-transparent px-2 text-center text-sm text-slate-700 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none outline-none"
+                                className="h-8 w-full min-w-0 border-0 bg-transparent px-2 text-center text-sm text-slate-700 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none outline-none"
                                 value={values[item.id] ?? ""}
                                 onChange={(e) => setValue(item.id, e.target.value)}
                               />
                               <button
                                 type="button"
-                                className="flex h-9 w-9 items-center justify-center text-slate-400 hover:text-slate-600 transition-colors border-l border-slate-200"
+                                className="flex h-8 w-8 shrink-0 items-center justify-center text-slate-400 hover:text-slate-600 transition-colors border-l border-slate-200"
                                 onClick={() => setValue(item.id, String(Number(values[item.id] ?? 0) + (item.key === "session_timeout_minutes" ? 30 : 1)))}
                               >
                                 +
