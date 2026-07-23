@@ -1,4 +1,5 @@
 import { prisma } from "../lib/prisma.js";
+import { writeAudit, type AuditReq } from "../lib/audit.js";
 
 // In-memory cache with TTL to avoid hitting DB on every request.
 let cache: Record<string, { value: string; expires: number }> = {};
@@ -43,12 +44,27 @@ export async function listSettings() {
   return grouped;
 }
 
-export async function updateSettings(updates: Array<{ id: string; value: string }>) {
+export async function updateSettings(
+  updates: Array<{ id: string; value: string }>,
+  ctx?: { userId: string; req: AuditReq }
+) {
   for (const u of updates) {
+    const old = await prisma.setting.findUnique({ where: { id: u.id } });
     await prisma.setting.update({
       where: { id: u.id },
       data: { value: u.value },
     });
+    if (ctx && old && old.value !== u.value) {
+      await writeAudit({
+        action: "UPDATE",
+        entity: "Setting",
+        entityId: u.id,
+        userId: ctx.userId,
+        oldValue: { key: old.key, value: old.value },
+        newValue: { key: old.key, value: u.value },
+        req: ctx.req,
+      });
+    }
   }
   invalidateCache();
 }

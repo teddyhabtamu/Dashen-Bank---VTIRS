@@ -33,7 +33,7 @@ router.put(
     if (!Array.isArray(updates) || updates.length === 0) {
       return res.status(422).json({ error: "updates array is required" });
     }
-    await updateSettings(updates);
+    await updateSettings(updates, { userId: req.session!.userId, req });
     const settings = await listSettings();
     res.json(settings);
   }
