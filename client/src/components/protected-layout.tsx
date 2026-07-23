@@ -5,6 +5,8 @@ import { Sidebar } from "./sidebar";
 import { Topbar } from "./topbar";
 import { BrandLoader } from "./ui/brand-loader";
 import { PageTransition } from "./page-transition";
+import { CommandPalette } from "./command-palette";
+import { Breadcrumbs } from "./breadcrumbs";
 
 export function ProtectedLayout() {
   const { user, loading } = useAuth();
@@ -37,12 +39,14 @@ export function ProtectedLayout() {
           onToggleCollapse={() => setCollapsed((v) => !v)}
           onOpenMobile={() => setMobileOpen(true)}
         />
+        <Breadcrumbs />
         <main className="flex-1 overflow-y-auto bg-slate-50 p-4 sm:p-6">
           <PageTransition key={location.pathname}>
             <Outlet />
           </PageTransition>
         </main>
       </div>
+      <CommandPalette />
     </div>
   );
 }

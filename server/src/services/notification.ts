@@ -17,7 +17,7 @@ export async function generateNotifications(userId: string) {
     prisma.vehicleRegistration.findMany({
       where: {
         expiryDate: { lte: horizon },
-        status: { not: "SUSPENDED" },
+        status: { notIn: ["SUSPENDED", "ARCHIVED"] },
       },
       include: {
         vehicle: { select: { id: true, plateNumber: true, vehicleCode: true } },
@@ -44,7 +44,7 @@ export async function generateNotifications(userId: string) {
       const link = `/vehicles/${reg.vehicle.id}`;
       const meta = JSON.stringify({ vehicleId: reg.vehicle.id, plateNumber: reg.vehicle.plateNumber, vehicleCode: reg.vehicle.vehicleCode });
 
-      if (await shouldCreate(userId, "REGISTRATION_REMINDER", link)) {
+      if (await shouldCreate(userId, "REGISTRATION_REMINDER", link, title)) {
         await create(userId, "REGISTRATION_REMINDER", title, message, link, meta);
         count++;
       }
@@ -62,7 +62,7 @@ export async function generateNotifications(userId: string) {
       const link = `/vehicles/${ins.vehicle.id}`;
       const meta = JSON.stringify({ vehicleId: ins.vehicle.id, plateNumber: ins.vehicle.plateNumber, vehicleCode: ins.vehicle.vehicleCode });
 
-      if (await shouldCreate(userId, "INSURANCE_REMINDER", link)) {
+      if (await shouldCreate(userId, "INSURANCE_REMINDER", link, title)) {
         await create(userId, "INSURANCE_REMINDER", title, message, link, meta);
         count++;
       }
@@ -72,12 +72,17 @@ export async function generateNotifications(userId: string) {
   return count;
 }
 
-// Only create if no unread notification exists for the same user + type + link.
-async function shouldCreate(userId: string, type: string, link: string): Promise<boolean> {
-  const existing = await prisma.notification.findFirst({
+// Only create if no matching unread notification exists, or if the status
+// changed (e.g. "Expiring Soon" → "Expired") so we can send an update.
+async function shouldCreate(userId: string, type: string, link: string, title: string): Promise<boolean> {
+  const latest = await prisma.notification.findFirst({
     where: { userId, type, link },
+    orderBy: { createdAt: "desc" },
   });
-  return !existing;
+  if (!latest) return true;
+  if (latest.title !== title) return true;
+  if (!latest.isRead) return false;
+  return false;
 }
 
 async function create(

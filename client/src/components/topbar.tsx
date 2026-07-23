@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Bell, Menu, PanelLeftClose, PanelLeftOpen, Check, BellDot } from "lucide-react";
+import { Bell, Menu, PanelLeftClose, PanelLeftOpen, Check, BellDot, Search, Command } from "lucide-react";
 import { useAuth } from "./auth-context";
 import { useBrand } from "@/lib/brand-context";
 import { formatDateTime } from "@/lib/format";
@@ -8,7 +8,12 @@ import { formatDateTime } from "@/lib/format";
 const TITLES: Record<string, string> = {
   "/dashboard": "Dashboard",
   "/vehicles": "Vehicle Registry",
+  "/vehicles/new": "New Vehicle",
+  "/vehicles/*/edit": "Edit Vehicle",
+  "/vehicles/*": "Vehicle Detail",
   "/registrations": "Registration Management",
+  "/registrations/*/history": "Registration History",
+  "/insurances": "Insurance Management",
   "/documents": "Document Management",
   "/search": "Search",
   "/reports": "Reports",
@@ -48,22 +53,41 @@ export function Topbar({
 
   const title =
     TITLES[pathname] ??
-    Object.entries(TITLES).find(([k]) => pathname.startsWith(k))?.[1] ??
+    Object.entries(TITLES)
+      .filter(([k]) => !k.includes("*"))
+      .sort(([a], [b]) => b.length - a.length)
+      .find(([k]) => pathname.startsWith(k))?.[1] ??
+    Object.entries(TITLES)
+      .filter(([k]) => k.includes("*"))
+      .find(([pattern]) => {
+        const regex = new RegExp("^" + pattern.replace(/\*/g, "[^/]+") + "$");
+        return regex.test(pathname);
+      })?.[1] ??
     systemName;
 
   useEffect(() => {
-    fetch("/api/notifications/unread-count")
-      .then((r) => r.json())
-      .then((d) => setUnread(d.count ?? 0))
-      .catch(() => {});
+    function fetchUnread() {
+      fetch("/api/notifications/unread-count")
+        .then((r) => r.json())
+        .then((d) => setUnread(d.count ?? 0))
+        .catch(() => {});
+    }
+    fetchUnread();
+    const id = setInterval(fetchUnread, 30_000);
+    return () => clearInterval(id);
   }, [pathname]);
 
   useEffect(() => {
     if (!panelOpen) return;
-    fetch("/api/notifications?pageSize=5&unreadOnly=true")
-      .then((r) => r.json())
-      .then((d) => setNotifs(d.items ?? []))
-      .catch(() => {});
+    function fetchNotifs() {
+      fetch("/api/notifications?pageSize=5&unreadOnly=true")
+        .then((r) => r.json())
+        .then((d) => setNotifs(d.items ?? []))
+        .catch(() => {});
+    }
+    fetchNotifs();
+    const id = setInterval(fetchNotifs, 15_000);
+    return () => clearInterval(id);
   }, [panelOpen]);
 
   useEffect(() => {
@@ -123,7 +147,19 @@ export function Topbar({
         </div>
       </div>
 
-      <div className="relative flex items-center gap-4">
+      <div className="relative flex items-center gap-2 sm:gap-4">
+        <button
+          onClick={() => document.dispatchEvent(new KeyboardEvent("keydown", { metaKey: true, key: "k" }))}
+          className="hidden items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-400 shadow-sm transition-colors hover:border-slate-300 hover:text-slate-500 sm:flex"
+          title="Quick search (Cmd+K)"
+        >
+          <Search className="h-3.5 w-3.5" />
+          <span>Quick search…</span>
+          <kbd className="flex items-center gap-0.5 rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-medium">
+            <Command className="h-2.5 w-2.5" />K
+          </kbd>
+        </button>
+
         <button
           className="relative rounded-lg p-2 text-slate-500 hover:bg-slate-100"
           onClick={() => setPanelOpen((o) => !o)}

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useParams, useBlocker } from "react-router-dom";
-import { ArrowLeft, Pencil, Car, FileText, ShieldCheck, User, MapPin, Fuel } from "lucide-react";
+import { Pencil } from "lucide-react";
 import { StatusBadge } from "@/components/ui/badge";
 import { BrandLoader } from "@/components/ui/brand-loader";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
@@ -12,23 +12,11 @@ import { label } from "@/lib/constants";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { PERMISSIONS } from "@/lib/rbac";
 
-function Section({ title, icon, children }: { title: string; icon: React.ReactNode; children: React.ReactNode }) {
+function Attr({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="card p-6">
-      <div className="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-slate-500">
-        {icon}
-        {title}
-      </div>
-      {children}
-    </div>
-  );
-}
-
-function Row({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    <div className="flex justify-between border-b border-slate-50 py-2 text-sm last:border-0">
-      <span className="text-slate-500">{label}</span>
-      <span className="font-medium text-slate-800">{value ?? "-"}</span>
+    <div className="flex items-center justify-between gap-4 py-2">
+      <span className="text-sm text-slate-500">{label}</span>
+      <span className="truncate text-right text-[15px] font-medium text-slate-800">{value ?? "-"}</span>
     </div>
   );
 }
@@ -65,113 +53,152 @@ export default function VehicleDetailPage() {
     setLoading(true);
     fetch(`/api/vehicles/${id}`)
       .then((r) => {
-        if (r.status === 404) {
-          setNotFound(true);
-          return null;
-        }
+        if (r.status === 404) { setNotFound(true); return null; }
         return r.json();
       })
-      .then((d) => {
-        if (d?.vehicle) setV(d.vehicle);
-      })
+      .then((d) => { if (d?.vehicle) setV(d.vehicle); })
       .finally(() => setLoading(false));
   }, [id]);
 
-  if (loading) {
-    return <BrandLoader />;
-  }
+  if (loading) return <BrandLoader />;
 
   if (notFound || !v) {
     return (
-      <div className="py-20 text-center text-slate-400">
-        <Car className="mx-auto mb-2 h-8 w-8 text-slate-300" />
-        Vehicle not found.
-        <div className="mt-3">
-          <Link to="/vehicles" className="text-primary hover:underline">Back to registry</Link>
-        </div>
+      <div className="flex flex-col items-center gap-2 py-20 text-center text-slate-400">
+        <span className="text-sm font-medium">Vehicle not found</span>
+        <Link to="/vehicles" className="text-xs text-primary hover:underline">Back to registry</Link>
       </div>
     );
   }
 
+  const documents = (v.documents ?? []) as any[];
+
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex items-start gap-3">
-          <Link to="/vehicles" className="mt-0.5 rounded-lg p-2 text-slate-500 hover:bg-slate-100">
-            <ArrowLeft className="h-5 w-5" />
-          </Link>
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <h2 className="truncate text-lg font-semibold text-slate-800 sm:text-xl">
-                {v.make} {v.model} {v.trim}
-              </h2>
+    <div className="mx-auto max-w-5xl space-y-10">
+      {/* Back */}
+      <Link to="/vehicles" className="inline-flex items-center gap-1 text-sm text-slate-400 hover:text-slate-600 transition-colors">
+        ← Vehicles
+      </Link>
+
+      {/* Hero */}
+      <div className="flex flex-col gap-2">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="space-y-2">
+            <h1 className="text-3xl font-bold tracking-tight text-slate-800">
+              {v.make} {v.model}{v.trim ? ` ${v.trim}` : ""}
+            </h1>
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="text-xl font-semibold text-slate-600">{v.plateNumber}</span>
               <StatusBadge status={v.status} />
             </div>
-            <p className="truncate font-mono text-xs text-slate-400">
-              {v.vehicleCode} · {v.plateNumber}
-            </p>
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-slate-400">
+              {v.year && <span>{v.year}</span>}
+              {v.year && <span className="text-slate-300">·</span>}
+              <span>{label(v.transmission) || "—"}</span>
+              <span className="text-slate-300">·</span>
+              <span>{label(v.fuelType) || "—"}</span>
+              {v.driveType && <><span className="text-slate-300">·</span><span>{label(v.driveType)}</span></>}
+              <span className="text-slate-300">·</span>
+              <span>{(v.odometer ?? 0).toLocaleString()} km</span>
+              {v.engineNo && <><span className="text-slate-300">·</span><span className="font-mono">ENG {v.engineNo.slice(0, 8)}</span></>}
+              {v.chassisNo && <><span className="text-slate-300">·</span><span className="font-mono">VIN {v.chassisNo.slice(0, 8)}</span></>}
+            </div>
           </div>
+          {can(PERMISSIONS.VEHICLE_EDIT) && (
+            <Link to={`/vehicles/${v.id}/edit`} className="btn-primary flex-shrink-0 gap-1.5 text-xs px-3 py-1.5">
+              <Pencil className="h-3.5 w-3.5" /> Edit
+            </Link>
+          )}
         </div>
-        {can(PERMISSIONS.VEHICLE_EDIT) && (
-          <Link to={`/vehicles/${v.id}/edit`} className="btn-primary flex-shrink-0">
-            <Pencil className="h-4 w-4" /> Edit
-          </Link>
-        )}
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <Section title="Basic Information" icon={<Car className="h-4 w-4" />}>
-          <Row label="Plate Number" value={v.plateNumber} />
-          <Row label="Previous Plate" value={v.prevPlateNo} />
-          <Row label="Category" value={v.category} />
-          <Row label="Type" value={v.type} />
-          <Row label="Make / Model" value={`${v.make} ${v.model}`} />
-          <Row label="Trim" value={v.trim} />
-          <Row label="Year" value={v.year} />
-          <Row label="Color" value={v.color} />
-        </Section>
+      {/* Detail sections — 2-col grid */}
+      <div className="grid grid-cols-1 gap-10 lg:grid-cols-2">
+        {/* Basic Information */}
+        <section>
+          <h2 className="mb-4 text-[18px] font-semibold text-slate-700">Basic Information</h2>
+          <div className="divide-y divide-slate-100">
+            <Attr label="Plate Number" value={v.plateNumber} />
+            <Attr label="Previous Plate" value={v.prevPlateNo} />
+            <Attr label="Make / Model" value={`${v.make} ${v.model}`} />
+            <Attr label="Trim" value={v.trim} />
+            <Attr label="Year" value={v.year} />
+            <Attr label="Color" value={v.color} />
+            <Attr label="Category" value={v.category} />
+            <Attr label="Type" value={v.type} />
+          </div>
+        </section>
 
-        <Section title="Technical Identification" icon={<Fuel className="h-4 w-4" />}>
-          <Row label="Engine Number" value={v.engineNo} />
-          <Row label="Chassis (VIN)" value={v.chassisNo} />
-          <Row label="Engine Capacity" value={v.engineCC ? `${v.engineCC} CC` : "-"} />
-          <Row label="Fuel Type" value={label(v.fuelType)} />
-          <Row label="Transmission" value={label(v.transmission)} />
-          <Row label="Drive Type" value={v.driveType ? label(v.driveType) : "-"} />
-          <Row label="Odometer" value={`${(v.odometer ?? 0).toLocaleString()} km`} />
-        </Section>
+        {/* Technical Specifications */}
+        <section>
+          <h2 className="mb-4 text-[18px] font-semibold text-slate-700">Technical Specifications</h2>
+          <div className="divide-y divide-slate-100">
+            <Attr label="Engine Number" value={v.engineNo} />
+            <Attr label="Chassis (VIN)" value={v.chassisNo} />
+            <Attr label="Engine Capacity" value={v.engineCC ? `${v.engineCC} CC` : "-"} />
+            <Attr label="Fuel Type" value={label(v.fuelType)} />
+            <Attr label="Transmission" value={label(v.transmission)} />
+            <Attr label="Drive Type" value={v.driveType ? label(v.driveType) : "-"} />
+            <Attr label="Odometer" value={`${(v.odometer ?? 0).toLocaleString()} km`} />
+          </div>
+        </section>
 
-        <Section title="Ownership" icon={<User className="h-4 w-4" />}>
-          <Row label="Owner" value={v.ownerName} />
-          <Row label="Department" value={v.department?.name} />
-          <Row label="Branch" value={v.branch?.name} />
-          <Row label="Current Driver" value={v.currentDriver?.fullName} />
-          <Row label="Acquisition Date" value={formatDate(v.acquisitionDate)} />
-          <Row label="Purchase Cost" value={formatCurrency(v.purchaseCost)} />
-          <Row label="Supplier" value={v.supplier} />
-        </Section>
+        {/* Ownership */}
+        <section>
+          <h2 className="mb-4 text-[18px] font-semibold text-slate-700">Ownership</h2>
+          <div className="divide-y divide-slate-100">
+            <Attr label="Owner" value={v.ownerName} />
+            <Attr label="Department" value={v.department?.name} />
+            <Attr label="Branch" value={v.branch?.name} />
+            <Attr label="Driver" value={v.currentDriver?.fullName} />
+            <Attr label="Acquired" value={formatDate(v.acquisitionDate)} />
+            <Attr label="Cost" value={formatCurrency(v.purchaseCost)} />
+            <Attr label="Supplier" value={v.supplier} />
+          </div>
+        </section>
 
-        <Section title="Registrations" icon={<ShieldCheck className="h-4 w-4" />}>
+        {/* Location */}
+        <section>
+          <h2 className="mb-4 text-[18px] font-semibold text-slate-700">Location</h2>
+          <div className="divide-y divide-slate-100">
+            <Attr label="Branch Code" value={v.branch?.code} />
+            <Attr label="Region" value={v.branch?.region} />
+            <Attr label="Address" value={v.branch?.address} />
+          </div>
+        </section>
+      </div>
+
+      {/* Registration & Insurance */}
+      <div className="grid grid-cols-1 gap-10 lg:grid-cols-2">
+        <section>
+          <h2 className="mb-4 text-[18px] font-semibold text-slate-700">Registration</h2>
           <RegistrationPanel
             vehicleId={v.id}
             initial={v.registrations}
             canRenew={can(PERMISSIONS.REGISTRATION_RENEW)}
             canSuspend={can(PERMISSIONS.REGISTRATION_SUSPEND)}
           />
-        </Section>
+        </section>
 
-        <Section title="Insurance" icon={<ShieldCheck className="h-4 w-4" />}>
+        <section>
+          <h2 className="mb-4 text-[18px] font-semibold text-slate-700">Insurance</h2>
           <InsurancePanel
             vehicleId={v.id}
             initial={v.insurances ?? []}
             canManage={can(PERMISSIONS.INSURANCE_MANAGE)}
           />
-        </Section>
+        </section>
+      </div>
 
-        <Section title="Documents & Images" icon={<FileText className="h-4 w-4" />}>
+      {/* Documents */}
+      <section>
+        <h2 className="mb-4 text-[18px] font-semibold text-slate-700">
+          Documents {documents.length > 0 && <span className="font-normal text-slate-400">({documents.length})</span>}
+        </h2>
+        <div className="rounded-xl border border-slate-200 bg-white">
           <DocumentManager
             vehicleId={v.id}
-            initialDocs={(v.documents ?? []).map((d: any) => ({
+            initialDocs={documents.map((d: any) => ({
               id: d.id, title: d.title, category: d.category, fileName: d.fileName,
               originalName: d.originalName, mimeType: d.mimeType, sizeBytes: d.sizeBytes,
               version: d.version, createdAt: d.createdAt,
@@ -184,14 +211,8 @@ export default function VehicleDetailPage() {
             canDelete={can(PERMISSIONS.DOCUMENT_DELETE)}
             onPendingChange={setPendingUploads}
           />
-        </Section>
-
-        <Section title="Location" icon={<MapPin className="h-4 w-4" />}>
-          <Row label="Branch Code" value={v.branch?.code} />
-          <Row label="Region" value={v.branch?.region} />
-          <Row label="Address" value={v.branch?.address} />
-        </Section>
-      </div>
+        </div>
+      </section>
 
       <ConfirmModal
         open={blockConfirm}

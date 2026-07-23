@@ -30,15 +30,22 @@ export function Dropdown({
   const triggerRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  // Position the floating menu just below the trigger, in a portal
-  // attached to <body> so it is never clipped by overflow containers.
   useLayoutEffect(() => {
     if (!open || !triggerRef.current) return;
     const rect = triggerRef.current.getBoundingClientRect();
+    const menuH = menuRef.current?.offsetHeight ?? 200;
     const menuW = menuRef.current?.offsetWidth ?? 200;
     let left = align === "right" ? rect.right - menuW : rect.left;
     left = Math.max(8, Math.min(left, window.innerWidth - menuW - 8));
-    const top = Math.min(rect.bottom + 4, window.innerHeight - 8);
+    const spaceBelow = window.innerHeight - rect.bottom - 4;
+    const spaceAbove = rect.top - 4;
+    const top = spaceBelow >= menuH
+      ? rect.bottom + 4
+      : spaceAbove >= menuH
+        ? rect.top - menuH - 4
+        : spaceBelow > spaceAbove
+          ? window.innerHeight - menuH - 8
+          : 8;
     setCoords({ top, left });
   }, [open, align, items.length]);
 

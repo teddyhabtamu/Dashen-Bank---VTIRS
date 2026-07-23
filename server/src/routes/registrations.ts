@@ -9,6 +9,8 @@ import {
   deleteRegistration,
   renewRegistration,
   suspendRegistration,
+  archiveRegistration,
+  restoreRegistration,
   DuplicateRegistrationError,
 } from "../services/registration.js";
 import { registrationSchema } from "../validation/registration.js";
@@ -134,6 +136,33 @@ router.post(
   async (req, res) => {
     const note = (req.body ?? {}).note as string | undefined;
     const reg = await suspendRegistration(req.params.id, note, {
+      userId: req.session!.userId,
+      req,
+    });
+    if (!reg) return res.status(404).json({ error: "Not found" });
+    res.json({ registration: reg });
+  }
+);
+
+router.post(
+  "/:id/archive",
+  requireAuth(PERMISSIONS.REGISTRATION_MANAGE),
+  async (req, res) => {
+    const note = (req.body ?? {}).note as string | undefined;
+    const reg = await archiveRegistration(req.params.id, note, {
+      userId: req.session!.userId,
+      req,
+    });
+    if (!reg) return res.status(404).json({ error: "Not found" });
+    res.json({ registration: reg });
+  }
+);
+
+router.post(
+  "/:id/restore",
+  requireAuth(PERMISSIONS.REGISTRATION_MANAGE),
+  async (req, res) => {
+    const reg = await restoreRegistration(req.params.id, {
       userId: req.session!.userId,
       req,
     });

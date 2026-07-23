@@ -153,6 +153,71 @@ export async function deleteRegistration(id: string, ctx: Context = {}) {
   return existing;
 }
 
+export async function archiveRegistration(id: string, note: string | undefined, ctx: Context = {}) {
+  const existing = await prisma.vehicleRegistration.findUnique({ where: { id } });
+  if (!existing) return null;
+
+  const reg = await prisma.vehicleRegistration.update({
+    where: { id },
+    data: { status: REGISTRATION_STATUS.ARCHIVED },
+  });
+
+  await logHistory(reg.id, reg.vehicleId, "ARCHIVE", {
+    prevStatus: existing.status,
+    newStatus: reg.status,
+    prevExpiry: existing.expiryDate,
+    newExpiry: existing.expiryDate,
+    note: note ?? null,
+    performedById: ctx.userId ?? null,
+  });
+
+  await writeAudit({
+    action: "ARCHIVE",
+    entity: "VehicleRegistration",
+    entityId: reg.id,
+    vehicleId: reg.vehicleId,
+    userId: ctx.userId,
+    oldValue: existing,
+    newValue: reg,
+    req: ctx.req,
+  });
+
+  return reg;
+}
+
+export async function restoreRegistration(id: string, ctx: Context = {}) {
+  const existing = await prisma.vehicleRegistration.findUnique({ where: { id } });
+  if (!existing) return null;
+
+  const newStatus = REGISTRATION_STATUS.ACTIVE;
+
+  const reg = await prisma.vehicleRegistration.update({
+    where: { id },
+    data: { status: newStatus },
+  });
+
+  await logHistory(reg.id, reg.vehicleId, "RESTORE", {
+    prevStatus: existing.status,
+    newStatus: reg.status,
+    prevExpiry: existing.expiryDate,
+    newExpiry: existing.expiryDate,
+    performedById: ctx.userId ?? null,
+  });
+
+  await writeAudit({
+    action: "RESTORE",
+    entity: "VehicleRegistration",
+    entityId: reg.id,
+    vehicleId: reg.vehicleId,
+    userId: ctx.userId,
+    oldValue: existing,
+    newValue: reg,
+    req: ctx.req,
+  });
+
+  return reg;
+}
+
 // Renew: push expiry forward, set to ACTIVE, record history.
 export async function renewRegistration(
   id: string,

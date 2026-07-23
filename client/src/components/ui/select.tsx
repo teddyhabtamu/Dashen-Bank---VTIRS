@@ -43,9 +43,18 @@ export function Select({
   useLayoutEffect(() => {
     if (!open || !triggerRef.current) return;
     const rect = triggerRef.current.getBoundingClientRect();
+    const menuH = menuRef.current?.offsetHeight ?? 200;
     const menuW = rect.width;
     let left = Math.max(8, Math.min(rect.left, window.innerWidth - menuW - 8));
-    const top = Math.min(rect.bottom + 4, window.innerHeight - 8);
+    const spaceBelow = window.innerHeight - rect.bottom - 4;
+    const spaceAbove = rect.top - 4;
+    const top = spaceBelow >= menuH
+      ? rect.bottom + 4
+      : spaceAbove >= menuH
+        ? rect.top - menuH - 4
+        : spaceBelow > spaceAbove
+          ? window.innerHeight - menuH - 8
+          : 8;
     setCoords({ top, left, width: menuW });
   }, [open, options.length]);
 

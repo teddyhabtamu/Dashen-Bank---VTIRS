@@ -55,6 +55,7 @@ export const REGISTRATION_STATUS = {
   PENDING_RENEWAL: "PENDING_RENEWAL",
   EXPIRED: "EXPIRED",
   SUSPENDED: "SUSPENDED",
+  ARCHIVED: "ARCHIVED",
 } as const;
 export const REGISTRATION_STATUS_OPTIONS = Object.values(REGISTRATION_STATUS);
 
@@ -110,6 +111,7 @@ export const LABELS: Record<string, string> = {
   PENDING_RENEWAL: "Pending Renewal",
   EXPIRED: "Expired",
   SUSPENDED: "Suspended",
+  ARCHIVED: "Archived",
   REGISTRATION_CERT: "Registration Certificate",
   INSURANCE_CERT: "Insurance Certificate",
   PURCHASE_AGREEMENT: "Purchase Agreement",

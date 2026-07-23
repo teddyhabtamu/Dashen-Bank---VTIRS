@@ -12,6 +12,7 @@ import NewVehiclePage from "@/pages/vehicles/new";
 import EditVehiclePage from "@/pages/vehicles/edit";
 import VehicleDetailPage from "@/pages/vehicles/detail";
 import RegistrationsPage from "@/pages/registrations";
+import RegistrationHistoryPage from "@/pages/registrations/history";
 import InsurancesPage from "@/pages/insurances";
 import DocumentsPage from "@/pages/documents";
 import SearchPage from "@/pages/search";
@@ -35,6 +36,7 @@ const router = createBrowserRouter([
       { path: "vehicles/:id", element: <VehicleDetailPage /> },
       { path: "vehicles/:id/edit", element: <EditVehiclePage /> },
       { path: "registrations", element: <RegistrationsPage /> },
+      { path: "registrations/:id/history", element: <RegistrationHistoryPage /> },
       { path: "insurances", element: <InsurancesPage /> },
       { path: "documents", element: <DocumentsPage /> },
       { path: "search", element: <SearchPage /> },

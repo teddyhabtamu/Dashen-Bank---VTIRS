@@ -41,7 +41,7 @@ export function effectiveRegistrationStatus(
   status: string,
   expiryDate: Date | string | null | undefined
 ): string {
-  if (status === REGISTRATION_STATUS.SUSPENDED || status === REGISTRATION_STATUS.PENDING_RENEWAL) {
+  if (status === REGISTRATION_STATUS.SUSPENDED || status === REGISTRATION_STATUS.PENDING_RENEWAL || status === REGISTRATION_STATUS.ARCHIVED) {
     return status;
   }
   const days = daysUntil(expiryDate);

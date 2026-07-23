@@ -1,7 +1,6 @@
-
 import { useEffect, useMemo, useState } from "react";
 import ReactECharts from "echarts-for-react";
-import { Download, FileSpreadsheet, Printer, Filter, CalendarRange } from "lucide-react";
+import { Download, FileSpreadsheet, Printer, CalendarRange } from "lucide-react";
 import { Select } from "@/components/ui/select";
 import { DatePicker } from "@/components/ui/datepicker";
 import { BrandLoader } from "@/components/ui/brand-loader";
@@ -75,6 +74,9 @@ export default function ReportsPage() {
     else exportPdf(rowsToHtmlTable(title, rows, totals), title, companyName);
   }
 
+  const hasFilters = branchId || departmentId || status || from || to;
+  const filterCount = [branchId, departmentId, status, from, to].filter(Boolean).length;
+
   return (
     <div className="space-y-4">
       <div>
@@ -82,33 +84,36 @@ export default function ReportsPage() {
         <p className="text-sm text-slate-500">Fleet analytics &amp; compliance reporting</p>
       </div>
 
-      <div className="card p-4">
-        <div className="flex flex-col flex-wrap gap-2 sm:flex-row sm:items-center">
-          <div className="flex items-center gap-1.5 text-sm font-medium text-slate-500"><Filter className="h-4 w-4" /> Filters:</div>
-          <Select className="w-full sm:w-auto" value={branchId} onChange={setBranchId} placeholder="All branches"
+      <div className="rounded-lg border border-slate-200 bg-white p-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <Select className="w-full sm:w-40" value={branchId} onChange={setBranchId} placeholder="All branches"
             options={[{ value: "", label: "All branches" }, ...(data?.branches ?? []).map((b) => ({ value: b.id, label: b.name }))]} />
-          <Select className="w-full sm:w-auto" value={departmentId} onChange={setDepartmentId} placeholder="All departments"
+          <Select className="w-full sm:w-40" value={departmentId} onChange={setDepartmentId} placeholder="All departments"
             options={[{ value: "", label: "All departments" }, ...(data?.departments ?? []).map((d) => ({ value: d.id, label: d.name }))]} />
-          <Select className="w-full sm:w-auto" value={status} onChange={setStatus} placeholder="All statuses"
+          <Select className="w-full sm:w-36" value={status} onChange={setStatus} placeholder="All statuses"
             options={[{ value: "", label: "All statuses" }, ...VEHICLE_STATUS_OPTIONS.map((s) => ({ value: s, label: label(s) }))]} />
-          <div className="flex flex-shrink-0 flex-wrap items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 sm:flex-nowrap">
-            <CalendarRange className="h-4 w-4 shrink-0 text-slate-400" />
-            <div className="min-w-0 flex-1 sm:flex-initial"><DatePicker value={from} onChange={(v) => setFrom(v)} placeholder="Acq. from" /></div>
+          <div className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1">
+            <CalendarRange className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+            <DatePicker value={from} onChange={setFrom} placeholder="From" className="w-24" />
             <span className="text-slate-300">–</span>
-            <div className="min-w-0 flex-1 sm:flex-initial"><DatePicker value={to} onChange={(v) => setTo(v)} placeholder="to" /></div>
+            <DatePicker value={to} onChange={setTo} placeholder="To" className="w-24" />
           </div>
-          {(branchId || departmentId || status || from || to) && (
-            <button className="text-xs text-slate-400 underline hover:text-slate-600"
-              onClick={() => { setBranchId(""); setDepartmentId(""); setStatus(""); setFrom(""); setTo(""); }}>Clear</button>
+          {hasFilters && (
+            <button className="whitespace-nowrap text-xs font-medium text-primary hover:text-primary/80"
+              onClick={() => { setBranchId(""); setDepartmentId(""); setStatus(""); setFrom(""); setTo(""); }}>
+              Clear ({filterCount})
+            </button>
           )}
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-1.5">
         {TABS.map((t) => (
           <button key={t.key} onClick={() => setActive(t.key)}
-            className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-              active === t.key ? "bg-primary text-white" : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+            className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
+              active === t.key
+                ? "bg-primary text-white shadow-sm"
+                : "border border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:text-slate-700"
             }`}>{t.label}</button>
         ))}
       </div>
@@ -116,21 +121,30 @@ export default function ReportsPage() {
       {loading ? (
         <BrandLoader />
       ) : !data ? (
-        <div className="card py-12 text-center text-slate-400">Failed to load reports.</div>
+        <div className="rounded-lg border border-slate-200 bg-white py-12 text-center text-sm text-slate-400">
+          Failed to load reports.
+        </div>
       ) : (
-        <div className="card p-5">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-lg font-semibold text-slate-800">{activeMeta?.title}</h2>
+        <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+          <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+            <h3 className="text-sm font-semibold text-slate-800">{activeMeta?.title}</h3>
             {can("report:export") && (
               <div className="flex gap-1">
-                <button className="btn-outline px-2.5 py-1 text-xs" onClick={() => exportAll("csv")}><Download className="h-3.5 w-3.5" /> CSV</button>
-                <button className="btn-outline px-2.5 py-1 text-xs" onClick={() => exportAll("excel")}><FileSpreadsheet className="h-3.5 w-3.5" /> Excel</button>
-                <button className="btn-outline px-2.5 py-1 text-xs" onClick={() => exportAll("pdf")}><Printer className="h-3.5 w-3.5" /> PDF</button>
+                <button className="btn-outline inline-flex items-center gap-1 px-2.5 py-1 text-xs" onClick={() => exportAll("csv")}>
+                  <Download className="h-3.5 w-3.5" /> CSV
+                </button>
+                <button className="btn-outline inline-flex items-center gap-1 px-2.5 py-1 text-xs" onClick={() => exportAll("excel")}>
+                  <FileSpreadsheet className="h-3.5 w-3.5" /> Excel
+                </button>
+                <button className="btn-outline inline-flex items-center gap-1 px-2.5 py-1 text-xs" onClick={() => exportAll("pdf")}>
+                  <Printer className="h-3.5 w-3.5" /> PDF
+                </button>
               </div>
             )}
           </div>
-
-          <ReportView active={active} payload={payload} />
+          <div className="p-4">
+            <ReportView active={active} payload={payload} />
+          </div>
         </div>
       )}
     </div>
@@ -164,7 +178,7 @@ function InventoryTable({ rows }: { rows: any[] }) {
     <>
       <div className="space-y-3 sm:hidden">
         {rows.map((r, i) => (
-          <div key={i} className="card p-4">
+          <div key={i} className="rounded-lg border border-slate-100 p-4">
             <div className="mb-2 flex items-start justify-between gap-2">
               <span className="truncate text-sm font-semibold text-slate-800">{r.plateNumber}</span>
               <span className="badge flex-shrink-0 bg-slate-100 text-slate-600">{r.status}</span>
@@ -226,7 +240,7 @@ function ExpiryTable({ rows, kind }: { rows: any[]; kind: "registration" | "insu
         {rows.map((r, i) => {
           const days = r.daysLeft;
           return (
-            <div key={i} className="card p-4">
+            <div key={i} className="rounded-lg border border-slate-100 p-4">
               <div className="mb-2 flex items-start justify-between gap-2">
                 <span className="truncate text-sm font-semibold text-slate-800">
                   {isReg ? r.regNumber : r.policyNo}

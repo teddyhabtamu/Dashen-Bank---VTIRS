@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import ReactECharts from "echarts-for-react";
 import {
   Car, ClipboardList, ShieldCheck, AlertTriangle, ChevronRight, CalendarClock,
-  Search, Activity, Gauge, MapPin, Wrench, Ban, Archive, History,
+  Activity, Gauge, MapPin, Wrench, Ban, Archive, History,
 } from "lucide-react";
 import { StatusBadge } from "@/components/ui/badge";
 import { BrandLoader } from "@/components/ui/brand-loader";
@@ -81,26 +81,18 @@ const barV = (data: any[]) => ({
 });
 
 export default function DashboardPage() {
-  const navigate = useNavigate();
   const [kpis, setKpis] = useState<Kpis | null>(null);
   const [regs, setRegs] = useState<any[]>([]);
   const [ins, setIns] = useState<any[]>([]);
   const [dist, setDist] = useState<Dist | null>(null);
   const [activity, setActivity] = useState<ActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [quick, setQuick] = useState("");
-
   useEffect(() => {
     fetch("/api/dashboard").then((r) => r.json()).then((d) => {
       setKpis(d.kpis); setRegs(d.registrations ?? []); setIns(d.insurances ?? []);
       setDist(d.distributions ?? null); setActivity(d.activity ?? []);
     }).finally(() => setLoading(false));
   }, []);
-
-  function submitQuick(e: React.FormEvent) {
-    e.preventDefault();
-    navigate(`/search?q=${encodeURIComponent(quick)}`);
-  }
 
   if (loading || !kpis || !dist) {
     return <BrandLoader label="Loading dashboard…" />;
@@ -113,13 +105,7 @@ export default function DashboardPage() {
           <h2 className="text-xl font-semibold text-slate-800">Dashboard</h2>
           <p className="text-sm text-slate-500">Fleet overview &amp; upcoming document expirations</p>
         </div>
-        <form onSubmit={submitQuick} className="flex w-full max-w-sm items-center gap-2">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <input name="q" value={quick} onChange={(e) => setQuick(e.target.value)} className="input pl-9" placeholder="Quick search plate, engine, VIN…" />
-          </div>
-          <button className="btn-primary px-3 py-2" type="submit"><Search className="h-4 w-4" /></button>
-        </form>
+
       </div>
 
       {(kpis.expiredRegistrations + kpis.expiredInsurance > 0) && (
