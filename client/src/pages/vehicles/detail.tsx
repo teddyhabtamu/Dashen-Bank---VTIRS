@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
-import { Link, useParams, useBlocker } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { Link, useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Pencil, Car, FileText, ShieldCheck, User, MapPin, Fuel } from "lucide-react";
 import { StatusBadge } from "@/components/ui/badge";
 import { BrandLoader } from "@/components/ui/brand-loader";
@@ -36,27 +36,34 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
 export default function VehicleDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { can } = useAuth();
+  const navigate = useNavigate();
   const [v, setV] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [pendingUploads, setPendingUploads] = useState(false);
   const [blockConfirm, setBlockConfirm] = useState(false);
-  const blocker = useBlocker(pendingUploads);
+  const pendingRef = useRef(false);
 
-  const resetBlocker = useCallback(() => {
-    if (blocker.state === "blocked") {
-      blocker.reset();
-      setBlockConfirm(false);
-    }
-  }, [blocker]);
+  useEffect(() => { pendingRef.current = pendingUploads; }, [pendingUploads]);
 
   useEffect(() => {
-    if (blocker.state === "blocked") setBlockConfirm(true);
-  }, [blocker.state]);
+    if (!pendingUploads) return;
+    function onBefore(e: BeforeUnloadEvent) { e.preventDefault(); }
+    window.addEventListener("beforeunload", onBefore);
+    return () => window.removeEventListener("beforeunload", onBefore);
+  }, [pendingUploads]);
 
-  function proceed() {
-    if (blocker.state === "blocked") blocker.proceed();
+  function handleBack(e: React.MouseEvent) {
+    if (pendingRef.current) {
+      e.preventDefault();
+      setBlockConfirm(true);
+    }
+  }
+
+  function confirmLeave() {
+    setPendingUploads(false);
     setBlockConfirm(false);
+    navigate("/vehicles");
   }
 
   useEffect(() => {
@@ -96,7 +103,7 @@ export default function VehicleDetailPage() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-start gap-3">
-          <Link to="/vehicles" className="mt-0.5 rounded-lg p-2 text-slate-500 hover:bg-slate-100">
+          <Link to="/vehicles" onClick={handleBack} className="mt-0.5 rounded-lg p-2 text-slate-500 hover:bg-slate-100">
             <ArrowLeft className="h-5 w-5" />
           </Link>
           <div className="min-w-0">
@@ -194,8 +201,8 @@ export default function VehicleDetailPage() {
 
       <ConfirmModal
         open={blockConfirm}
-        onClose={resetBlocker}
-        onConfirm={proceed}
+        onClose={() => setBlockConfirm(false)}
+        onConfirm={confirmLeave}
         title="Unsaved files"
         message="You have files selected but not uploaded. Leave anyway?"
         confirmLabel="Leave"
