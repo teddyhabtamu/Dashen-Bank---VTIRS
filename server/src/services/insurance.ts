@@ -112,10 +112,13 @@ export async function deleteInsurance(id: string, ctx: Context = {}) {
 
 export async function listInsurances(opts: {
   search?: string;
+  coverage?: string;
+  from?: string;
+  to?: string;
   page?: number;
   pageSize?: number;
 }) {
-  const { search, page = 1, pageSize } = opts;
+  const { search, coverage, from, to, page = 1, pageSize } = opts;
   const ps = pageSize ?? await defaultPageSize();
   const where: any = {};
   if (search) {
@@ -126,6 +129,12 @@ export async function listInsurances(opts: {
       { vehicle: { plateNumber: { contains: search } } },
       { vehicle: { vehicleCode: { contains: search } } },
     ];
+  }
+  if (coverage) where.coverage = coverage;
+  if (from || to) {
+    where.endDate = {};
+    if (from) where.endDate.gte = new Date(from);
+    if (to) where.endDate.lte = new Date(to);
   }
 
   const [items, total] = await Promise.all([

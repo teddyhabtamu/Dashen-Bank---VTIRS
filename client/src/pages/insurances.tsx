@@ -1,7 +1,7 @@
 
 import { Link } from "react-router-dom";
 import { useCallback, useEffect, useState } from "react";
-import { Plus, Search, ShieldCheck, MoreVertical } from "lucide-react";
+import { Plus, Search, ShieldCheck, MoreVertical, CalendarRange } from "lucide-react";
 import { BrandLoader } from "@/components/ui/brand-loader";
 import { Dropdown } from "@/components/ui/dropdown";
 import { Select } from "@/components/ui/select";
@@ -46,6 +46,9 @@ export default function InsurancesPage() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
+  const [coverage, setCoverage] = useState("");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
   const [loading, setLoading] = useState(true);
   const [pageSize, setPageSize] = useState(15);
 
@@ -59,13 +62,16 @@ export default function InsurancesPage() {
     const qs = new URLSearchParams();
     qs.set("page", String(page));
     if (search) qs.set("search", search);
+    if (coverage) qs.set("coverage", coverage);
+    if (from) qs.set("from", from);
+    if (to) qs.set("to", to);
     const res = await fetch(`/api/insurances?${qs.toString()}`);
     const data = await res.json();
     setRows(data.items ?? []);
     setTotal(data.total ?? 0);
     if (data.pageSize) setPageSize(data.pageSize);
     setLoading(false);
-  }, [page, search]);
+  }, [page, search, coverage, from, to]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -120,6 +126,9 @@ export default function InsurancesPage() {
 
   const chips: { key: string; label: string; clear: () => void }[] = [];
   if (search) chips.push({ key: "q", label: `"${search}"`, clear: () => setSearch("") });
+  if (coverage) chips.push({ key: "cov", label: `Coverage: ${coverage}`, clear: () => setCoverage("") });
+  if (from) chips.push({ key: "from", label: `From: ${from}`, clear: () => setFrom("") });
+  if (to) chips.push({ key: "to", label: `To: ${to}`, clear: () => setTo("") });
 
   return (
     <div className="space-y-4">
@@ -135,10 +144,19 @@ export default function InsurancesPage() {
 
       <div className="card p-4">
         <div className="flex flex-wrap items-center gap-2">
-          <div className="relative min-w-[200px] flex-1">
+          <div className="relative min-w-[180px] flex-1">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input className="input pl-9" placeholder="Search policy, company, plate..." value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
+          </div>
+          <Select className="w-auto" value={coverage} onChange={(v) => { setCoverage(v); setPage(1); }}
+            placeholder="All coverage"
+            options={[{ value: "", label: "All coverage" }, ...COVERAGE_OPTIONS.map((c) => ({ value: c, label: c }))]} />
+          <div className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1">
+            <CalendarRange className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+            <DatePicker value={from} onChange={(v) => { setFrom(v); setPage(1); }} placeholder="End from" className="w-24" />
+            <span className="text-slate-300">–</span>
+            <DatePicker value={to} onChange={(v) => { setTo(v); setPage(1); }} placeholder="to" className="w-24" />
           </div>
         </div>
 
@@ -151,7 +169,7 @@ export default function InsurancesPage() {
                 {c.label} <span className="text-primary/60">✕</span>
               </button>
             ))}
-            <button onClick={() => { setSearch(""); }} className="text-xs text-slate-400 underline hover:text-slate-600">Clear all</button>
+            <button onClick={() => { setSearch(""); setCoverage(""); setFrom(""); setTo(""); }} className="text-xs text-slate-400 underline hover:text-slate-600">Clear all</button>
           </div>
         )}
       </div>

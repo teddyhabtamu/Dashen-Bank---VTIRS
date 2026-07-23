@@ -17,6 +17,9 @@ router.get("/", requireAuth(PERMISSIONS.INSURANCE_MANAGE), async (req, res) => {
   const q = req.query;
   const result = await listInsurances({
     search: (q.search as string) ?? undefined,
+    coverage: (q.coverage as string) ?? undefined,
+    from: (q.from as string) ?? undefined,
+    to: (q.to as string) ?? undefined,
     page: Number(q.page ?? "1"),
     pageSize: q.pageSize ? Number(q.pageSize) : undefined,
   });
