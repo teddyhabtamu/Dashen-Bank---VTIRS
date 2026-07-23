@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { History, ChevronDown, ChevronRight, Search } from "lucide-react";
 import { BrandLoader } from "@/components/ui/brand-loader";
 import { Select } from "@/components/ui/select";
@@ -162,12 +162,14 @@ export default function AuditLogsPage() {
             <tbody className="divide-y divide-slate-100">
               {rows.map((row) => {
                 const hasDiff = !!(row.oldValue || row.newValue);
+                const open = expanded.has(row.id);
                 return (
-                  <tr key={row.id} className="group text-sm hover:bg-slate-50">
+                  <React.Fragment key={row.id}>
+                  <tr className="group text-sm hover:bg-slate-50">
                     <td className="px-3 py-2.5">
                       {hasDiff && (
                         <button onClick={() => toggle(row.id)} className="text-slate-300 hover:text-slate-600">
-                          {expanded.has(row.id) ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                          {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                         </button>
                       )}
                     </td>
@@ -188,6 +190,30 @@ export default function AuditLogsPage() {
                     <td className="px-3 py-2.5 font-mono text-xs text-slate-400">{row.ipAddress ?? "—"}</td>
                     <td className="px-3 py-2.5 text-right text-xs text-slate-500">{formatDateTime(row.createdAt)}</td>
                   </tr>
+                  {open && (
+                    <tr className="bg-slate-50">
+                      <td colSpan={7} className="px-4 py-3">
+                        <div className="grid gap-4 sm:grid-cols-2">
+                          <div>
+                            <h4 className="mb-1 text-xs font-semibold text-slate-500">Previous Value</h4>
+                            <pre className="max-h-48 overflow-auto rounded bg-white p-2 font-mono text-xs text-slate-700">
+                              {row.oldValue ? JSON.stringify(row.oldValue, null, 2) : "—"}
+                            </pre>
+                          </div>
+                          <div>
+                            <h4 className="mb-1 text-xs font-semibold text-slate-500">New Value</h4>
+                            <pre className="max-h-48 overflow-auto rounded bg-white p-2 font-mono text-xs text-slate-700">
+                              {row.newValue ? JSON.stringify(row.newValue, null, 2) : "—"}
+                            </pre>
+                          </div>
+                        </div>
+                        {row.userAgent && (
+                          <p className="mt-2 text-xs text-slate-400">User-Agent: {row.userAgent}</p>
+                        )}
+                      </td>
+                    </tr>
+                  )}
+                  </React.Fragment>
                 );
               })}
             </tbody>
@@ -198,6 +224,7 @@ export default function AuditLogsPage() {
         <div className="divide-y divide-slate-100 sm:hidden">
           {rows.map((row) => {
             const hasDiff = !!(row.oldValue || row.newValue);
+            const open = expanded.has(row.id);
             return (
               <div key={row.id} className="space-y-2 px-4 py-3 text-sm">
                 <div className="flex items-start justify-between gap-2">
@@ -217,44 +244,34 @@ export default function AuditLogsPage() {
                 {hasDiff && (
                   <>
                     <button onClick={() => toggle(row.id)} className="flex items-center gap-1 text-xs text-primary">
-                      {expanded.has(row.id) ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-                      {expanded.has(row.id) ? "Hide details" : "Show details"}
+                      {open ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                      {open ? "Hide details" : "Show details"}
                     </button>
+                    {open && (
+                      <div className="grid gap-3 rounded-lg bg-slate-100 p-3">
+                        <div>
+                          <h4 className="mb-1 text-xs font-semibold text-slate-500">Previous Value</h4>
+                          <pre className="max-h-48 overflow-auto rounded bg-white p-2 font-mono text-xs text-slate-700">
+                            {row.oldValue ? JSON.stringify(row.oldValue, null, 2) : "—"}
+                          </pre>
+                        </div>
+                        <div>
+                          <h4 className="mb-1 text-xs font-semibold text-slate-500">New Value</h4>
+                          <pre className="max-h-48 overflow-auto rounded bg-white p-2 font-mono text-xs text-slate-700">
+                            {row.newValue ? JSON.stringify(row.newValue, null, 2) : "—"}
+                          </pre>
+                        </div>
+                        {row.userAgent && (
+                          <p className="text-xs text-slate-400">User-Agent: {row.userAgent}</p>
+                        )}
+                      </div>
+                    )}
                   </>
                 )}
               </div>
             );
           })}
         </div>
-
-        {/* Expanded detail rows */}
-        {expanded.size > 0 && (
-          <div className="border-t border-slate-100">
-            {rows
-              .filter((r) => expanded.has(r.id))
-              .map((row) => (
-                <div key={`detail-${row.id}`} className="border-b border-slate-50 bg-slate-50 px-4 py-3 text-xs">
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div>
-                      <h4 className="mb-1 font-semibold text-slate-500">Previous Value</h4>
-                      <pre className="max-h-48 overflow-auto rounded bg-white p-2 font-mono text-xs text-slate-700">
-                        {row.oldValue ? JSON.stringify(row.oldValue, null, 2) : "—"}
-                      </pre>
-                    </div>
-                    <div>
-                      <h4 className="mb-1 font-semibold text-slate-500">New Value</h4>
-                      <pre className="max-h-48 overflow-auto rounded bg-white p-2 font-mono text-xs text-slate-700">
-                        {row.newValue ? JSON.stringify(row.newValue, null, 2) : "—"}
-                      </pre>
-                    </div>
-                  </div>
-                  {row.userAgent && (
-                    <p className="mt-2 text-slate-400">User-Agent: {row.userAgent}</p>
-                  )}
-                </div>
-              ))}
-          </div>
-        )}
 
           </>
         )}
