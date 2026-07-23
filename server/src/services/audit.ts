@@ -7,7 +7,7 @@ export async function listAuditLogs({
   pageSize,
   action,
   entity,
-  userId,
+  search,
   from,
   to,
 }: {
@@ -15,7 +15,7 @@ export async function listAuditLogs({
   pageSize?: number;
   action?: string;
   entity?: string;
-  userId?: string;
+  search?: string;
   from?: string;
   to?: string;
 }) {
@@ -23,7 +23,16 @@ export async function listAuditLogs({
   const where: Prisma.AuditLogWhereInput = {};
   if (action) where.action = action;
   if (entity) where.entity = entity;
-  if (userId) where.userId = userId;
+  if (search) {
+    where.OR = [
+      { action: { contains: search } },
+      { entity: { contains: search } },
+      { user: { fullName: { contains: search } } },
+      { user: { username: { contains: search } } },
+      { vehicle: { plateNumber: { contains: search } } },
+      { vehicle: { vehicleCode: { contains: search } } },
+    ];
+  }
   if (from || to) {
     where.createdAt = {};
     if (from) where.createdAt.gte = new Date(from);

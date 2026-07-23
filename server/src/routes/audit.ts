@@ -15,7 +15,7 @@ router.get(
       pageSize: q.pageSize ? Number(q.pageSize) : undefined,
       action: (q.action as string) ?? undefined,
       entity: (q.entity as string) ?? undefined,
-      userId: (q.userId as string) ?? undefined,
+      search: (q.search as string) ?? undefined,
       from: (q.from as string) ?? undefined,
       to: (q.to as string) ?? undefined,
     });

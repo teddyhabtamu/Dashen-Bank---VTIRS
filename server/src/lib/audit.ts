@@ -1,6 +1,6 @@
 import { prisma } from "./prisma.js";
 
-export type AuditReq = { headers: Headers | Record<string, unknown> };
+export type AuditReq = { headers: Headers | Record<string, unknown>; ip?: string; socket?: { remoteAddress?: string } }; 
 
 interface AuditInput {
   action: string; // CREATE | UPDATE | DELETE | LOGIN | EXPORT | APPROVE
@@ -26,7 +26,9 @@ export async function writeAudit(input: AuditInput): Promise<void> {
   try {
     const ip =
       getHeader(input.req, "x-forwarded-for")?.split(",")[0]?.trim() ||
-      getHeader(input.req, "x-real-ip");
+      getHeader(input.req, "x-real-ip") ||
+      input.req?.ip ||
+      input.req?.socket?.remoteAddress;
     const ua = getHeader(input.req, "user-agent");
 
     await prisma.auditLog.create({

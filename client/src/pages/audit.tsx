@@ -37,7 +37,7 @@ export default function AuditLogsPage() {
   const [pageSize, setPageSize] = useState(20);
   const [action, setAction] = useState("");
   const [entity, setEntity] = useState("");
-  const [userSearch, setUserSearch] = useState("");
+  const [search, setSearch] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [loading, setLoading] = useState(true);
@@ -56,7 +56,7 @@ export default function AuditLogsPage() {
     qs.set("page", String(page));
     if (action) qs.set("action", action);
     if (entity) qs.set("entity", entity);
-    if (userSearch) qs.set("userId", userSearch);
+    if (search) qs.set("search", search);
     if (from) qs.set("from", from);
     if (to) qs.set("to", to);
     const res = await fetch(`/api/audit?${qs.toString()}`);
@@ -65,7 +65,7 @@ export default function AuditLogsPage() {
     setTotal(data.total ?? 0);
     if (data.pageSize) setPageSize(data.pageSize);
     setLoading(false);
-  }, [page, action, entity, userSearch, from, to]);
+  }, [page, action, entity, search, from, to]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -89,12 +89,18 @@ export default function AuditLogsPage() {
       </div>
 
       <div className="flex flex-wrap items-end gap-3 rounded-lg border bg-white p-4">
+        <div className="relative min-w-[160px] flex-1">
+          <label className="mb-1 block text-xs font-medium text-slate-500">Search</label>
+          <Search className="absolute left-3 top-[34px] h-4 w-4 text-slate-400" />
+          <input className="input pl-9" placeholder="Action, entity, user..." value={search}
+            onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
+        </div>
         <div className="flex-1 sm:flex-initial">
           <label className="mb-1 block text-xs font-medium text-slate-500">Action</label>
           <Select
             className="w-full sm:w-36"
             value={action}
-            onChange={setAction}
+            onChange={(v) => { setAction(v); setPage(1); }}
             options={[
               { value: "", label: "All Actions" },
               ...actions.map((a) => ({ value: a, label: a })),
@@ -106,7 +112,7 @@ export default function AuditLogsPage() {
           <Select
             className="w-full sm:w-44"
             value={entity}
-            onChange={setEntity}
+            onChange={(v) => { setEntity(v); setPage(1); }}
             options={[
               { value: "", label: "All Entities" },
               ...entities.map((e) => ({ value: e, label: e })),
@@ -115,24 +121,20 @@ export default function AuditLogsPage() {
         </div>
         <div className="flex-1 sm:flex-initial">
           <label className="mb-1 block text-xs font-medium text-slate-500">From</label>
-          <DatePicker value={from} onChange={setFrom} />
+          <DatePicker value={from} onChange={(v) => { setFrom(v); setPage(1); }} />
         </div>
         <div className="flex-1 sm:flex-initial">
           <label className="mb-1 block text-xs font-medium text-slate-500">To</label>
-          <DatePicker value={to} onChange={setTo} />
+          <DatePicker value={to} onChange={(v) => { setTo(v); setPage(1); }} />
         </div>
-        <button className="btn-primary h-9" onClick={() => { setPage(1); load(); }}>
-          <Search className="mr-1 h-4 w-4" />
-          Filter
-        </button>
-        <button
-          className="btn-outline h-9"
-          onClick={() => {
-            setAction(""); setEntity(""); setUserSearch(""); setFrom(""); setTo(""); setPage(1);
-          }}
-        >
-          Reset
-        </button>
+        {(action || entity || search || from || to) && (
+          <button
+            className="btn-outline h-9"
+            onClick={() => { setAction(""); setEntity(""); setSearch(""); setFrom(""); setTo(""); setPage(1); }}
+          >
+            Reset
+          </button>
+        )}
       </div>
 
       <div className="overflow-hidden rounded-lg border bg-white">
