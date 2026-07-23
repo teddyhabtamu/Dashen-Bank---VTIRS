@@ -1,10 +1,11 @@
 
 import { useCallback, useRef, useState } from "react";
-import { Upload, FileText, Image as ImageIcon, Trash2, Download, Eye } from "lucide-react";
+import { Upload, FileText, Image as ImageIcon, Trash2, Download, Eye, X } from "lucide-react";
 import { Select } from "@/components/ui/select";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { DOCUMENT_CATEGORY_OPTIONS, label } from "@/lib/constants";
 import { formatFileSize, formatDate } from "@/lib/format";
+import { useToast } from "@/lib/toast-context";
 
 interface DocItem {
   id: string;
@@ -47,7 +48,9 @@ export function DocumentManager({
   const [err, setErr] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleteInfo, setDeleteInfo] = useState<{ id: string; name: string } | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
+  const { toast } = useToast();
 
   const refresh = useCallback(async () => {
     const res = await fetch(`/api/vehicles/${vehicleId}`, { cache: "no-store" });
@@ -56,11 +59,22 @@ export function DocumentManager({
     setImages(data.vehicle.images ?? []);
   }, [vehicleId]);
 
-  async function handleFiles(files: FileList | null) {
+  function pickFiles(files: FileList | null) {
     if (!files || files.length === 0) return;
+    setSelectedFiles((prev) => [...prev, ...Array.from(files)]);
+    if (fileRef.current) fileRef.current.value = "";
+  }
+
+  function removeFile(index: number) {
+    setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  async function doUpload() {
+    if (selectedFiles.length === 0) return;
     setBusy(true); setErr(null);
+    let ok = 0;
     try {
-      for (const file of Array.from(files)) {
+      for (const file of selectedFiles) {
         const fd = new FormData();
         fd.append("file", file);
         fd.append("vehicleId", vehicleId);
@@ -74,10 +88,15 @@ export function DocumentManager({
           setErr(d.error ?? "Upload failed");
           break;
         }
+        ok++;
       }
-      setTitle("");
-      await refresh();
-    } finally { setBusy(false); if (fileRef.current) fileRef.current.value = ""; }
+      if (ok > 0) {
+        toast("success", `${ok} file(s) uploaded`);
+        setTitle("");
+        setSelectedFiles([]);
+        await refresh();
+      }
+    } finally { setBusy(false); }
   }
 
   function askDelete(id: string, name: string) {
@@ -115,15 +134,38 @@ export function DocumentManager({
               <input className="input mt-1" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Registration Certificate 2025" />
             </label>
           </div>
+
           <button
             type="button"
             onClick={() => fileRef.current?.click()}
             disabled={busy}
             className="flex w-full items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm font-medium text-slate-600 transition-colors hover:border-primary hover:text-primary disabled:opacity-50"
           >
-            <Upload className="h-4 w-4" /> {busy ? "Uploading…" : "Choose file(s) to upload (PDF, JPG, PNG)"}
+            <Upload className="h-4 w-4" /> {busy ? "Uploading…" : "Choose file(s) (PDF, JPG, PNG)"}
           </button>
-          <input ref={fileRef} type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" multiple hidden onChange={(e) => handleFiles(e.target.files)} />
+          <input ref={fileRef} type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" multiple hidden onChange={(e) => pickFiles(e.target.files)} />
+
+          {selectedFiles.length > 0 && (
+            <div className="mt-3">
+              <p className="mb-2 text-xs font-semibold text-slate-500">{selectedFiles.length} file(s) selected</p>
+              <ul className="divide-y divide-slate-200 rounded-lg border border-slate-200 bg-white">
+                {selectedFiles.map((f, i) => (
+                  <li key={i} className="flex items-center gap-2 px-3 py-2 text-sm">
+                    {f.type.startsWith("image/") ? <ImageIcon className="h-4 w-4 shrink-0 text-slate-400" /> : <FileText className="h-4 w-4 shrink-0 text-slate-400" />}
+                    <span className="min-w-0 flex-1 truncate">{f.name}</span>
+                    <span className="shrink-0 text-xs text-slate-400">{formatFileSize(f.size)}</span>
+                    <button onClick={() => removeFile(i)} className="shrink-0 rounded p-0.5 text-red-400 hover:bg-red-50 hover:text-red-600"><X className="h-3.5 w-3.5" /></button>
+                  </li>
+                ))}
+              </ul>
+              <div className="mt-3 flex items-center gap-2">
+                <button className="btn-primary" onClick={doUpload} disabled={busy}>
+                  <Upload className="h-4 w-4" /> {busy ? "Uploading…" : `Upload ${selectedFiles.length} file(s)`}
+                </button>
+                <button className="btn-outline" onClick={() => setSelectedFiles([])} disabled={busy}>Cancel</button>
+              </div>
+            </div>
+          )}
           {err && <p className="mt-2 text-xs text-red-500">{err}</p>}
         </div>
       )}
