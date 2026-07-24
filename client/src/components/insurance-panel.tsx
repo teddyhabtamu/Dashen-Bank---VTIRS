@@ -3,6 +3,7 @@ import { Plus, MoreVertical, Pencil, Trash2 } from "lucide-react";
 import { Modal } from "@/components/ui/modal";
 import { Select } from "@/components/ui/select";
 import { DatePicker } from "@/components/ui/datepicker";
+import { Tooltip } from "@/components/ui/tooltip";
 import { Dropdown } from "@/components/ui/dropdown";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { formatDate, daysUntil } from "@/lib/format";
@@ -145,7 +146,7 @@ export function InsurancePanel({ vehicleId, initial, canManage }: {
                     </span>
                     {canManage && (
                       <Dropdown align="right"
-                        trigger={({ toggle }) => (<button onClick={toggle} className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100"><MoreVertical className="h-4 w-4" /></button>)}
+                        trigger={({ toggle }) => (<Tooltip content="Actions"><button onClick={toggle} className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100"><MoreVertical className="h-4 w-4" /></button></Tooltip>)}
                         items={[
                           { label: "Edit", icon: <Pencil className="h-4 w-4" />, onClick: () => openEdit(ins) },
                           { label: "Delete", icon: <Trash2 className="h-4 w-4" />, danger: true, onClick: () => setDeleteId(ins.id) },

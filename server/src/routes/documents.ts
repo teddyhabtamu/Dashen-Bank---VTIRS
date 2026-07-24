@@ -7,7 +7,7 @@ import { createReadStream, existsSync } from "node:fs";
 import { requireAuth } from "../lib/guard.js";
 import { PERMISSIONS } from "../lib/rbac.js";
 import { prisma } from "../lib/prisma.js";
-import { deleteDocument } from "../services/document.js";
+import { deleteDocument, updateDocument } from "../services/document.js";
 import { writeAudit } from "../lib/audit.js";
 
 const router = Router();
@@ -190,6 +190,25 @@ router.get("/:id", requireAuth(PERMISSIONS.DOCUMENT_VIEW), async (req, res) => {
   res.setHeader("Cache-Control", "private, max-age=3600");
   createReadStream(full).pipe(res);
 });
+
+router.patch(
+  "/:id",
+  requireAuth(PERMISSIONS.DOCUMENT_UPLOAD),
+  async (req, res) => {
+    const { title, category } = req.body as { title?: string; category?: string };
+    if (!title?.trim() && !category) {
+      return res.status(400).json({ error: "Nothing to update" });
+    }
+
+    const updated = await updateDocument(req.params.id, { title, category }, {
+      userId: req.session!.userId,
+      req,
+    });
+
+    if (!updated) return res.status(404).json({ error: "Not found" });
+    res.json({ ok: true, record: updated });
+  }
+);
 
 router.delete(
   "/:id",

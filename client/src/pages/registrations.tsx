@@ -1,9 +1,11 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useCallback, useEffect, useState } from "react";
-import { Plus, Search, MoreVertical, History, RotateCcw, AlertCircle, Archive, RefreshCw } from "lucide-react";
+import { Plus, Search, MoreVertical, History, RotateCcw, AlertCircle, Archive, RefreshCw, Download } from "lucide-react";
 import { StatusBadge } from "@/components/ui/badge";
 import { BrandLoader } from "@/components/ui/brand-loader";
+import { useBrand } from "@/lib/brand-context";
 import { Dropdown } from "@/components/ui/dropdown";
+import { Tooltip } from "@/components/ui/tooltip";
 import { Select } from "@/components/ui/select";
 import { DatePicker } from "@/components/ui/datepicker";
 import { Modal } from "@/components/ui/modal";
@@ -12,6 +14,7 @@ import { useAuth } from "@/components/auth-context";
 import { REGISTRATION_STATUS_OPTIONS, label } from "@/lib/constants";
 import { formatDate, daysUntil } from "@/lib/format";
 import { useToast } from "@/lib/toast-context";
+import { exportCsv, exportXlsx, exportPdf, rowsToHtmlTable } from "@/lib/export";
 import { expiryState, effectiveRegistrationStatus } from "@/lib/services/reminders";
 
 interface RegRow {
@@ -38,6 +41,7 @@ function ExpiryPill({ date }: { date: string }) {
 
 export default function RegistrationsPage() {
   const { can } = useAuth();
+  const { companyName } = useBrand();
   const { toast } = useToast();
   const navigate = useNavigate();
   const [rows, setRows] = useState<RegRow[]>([]);
@@ -149,6 +153,21 @@ export default function RegistrationsPage() {
     } finally { setBusy(false); }
   }
 
+  function exportRegistrations(format: "csv" | "excel" | "pdf") {
+    const data = rows.map((r) => ({
+      "Reg Number": r.regNumber,
+      Vehicle: `${r.vehicle.plateNumber} (${r.vehicle.vehicleCode})`,
+      Office: r.office ?? "",
+      "Reg Date": r.regDate,
+      "Expiry Date": r.expiryDate,
+      Status: label(effectiveRegistrationStatus(r.status, r.expiryDate)),
+    }));
+    const stamp = new Date().toISOString().slice(0, 10);
+    if (format === "csv") exportCsv(`registrations_${stamp}.csv`, data);
+    else if (format === "excel") exportXlsx(`registrations_${stamp}.xlsx`, data);
+    else exportPdf(rowsToHtmlTable("Registrations", data), "Registrations", companyName);
+  }
+
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   const chips: { key: string; label: string; clear: () => void }[] = [];
@@ -162,9 +181,21 @@ export default function RegistrationsPage() {
           <h2 className="text-xl font-semibold text-slate-800">Registrations</h2>
           <p className="text-sm text-slate-500">Manage vehicle registrations, renewals &amp; suspensions</p>
         </div>
-        {can("registration:manage") && (
-          <button className="btn-primary" onClick={openCreate}><Plus className="h-4 w-4" /> New Registration</button>
-        )}
+        <div className="flex items-center gap-2">
+          {rows.length > 0 && (
+            <Dropdown align="right"
+              trigger={({ toggle }) => (<Tooltip content="Export"><button onClick={toggle} className="btn-outline text-xs"><Download className="h-3.5 w-3.5" /> Export</button></Tooltip>)}
+              items={[
+                { label: "CSV", onClick: () => exportRegistrations("csv") },
+                { label: "Excel", onClick: () => exportRegistrations("excel") },
+                { label: "PDF", onClick: () => exportRegistrations("pdf") },
+              ]}
+            />
+          )}
+          {can("registration:manage") && (
+            <button className="btn-primary" onClick={openCreate}><Plus className="h-4 w-4" /> New Registration</button>
+          )}
+        </div>
       </div>
 
       <div className="card p-4">
@@ -279,22 +310,22 @@ export default function RegistrationsPage() {
       }>
         {err && <div className="mb-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-600">{err}</div>}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <label className="text-sm sm:col-span-2">Vehicle
+          <label className="text-sm sm:col-span-2">Vehicle <span className="text-red-400">*</span>
             <div className="mt-1">
               <Select className="w-full" value={form.vehicleId} onChange={(v) => setForm({ ...form, vehicleId: v })}
                 placeholder="Select vehicle…" options={vehicles} searchable />
             </div>
           </label>
-          <label className="text-sm">Reg Number
+          <label className="text-sm">Reg Number <span className="text-red-400">*</span>
             <input className="input mt-1" value={form.regNumber} onChange={(e) => setForm({ ...form, regNumber: e.target.value })} />
           </label>
           <label className="text-sm">Office
             <input className="input mt-1" value={form.office} onChange={(e) => setForm({ ...form, office: e.target.value })} />
           </label>
-          <label className="text-sm">Reg Date
+          <label className="text-sm">Reg Date <span className="text-red-400">*</span>
             <div className="mt-1"><DatePicker value={form.regDate} onChange={(v) => setForm({ ...form, regDate: v })} /></div>
           </label>
-          <label className="text-sm">Expiry Date
+          <label className="text-sm">Expiry Date <span className="text-red-400">*</span>
             <div className="mt-1"><DatePicker value={form.expiryDate} onChange={(v) => setForm({ ...form, expiryDate: v })} /></div>
           </label>
           <label className="text-sm sm:col-span-2">Status
@@ -325,7 +356,7 @@ function RenewModal({ open, onClose, onConfirm, loading }: { open: boolean; onCl
       <><button className="btn-outline" onClick={onClose} disabled={loading}>Cancel</button>
       <button className="btn-primary" onClick={() => onConfirm(date)} disabled={loading || !date}>Renew</button></>
     }>
-      <label className="text-sm">New Expiry Date
+      <label className="text-sm">New Expiry Date <span className="text-red-400">*</span>
         <div className="mt-1"><DatePicker value={date} onChange={(v) => setDate(v)} /></div>
       </label>
     </Modal>

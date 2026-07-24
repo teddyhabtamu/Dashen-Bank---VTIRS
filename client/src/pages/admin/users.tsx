@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Users, Search, Plus, MoreVertical, Pencil, Trash2 } from "lucide-react";
+import { Users, Search, Plus, MoreVertical, Pencil, Trash2, Download } from "lucide-react";
 import { BrandLoader } from "@/components/ui/brand-loader";
 import { Select } from "@/components/ui/select";
 import { Modal } from "@/components/ui/modal";
@@ -8,6 +8,7 @@ import { Dropdown } from "@/components/ui/dropdown";
 import { useAuth } from "@/components/auth-context";
 import { useToast } from "@/lib/toast-context";
 import { formatDateTime } from "@/lib/format";
+import { exportCsv } from "@/lib/export";
 
 interface UserRow {
   id: string;
@@ -90,6 +91,21 @@ export default function UsersPage() {
   }, [page, search, roleFilter, statusFilter]);
 
   useEffect(() => { load(); }, [load]);
+
+  function exportUsers() {
+    exportCsv(`users_${new Date().toISOString().slice(0, 10)}.csv`,
+      rows.map((u) => ({
+        Username: u.username,
+        "Full Name": u.fullName,
+        Email: u.email,
+        Role: u.roleName,
+        Branch: u.branchName ?? "",
+        Status: u.status,
+        "Last Login": u.lastLoginAt ?? "",
+        "Created At": u.createdAt,
+      }))
+    );
+  }
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
@@ -179,16 +195,25 @@ export default function UsersPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <h2 className="mr-auto flex items-center gap-2 text-lg font-semibold text-slate-800">
-          <Users className="h-5 w-5 text-primary" />
-          User Management
-        </h2>
-        {can("user:manage") && (
-          <button className="btn-primary" onClick={openCreate}>
-            <Plus className="mr-1 h-4 w-4" /> Add User
-          </button>
-        )}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="flex items-center gap-2 text-lg font-semibold text-slate-800">
+            <Users className="h-5 w-5 text-primary" />
+            User Management
+          </h2>
+        </div>
+        <div className="flex items-center gap-2">
+          {rows.length > 0 && (
+            <button className="btn-outline text-xs" onClick={exportUsers}>
+              <Download className="h-3.5 w-3.5" /> CSV
+            </button>
+          )}
+          {can("user:manage") && (
+            <button className="btn-primary" onClick={openCreate}>
+              <Plus className="mr-1 h-4 w-4" /> Add User
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-white p-4">

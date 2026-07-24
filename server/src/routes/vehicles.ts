@@ -8,6 +8,7 @@ import {
   deleteVehicle,
   DuplicateVehicleError,
 } from "../services/vehicle.js";
+import { listAssignments, assignDriver, returnDriver } from "../services/assignment.js";
 import { vehicleSchema } from "../validation/vehicle.js";
 import { prisma } from "../lib/prisma.js";
 
@@ -58,6 +59,10 @@ router.get("/:id", requireAuth(PERMISSIONS.VEHICLE_VIEW), async (req, res) => {
       insurances: { orderBy: { endDate: "desc" }, take: 5 },
       documents: true,
       images: true,
+      assignments: {
+        orderBy: { assignedAt: "desc" },
+        include: { driver: true, branch: true },
+      },
     },
   });
   if (!vehicle) return res.status(404).json({ error: "Not found" });
@@ -99,5 +104,37 @@ router.delete(
     res.json({ ok: true });
   }
 );
+
+// ── Assignments ─────────────────────────────────────────────────────
+
+router.get("/:vehicleId/assignments", requireAuth(PERMISSIONS.VEHICLE_VIEW), async (req, res) => {
+  const assignments = await listAssignments(req.params.vehicleId);
+  res.json({ assignments });
+});
+
+router.post("/:vehicleId/assignments", requireAuth(PERMISSIONS.VEHICLE_EDIT), async (req, res) => {
+  const { driverId, branchId, note } = req.body as { driverId?: string; branchId?: string; note?: string };
+  if (!driverId) return res.status(400).json({ error: "driverId is required" });
+  try {
+    const assignment = await assignDriver(req.params.vehicleId, { driverId, branchId: branchId ?? null, note: note ?? null }, {
+      userId: req.session!.userId,
+      req,
+    });
+    if (!assignment) return res.status(404).json({ error: "Vehicle not found" });
+    res.status(201).json({ assignment });
+  } catch (e: any) {
+    if (e.message === "Driver not found") return res.status(404).json({ error: e.message });
+    throw e;
+  }
+});
+
+router.patch("/:vehicleId/assignments/:id/return", requireAuth(PERMISSIONS.VEHICLE_EDIT), async (req, res) => {
+  const assignment = await returnDriver(req.params.vehicleId, req.params.id, {
+    userId: req.session!.userId,
+    req,
+  });
+  if (!assignment) return res.status(404).json({ error: "Assignment not found" });
+  res.json({ assignment });
+});
 
 export default router;

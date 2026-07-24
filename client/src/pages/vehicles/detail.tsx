@@ -6,6 +6,7 @@ import { BrandLoader } from "@/components/ui/brand-loader";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { RegistrationPanel } from "@/components/registration-panel";
 import { InsurancePanel } from "@/components/insurance-panel";
+import { AssignmentPanel } from "@/components/assignment-panel";
 import { DocumentManager } from "@/components/document-manager";
 import { useAuth } from "@/components/auth-context";
 import { label } from "@/lib/constants";
@@ -167,6 +168,19 @@ export default function VehicleDetailPage() {
           </div>
         </section>
       </div>
+
+      {/* Driver Assignments */}
+      <section>
+        <h2 className="mb-4 text-[18px] font-semibold text-slate-700">Driver Assignments</h2>
+        <div className="rounded-xl border border-slate-200 bg-white p-5">
+          <AssignmentPanel
+            vehicleId={v.id}
+            initial={v.assignments ?? []}
+            currentDriver={v.currentDriver}
+            canManage={can(PERMISSIONS.VEHICLE_EDIT)}
+          />
+        </div>
+      </section>
 
       {/* Registration & Insurance */}
       <div className="grid grid-cols-1 gap-10 lg:grid-cols-2">

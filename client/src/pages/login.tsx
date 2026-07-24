@@ -83,7 +83,7 @@ export default function LoginPage() {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 autoComplete="username"
-                placeholder="e.g. admin"
+                placeholder="Enter username"
                 required
               />
             </div>
@@ -120,11 +120,6 @@ export default function LoginPage() {
             >
               {loading ? "Signing in..." : "Sign in"}
             </button>
-
-            <p className="text-center text-xs text-white/50">
-              Default admin — <span className="font-medium text-white/70">admin</span> /{" "}
-              <span className="font-medium text-white/70">Admin@1234</span>
-            </p>
           </form>
         </div>
       </section>

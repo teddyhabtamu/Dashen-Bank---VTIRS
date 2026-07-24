@@ -1,11 +1,15 @@
-
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { FileText, Search, Download, Eye } from "lucide-react";
+import { FileText, Search, MoreVertical, Eye, Download, Pencil, Trash2 } from "lucide-react";
 import { Select } from "@/components/ui/select";
 import { BrandLoader } from "@/components/ui/brand-loader";
+import { Modal } from "@/components/ui/modal";
+import { ConfirmModal } from "@/components/ui/confirm-modal";
+import { Dropdown } from "@/components/ui/dropdown";
 import { DOCUMENT_CATEGORY_OPTIONS, label } from "@/lib/constants";
 import { formatFileSize, formatDate } from "@/lib/format";
+import { useToast } from "@/lib/toast-context";
+import { exportCsv } from "@/lib/export";
 
 interface Doc {
   id: string;
@@ -20,10 +24,15 @@ interface Doc {
 }
 
 export default function DocumentsPage() {
+  const { toast } = useToast();
   const [docs, setDocs] = useState<Doc[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [cat, setCat] = useState("");
+  const [editingDoc, setEditingDoc] = useState<Doc | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editCat, setEditCat] = useState("");
+  const [deleteId, setDeleteId] = useState<string | null>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -37,15 +46,67 @@ export default function DocumentsPage() {
 
   const filtered = cat ? docs.filter((d) => d.category === cat) : docs;
 
+  async function handleEditSave() {
+    if (!editingDoc) return;
+    const body: Record<string, string> = {};
+    if (editTitle.trim()) body.title = editTitle.trim();
+    if (editCat) body.category = editCat;
+    const res = await fetch(`/api/documents/${editingDoc.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      toast("error", "Failed to update document");
+      return;
+    }
+    const { record } = await res.json();
+    setDocs((prev) =>
+      prev.map((d) => (d.id === editingDoc.id ? { ...d, title: record.title, category: record.category } : d))
+    );
+    toast("success", "Document updated");
+    setEditingDoc(null);
+  }
+
+  async function handleDelete(id: string) {
+    const res = await fetch(`/api/documents/${id}`, { method: "DELETE" });
+    if (!res.ok) { toast("error", "Failed to delete"); return; }
+    setDocs((prev) => prev.filter((d) => d.id !== id));
+    toast("success", "Document deleted");
+    setDeleteId(null);
+  }
+
+  function exportDocuments() {
+    exportCsv(`documents_${new Date().toISOString().slice(0, 10)}.csv`,
+      filtered.map((d) => ({
+        Title: d.title,
+        Category: label(d.category),
+        "File Name": d.originalName,
+        Type: d.mimeType,
+        Size: String(d.sizeBytes),
+        Version: d.version,
+        Vehicle: `${d.vehicle.plateNumber} (${d.vehicle.vehicleCode})`,
+        "Created At": d.createdAt,
+      }))
+    );
+  }
+
   const chips: { key: string; label: string; clear: () => void }[] = [];
-  if (search) chips.push({ key: "q", label: `“${search}”`, clear: () => setSearch("") });
+  if (search) chips.push({ key: "q", label: `"${search}"`, clear: () => setSearch("") });
   if (cat) chips.push({ key: "cat", label: `Category: ${label(cat)}`, clear: () => setCat("") });
 
   return (
     <div className="space-y-4">
-      <div>
-        <h2 className="text-xl font-semibold text-slate-800">Documents</h2>
-        <p className="text-sm text-slate-500">Fleet-wide document repository</p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-semibold text-slate-800">Documents</h2>
+          <p className="text-sm text-slate-500">Fleet-wide document repository</p>
+        </div>
+        {filtered.length > 0 && (
+          <button className="btn-outline text-xs" onClick={exportDocuments}>
+            <Download className="h-3.5 w-3.5" /> CSV
+          </button>
+        )}
       </div>
 
       <div className="card p-4">
@@ -121,15 +182,62 @@ export default function DocumentsPage() {
                     {" · "}{d.vehicle.vehicleCode} · {formatFileSize(d.sizeBytes)} · {formatDate(d.createdAt)}
                   </div>
                 </div>
-                <div className="flex flex-shrink-0 items-center gap-1">
-                  <a href={`/api/documents/${d.id}`} target="_blank" rel="noreferrer" className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100" title="Preview"><Eye className="h-4 w-4" /></a>
-                  <a href={`/api/documents/${d.id}?download=1`} className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100" title="Download"><Download className="h-4 w-4" /></a>
-                </div>
+                <Dropdown
+                  align="right"
+                  trigger={({ toggle }) => (
+                    <button onClick={toggle} className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600" title="Actions">
+                      <MoreVertical className="h-4 w-4" />
+                    </button>
+                  )}
+                  items={[
+                    { label: "Preview", icon: <Eye className="h-4 w-4" />, onClick: () => window.open(`/api/documents/${d.id}`, "_blank") },
+                    { label: "Download", icon: <Download className="h-4 w-4" />, onClick: () => window.open(`/api/documents/${d.id}?download=1`, "_blank") },
+                    { label: "Edit metadata", icon: <Pencil className="h-4 w-4" />, onClick: () => { setEditingDoc(d); setEditTitle(d.title); setEditCat(d.category); } },
+                    { label: "Delete", icon: <Trash2 className="h-4 w-4" />, danger: true, onClick: () => setDeleteId(d.id) },
+                  ]}
+                />
               </li>
             ))}
           </ul>
         </div>
       )}
+
+      <Modal
+        open={!!editingDoc}
+        onClose={() => setEditingDoc(null)}
+        title="Edit document metadata"
+        size="sm"
+        footer={
+          <>
+            <button className="btn-outline" onClick={() => setEditingDoc(null)}>Cancel</button>
+            <button className="btn btn-primary" onClick={handleEditSave}>Save</button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-600">Title</label>
+            <input className="input" value={editTitle} onChange={(e) => setEditTitle(e.target.value)} />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-600">Category</label>
+            <Select
+              value={editCat}
+              onChange={setEditCat}
+              options={DOCUMENT_CATEGORY_OPTIONS.map((c) => ({ value: c, label: label(c) }))}
+            />
+          </div>
+        </div>
+      </Modal>
+
+      <ConfirmModal
+        open={!!deleteId}
+        onClose={() => setDeleteId(null)}
+        onConfirm={() => handleDelete(deleteId!)}
+        title="Delete document?"
+        message="This will permanently remove the file from the server."
+        confirmLabel="Delete"
+      />
     </div>
   );
 }

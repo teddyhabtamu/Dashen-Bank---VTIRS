@@ -6,6 +6,8 @@ import {
   markRead,
   markAllRead,
   getNotificationTypes,
+  deleteNotification,
+  clearAllNotifications,
 } from "../services/notification.js";
 
 const router = Router();
@@ -38,6 +40,16 @@ router.patch("/:id/read", requireAuth(), async (req, res) => {
 
 router.post("/read-all", requireAuth(), async (req, res) => {
   await markAllRead(req.session!.userId);
+  res.json({ ok: true });
+});
+
+router.delete("/:id", requireAuth(), async (req, res) => {
+  await deleteNotification(req.params.id, req.session!.userId);
+  res.json({ ok: true });
+});
+
+router.delete("/", requireAuth(), async (req, res) => {
+  await clearAllNotifications(req.session!.userId);
   res.json({ ok: true });
 });
 

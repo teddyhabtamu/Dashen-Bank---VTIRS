@@ -17,6 +17,8 @@ import UsersPage from "@/pages/admin/users";
 import NotificationsPage from "@/pages/notifications";
 import RolesPage from "@/pages/admin/roles";
 import SettingsPage from "@/pages/admin/settings";
+import ReferencePage from "@/pages/admin/reference";
+
 
 export default function App() {
   return (
@@ -39,6 +41,8 @@ export default function App() {
           <Route path="/notifications" element={<NotificationsPage />} />
           <Route path="/admin/roles" element={<RolesPage />} />
           <Route path="/admin/settings" element={<SettingsPage />} />
+          <Route path="/admin/reference" element={<ReferencePage />} />
+
         </Route>
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />

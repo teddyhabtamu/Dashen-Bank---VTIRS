@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Bell, Check, BellDot } from "lucide-react";
+import { Bell, BellDot, MoreVertical, Check, Trash2 } from "lucide-react";
 import { BrandLoader } from "@/components/ui/brand-loader";
 import { Select } from "@/components/ui/select";
+import { ConfirmModal } from "@/components/ui/confirm-modal";
+import { Dropdown } from "@/components/ui/dropdown";
 import { formatDateTime, label } from "@/lib/format";
+import { useToast } from "@/lib/toast-context";
 
 interface NotifRow {
   id: string;
@@ -16,6 +19,7 @@ interface NotifRow {
 }
 
 export default function NotificationsPage() {
+  const { toast } = useToast();
   const [rows, setRows] = useState<NotifRow[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -23,6 +27,7 @@ export default function NotificationsPage() {
   const [loading, setLoading] = useState(true);
   const [types, setTypes] = useState<string[]>([]);
   const [pageSize, setPageSize] = useState(20);
+  const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
@@ -53,6 +58,22 @@ export default function NotificationsPage() {
   async function markAll() {
     await fetch("/api/notifications/read-all", { method: "POST" });
     setRows((prev) => prev.map((n) => ({ ...n, isRead: true })));
+    toast("success", "All notifications marked as read");
+  }
+
+  async function deleteOne(id: string) {
+    await fetch(`/api/notifications/${id}`, { method: "DELETE" });
+    setRows((prev) => prev.filter((n) => n.id !== id));
+    setTotal((prev) => prev - 1);
+    toast("success", "Notification deleted");
+  }
+
+  async function clearAll() {
+    await fetch("/api/notifications/", { method: "DELETE" });
+    setRows([]);
+    setTotal(0);
+    toast("success", "All notifications cleared");
+    setClearConfirmOpen(false);
   }
 
   const unreadCount = rows.filter((n) => !n.isRead).length;
@@ -64,10 +85,17 @@ export default function NotificationsPage() {
           <Bell className="h-5 w-5 text-primary" />
           Notifications
         </h2>
-        {unreadCount > 0 && (
-          <button className="btn-outline text-xs" onClick={markAll}>
-            <Check className="mr-1 h-3.5 w-3.5" /> Mark all read
-          </button>
+        {rows.length > 0 && (
+          <>
+            {unreadCount > 0 && (
+              <button className="btn-outline text-xs" onClick={markAll}>
+                <Check className="mr-1 h-3.5 w-3.5" /> Mark all read
+              </button>
+            )}
+            <button className="btn-outline text-xs text-red-600 hover:bg-red-50" onClick={() => setClearConfirmOpen(true)}>
+              <Trash2 className="mr-1 h-3.5 w-3.5" /> Clear all
+            </button>
+          </>
         )}
       </div>
 
@@ -133,11 +161,18 @@ export default function NotificationsPage() {
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-right text-xs text-slate-400">{formatDateTime(row.createdAt)}</td>
                       <td className="px-4 py-3">
-                        {!row.isRead && (
-                          <button onClick={() => markOne(row.id)} className="rounded p-1 text-slate-300 hover:text-slate-600" title="Mark read">
-                            <Check className="h-4 w-4" />
-                          </button>
-                        )}
+                        <Dropdown
+                          align="right"
+                          trigger={({ toggle }) => (
+                            <button onClick={toggle} className="rounded-md p-1 text-slate-300 hover:bg-slate-100 hover:text-slate-600" title="Actions">
+                              <MoreVertical className="h-4 w-4" />
+                            </button>
+                          )}
+                          items={[
+                            ...(!row.isRead ? [{ label: "Mark read", icon: <Check className="h-4 w-4" />, onClick: () => markOne(row.id) }] : []),
+                            { label: "Delete", icon: <Trash2 className="h-4 w-4" />, danger: true, onClick: () => deleteOne(row.id) },
+                          ]}
+                        />
                       </td>
                     </tr>
                   ))}
@@ -145,7 +180,6 @@ export default function NotificationsPage() {
               </table>
             </div>
 
-            {/* Mobile cards */}
             <div className="divide-y divide-slate-100 sm:hidden">
               {rows.map((row) => (
                 <div key={row.id} className={cn("space-y-1 px-4 py-3 text-sm", !row.isRead && "bg-primary/5")}>
@@ -171,10 +205,19 @@ export default function NotificationsPage() {
                       <p className="text-xs text-slate-500">{row.message}</p>
                     </>
                   )}
-                  <div className="flex gap-2 pt-1">
-                    {!row.isRead && (
-                      <button onClick={() => markOne(row.id)} className="text-xs text-primary hover:underline">Mark read</button>
-                    )}
+                  <div className="flex justify-end pt-1">
+                    <Dropdown
+                      align="right"
+                      trigger={({ toggle }) => (
+                        <button onClick={toggle} className="rounded-md p-1 text-slate-300 hover:bg-slate-100 hover:text-slate-600" title="Actions">
+                          <MoreVertical className="h-4 w-4" />
+                        </button>
+                      )}
+                      items={[
+                        ...(!row.isRead ? [{ label: "Mark read", icon: <Check className="h-4 w-4" />, onClick: () => markOne(row.id) }] : []),
+                        { label: "Delete", icon: <Trash2 className="h-4 w-4" />, danger: true, onClick: () => deleteOne(row.id) },
+                      ]}
+                    />
                   </div>
                 </div>
               ))}
@@ -183,7 +226,6 @@ export default function NotificationsPage() {
         )}
       </div>
 
-      {/* Pagination */}
       {!loading && rows.length > 0 && (
         <div className="flex items-center justify-between">
           <span className="text-sm font-medium text-slate-600">{total} notification(s)</span>
@@ -194,6 +236,15 @@ export default function NotificationsPage() {
           </div>
         </div>
       )}
+
+      <ConfirmModal
+        open={clearConfirmOpen}
+        onClose={() => setClearConfirmOpen(false)}
+        onConfirm={clearAll}
+        title="Clear all notifications?"
+        message="This will permanently delete all notifications."
+        confirmLabel="Clear all"
+      />
     </div>
   );
 }

@@ -298,11 +298,13 @@ model Notification {
   message   String
   link      String?
   isRead    Boolean  @default(false)
+  dismissed Boolean  @default(false)
   meta      String? // JSON stringified
   createdAt DateTime @default(now())
 
   @@index([userId])
   @@index([isRead])
+  @@index([dismissed])
 }
 
 model AuditLog {

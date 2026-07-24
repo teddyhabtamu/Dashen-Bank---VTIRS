@@ -3,6 +3,8 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Calendar, ChevronLeft, ChevronRight, X } from "lucide-react";
 import { cn } from "@/lib/format";
+import { Tooltip } from "@/components/ui/tooltip";
+import { Select } from "./select";
 
 interface DatePickerProps {
   value: string; // YYYY-MM-DD
@@ -65,10 +67,15 @@ export function DatePicker({ value, onChange, placeholder = "Select date", disab
     if (!open) return;
     const onDocClick = (e: MouseEvent) => {
       if (triggerRef.current?.contains(e.target as Node) || popRef.current?.contains(e.target as Node)) return;
+      if ((e.target as HTMLElement).closest('[role="listbox"]')) return;
       setOpen(false);
     };
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
-    const onScroll = () => setOpen(false);
+    const onScroll = (e: Event) => {
+      if (popRef.current?.contains(e.target as Node)) return;
+      if ((e.target as HTMLElement).closest('[role="listbox"]')) return;
+      setOpen(false);
+    };
     document.addEventListener("mousedown", onDocClick);
     document.addEventListener("keydown", onKey);
     window.addEventListener("scroll", onScroll, true);
@@ -144,28 +151,32 @@ export function DatePicker({ value, onChange, placeholder = "Select date", disab
             style={coords ? { top: coords.top, left: coords.left, width: coords.width } : undefined}
           >
             <div className="mb-2 flex items-center justify-between">
-              <button type="button" onClick={() => shiftMonth(-1)} className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100">
-                <ChevronLeft className="h-4 w-4" />
-              </button>
+              <Tooltip content="Previous month">
+                <button type="button" onClick={() => shiftMonth(-1)} className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100">
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+              </Tooltip>
               <div className="flex items-center gap-1">
-                <select
-                  value={view.m}
-                  onChange={(e) => setView((v) => ({ ...v, m: Number(e.target.value) }))}
-                  className="rounded-md border border-slate-200 bg-white px-2 py-1 text-sm font-medium outline-none focus:border-slate-400"
-                >
-                  {MONTHS.map((mn, i) => (<option key={i} value={i}>{mn}</option>))}
-                </select>
-                <select
-                  value={view.y}
-                  onChange={(e) => setView((v) => ({ ...v, y: Number(e.target.value) }))}
-                  className="rounded-md border border-slate-200 bg-white px-2 py-1 text-sm font-medium outline-none focus:border-slate-400"
-                >
-                  {years.map((y) => (<option key={y} value={y}>{y}</option>))}
-                </select>
+                <div className="w-[130px]">
+                  <Select
+                    value={String(view.m)}
+                    onChange={(v) => setView((p) => ({ ...p, m: Number(v) }))}
+                    options={MONTHS.map((mn, i) => ({ value: String(i), label: mn }))}
+                  />
+                </div>
+                <div className="w-[90px]">
+                  <Select
+                    value={String(view.y)}
+                    onChange={(v) => setView((p) => ({ ...p, y: Number(v) }))}
+                    options={years.map((y) => ({ value: String(y), label: String(y) }))}
+                  />
+                </div>
               </div>
-              <button type="button" onClick={() => shiftMonth(1)} className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100">
-                <ChevronRight className="h-4 w-4" />
-              </button>
+              <Tooltip content="Next month">
+                <button type="button" onClick={() => shiftMonth(1)} className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100">
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </Tooltip>
             </div>
 
             <div className="mb-1 grid grid-cols-7 gap-1 text-center text-[11px] font-medium text-slate-400">

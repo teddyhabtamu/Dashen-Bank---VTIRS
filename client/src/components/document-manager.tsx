@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Upload, FileText, Image as ImageIcon, Trash2, Download, Eye, X } from "lucide-react";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
+import { Select } from "@/components/ui/select";
 import { DOCUMENT_CATEGORY_OPTIONS, label } from "@/lib/constants";
 import { formatFileSize, formatDate } from "@/lib/format";
 import { useToast } from "@/lib/toast-context";
+import { Tooltip } from "@/components/ui/tooltip";
 
 interface DocItem {
   id: string;
@@ -165,27 +167,28 @@ export function DocumentManager({
                           <span className="shrink-0 text-xs text-slate-400">{formatFileSize(s.file.size)}</span>
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
-                          <select
+                          <Select
                             value={s.category}
-                            onChange={(e) => updateStaged(i, { category: e.target.value })}
-                            className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
-                          >
-                            {DOCUMENT_CATEGORY_OPTIONS.map((c) => (
-                              <option key={c} value={c}>{label(c)}</option>
-                            ))}
-                          </select>
+                            onChange={(v) => updateStaged(i, { category: v })}
+                            options={DOCUMENT_CATEGORY_OPTIONS.map((c) => ({ value: c, label: label(c) }))}
+                            placeholder="Category"
+                            className="w-40"
+                            searchable={false}
+                          />
                           <input
                             value={s.title}
                             onChange={(e) => updateStaged(i, { title: e.target.value })}
                             placeholder="Title (optional)"
                             className="min-w-0 flex-1 rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-600 placeholder:text-slate-400 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
                           />
-                          <button
-                            onClick={() => removeStaged(i)}
-                            className="shrink-0 rounded p-1 text-red-400 hover:bg-red-50 hover:text-red-600"
-                          >
-                            <X className="h-3.5 w-3.5" />
-                          </button>
+                          <Tooltip content="Remove file">
+                            <button
+                              onClick={() => removeStaged(i)}
+                              className="shrink-0 rounded p-1 text-red-400 hover:bg-red-50 hover:text-red-600"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          </Tooltip>
                         </div>
                       </div>
                     </div>
@@ -210,7 +213,7 @@ export function DocumentManager({
           <FileText className="h-4 w-4" /> Documents ({docs.filter((d) => !isImg(d.mimeType)).length})
         </div>
         {docs.filter((d) => !isImg(d.mimeType)).length === 0 ? (
-          <p className="mt-2 text-sm text-slate-400">No documents uploaded.</p>
+          <p className="mt-2 px-4 text-sm text-slate-400">No documents uploaded.</p>
         ) : (
           <ul className="mt-2 divide-y divide-slate-100 rounded-xl border border-slate-100">
             {docs.filter((d) => !isImg(d.mimeType)).map((d) => (

@@ -4,6 +4,7 @@ import { Bell, Menu, PanelLeftClose, PanelLeftOpen, Check, BellDot, Search, Comm
 import { useAuth } from "./auth-context";
 import { useBrand } from "@/lib/brand-context";
 import { formatDateTime } from "@/lib/format";
+import { Tooltip } from "@/components/ui/tooltip";
 
 const TITLES: Record<string, string> = {
   "/dashboard": "Dashboard",
@@ -160,17 +161,19 @@ export function Topbar({
           </kbd>
         </button>
 
-        <button
-          className="relative rounded-lg p-2 text-slate-500 hover:bg-slate-100"
-          onClick={() => setPanelOpen((o) => !o)}
-        >
-          {unread > 0 ? <BellDot className="h-5 w-5" /> : <Bell className="h-5 w-5" />}
-          {unread > 0 && (
-            <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold leading-none text-white">
-              {unread > 99 ? "99+" : unread}
-            </span>
-          )}
-        </button>
+        <Tooltip content="Notifications">
+          <button
+            className="relative rounded-lg p-2 text-slate-500 hover:bg-slate-100"
+            onClick={() => setPanelOpen((o) => !o)}
+          >
+            {unread > 0 ? <BellDot className="h-5 w-5" /> : <Bell className="h-5 w-5" />}
+            {unread > 0 && (
+              <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold leading-none text-white">
+                {unread > 99 ? "99+" : unread}
+              </span>
+            )}
+          </button>
+        </Tooltip>
 
         {panelOpen && (
           <div

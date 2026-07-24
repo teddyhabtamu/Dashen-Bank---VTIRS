@@ -18,6 +18,32 @@ async function deleteFileSafe(relPath: string) {
   }
 }
 
+export async function updateDocument(id: string, data: { title?: string; category?: string }, ctx: Ctx = {}) {
+  const doc = await prisma.vehicleDocument.findUnique({ where: { id } });
+  if (!doc) return null;
+
+  const updated = await prisma.vehicleDocument.update({
+    where: { id },
+    data: {
+      ...(data.title !== undefined && { title: data.title }),
+      ...(data.category !== undefined && { category: data.category }),
+    },
+  });
+
+  await writeAudit({
+    action: "UPDATE",
+    entity: "VehicleDocument",
+    entityId: id,
+    vehicleId: doc.vehicleId,
+    userId: ctx.userId,
+    oldValue: { title: doc.title, category: doc.category },
+    newValue: { title: updated.title, category: updated.category },
+    req: ctx.req,
+  });
+
+  return updated;
+}
+
 export async function deleteDocument(id: string, ctx: Ctx = {}) {
   const doc = await prisma.vehicleDocument.findUnique({ where: { id } });
   if (doc) {

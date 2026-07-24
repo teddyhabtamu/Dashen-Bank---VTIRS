@@ -72,8 +72,9 @@ export async function generateNotifications(userId: string) {
   return count;
 }
 
-// Only create if no matching unread notification exists, or if the status
-// changed (e.g. "Expiring Soon" → "Expired") so we can send an update.
+// Only create if no matching unread or dismissed notification exists, or if
+// the status changed (e.g. "Expiring Soon" → "Expired") so we can send an
+// update.
 async function shouldCreate(userId: string, type: string, link: string, title: string): Promise<boolean> {
   const latest = await prisma.notification.findFirst({
     where: { userId, type, link },
@@ -82,6 +83,7 @@ async function shouldCreate(userId: string, type: string, link: string, title: s
   if (!latest) return true;
   if (latest.title !== title) return true;
   if (!latest.isRead) return false;
+  if (latest.dismissed) return false;
   return false;
 }
 
@@ -107,11 +109,13 @@ export async function listNotifications(
     pageSize,
     type,
     unreadOnly,
+    showDismissed,
   }: {
     page?: number;
     pageSize?: number;
     type?: string;
     unreadOnly?: boolean;
+    showDismissed?: boolean;
   }
 ) {
   const ps = pageSize ?? await defaultPageSize();
@@ -120,6 +124,7 @@ export async function listNotifications(
   const where: Record<string, unknown> = { userId };
   if (type) where.type = type;
   if (unreadOnly) where.isRead = false;
+  if (!showDismissed) where.dismissed = false;
 
   const [items, total] = await Promise.all([
     prisma.notification.findMany({
@@ -151,7 +156,7 @@ export async function listNotifications(
 
 export async function getUnreadCount(userId: string): Promise<number> {
   await generateNotifications(userId).catch(() => {});
-  return prisma.notification.count({ where: { userId, isRead: false } as any });
+  return prisma.notification.count({ where: { userId, isRead: false, dismissed: false } as any });
 }
 
 export async function markRead(id: string, userId: string) {
@@ -168,10 +173,24 @@ export async function markAllRead(userId: string) {
   });
 }
 
+export async function deleteNotification(id: string, userId: string) {
+  await prisma.notification.updateMany({
+    where: { id, userId } as any,
+    data: { dismissed: true },
+  });
+}
+
+export async function clearAllNotifications(userId: string) {
+  await prisma.notification.updateMany({
+    where: { userId, dismissed: false } as any,
+    data: { dismissed: true },
+  });
+}
+
 export async function getNotificationTypes(userId: string): Promise<string[]> {
   const rows = await prisma.notification.groupBy({
     by: ["type"],
-    where: { userId } as any,
+    where: { userId, dismissed: false } as any,
     _count: { _all: true },
   });
   return rows.map((r) => r.type).sort();

@@ -1,7 +1,7 @@
 
 import { Link } from "react-router-dom";
 import { useCallback, useEffect, useState } from "react";
-import { Plus, Search, ShieldCheck, MoreVertical, CalendarRange } from "lucide-react";
+import { Download, Plus, Search, ShieldCheck, MoreVertical, CalendarRange } from "lucide-react";
 import { BrandLoader } from "@/components/ui/brand-loader";
 import { Dropdown } from "@/components/ui/dropdown";
 import { Select } from "@/components/ui/select";
@@ -9,7 +9,10 @@ import { DatePicker } from "@/components/ui/datepicker";
 import { Modal } from "@/components/ui/modal";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { useAuth } from "@/components/auth-context";
+import { useBrand } from "@/lib/brand-context";
 import { useToast } from "@/lib/toast-context";
+import { exportCsv, exportXlsx, exportPdf, rowsToHtmlTable } from "@/lib/export";
+import { Tooltip } from "@/components/ui/tooltip";
 import { COVERAGE_OPTIONS } from "@/lib/constants";
 import { daysUntil, formatDate } from "@/lib/format";
 
@@ -41,6 +44,7 @@ function ExpiryPill({ date }: { date: string }) {
 
 export default function InsurancesPage() {
   const { can } = useAuth();
+  const { companyName } = useBrand();
   const { toast } = useToast();
   const [rows, setRows] = useState<InsRow[]>([]);
   const [total, setTotal] = useState(0);
@@ -122,6 +126,21 @@ export default function InsurancesPage() {
     } finally { setBusy(false); }
   }
 
+  function exportInsurances(format: "csv" | "excel" | "pdf") {
+    const data = rows.map((r) => ({
+      Company: r.company,
+      "Policy No": r.policyNo,
+      Coverage: r.coverage,
+      "Start Date": r.startDate,
+      "End Date": r.endDate,
+      Vehicle: `${r.vehicle.plateNumber} (${r.vehicle.vehicleCode})`,
+    }));
+    const stamp = new Date().toISOString().slice(0, 10);
+    if (format === "csv") exportCsv(`insurances_${stamp}.csv`, data);
+    else if (format === "excel") exportXlsx(`insurances_${stamp}.xlsx`, data);
+    else exportPdf(rowsToHtmlTable("Insurance Policies", data), "Insurance Policies", companyName);
+  }
+
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   const chips: { key: string; label: string; clear: () => void }[] = [];
@@ -137,9 +156,21 @@ export default function InsurancesPage() {
           <h2 className="text-xl font-semibold text-slate-800">Insurance</h2>
           <p className="text-sm text-slate-500">View and manage insurance policies across all vehicles</p>
         </div>
-        {can("insurance:manage") && (
-          <button className="btn-primary" onClick={openCreate}><Plus className="h-4 w-4" /> New Insurance</button>
-        )}
+        <div className="flex items-center gap-2">
+          {rows.length > 0 && (
+            <Dropdown align="right"
+              trigger={({ toggle }) => (<Tooltip content="Export"><button onClick={toggle} className="btn-outline text-xs"><Download className="h-3.5 w-3.5" /> Export</button></Tooltip>)}
+              items={[
+                { label: "CSV", onClick: () => exportInsurances("csv") },
+                { label: "Excel", onClick: () => exportInsurances("excel") },
+                { label: "PDF", onClick: () => exportInsurances("pdf") },
+              ]}
+            />
+          )}
+          {can("insurance:manage") && (
+            <button className="btn-primary" onClick={openCreate}><Plus className="h-4 w-4" /> New Insurance</button>
+          )}
+        </div>
       </div>
 
       <div className="card p-4">
@@ -239,7 +270,7 @@ export default function InsurancesPage() {
         {err && <div className="mb-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-600">{err}</div>}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {!editId && (
-            <label className="text-sm sm:col-span-2">Vehicle
+            <label className="text-sm sm:col-span-2">Vehicle <span className="text-red-400">*</span>
               <div className="mt-1">
                 <Select
                   className="w-full"
@@ -252,10 +283,10 @@ export default function InsurancesPage() {
               </div>
             </label>
           )}
-          <label className="text-sm">Company
+          <label className="text-sm">Company <span className="text-red-400">*</span>
             <input className="input mt-1" value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} />
           </label>
-          <label className="text-sm">Policy No
+          <label className="text-sm">Policy No <span className="text-red-400">*</span>
             <input className="input mt-1" value={form.policyNo} onChange={(e) => setForm({ ...form, policyNo: e.target.value })} />
           </label>
           <label className="text-sm">Coverage
@@ -268,10 +299,10 @@ export default function InsurancesPage() {
               />
             </div>
           </label>
-          <label className="text-sm">Start Date
+          <label className="text-sm">Start Date <span className="text-red-400">*</span>
             <div className="mt-1"><DatePicker value={form.startDate} onChange={(v) => setForm({ ...form, startDate: v })} /></div>
           </label>
-          <label className="text-sm">End Date
+          <label className="text-sm">End Date <span className="text-red-400">*</span>
             <div className="mt-1"><DatePicker value={form.endDate} onChange={(v) => setForm({ ...form, endDate: v })} /></div>
           </label>
         </div>

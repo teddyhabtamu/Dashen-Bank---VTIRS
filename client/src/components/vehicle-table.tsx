@@ -1,8 +1,10 @@
 import { Link } from "react-router-dom";
 import { useState, useEffect, useCallback } from "react";
-import { Plus, Search, Car, Eye, Pencil, Trash2, ChevronLeft, ChevronRight, MoreVertical } from "lucide-react";
+import { Plus, Search, Car, Eye, Pencil, Trash2, ChevronLeft, ChevronRight, MoreVertical, Download } from "lucide-react";
+import { Tooltip } from "@/components/ui/tooltip";
 import { StatusBadge } from "@/components/ui/badge";
 import { BrandLoader } from "@/components/ui/brand-loader";
+import { Modal } from "@/components/ui/modal";
 import { Dropdown } from "@/components/ui/dropdown";
 import { Select } from "@/components/ui/select";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
@@ -10,6 +12,7 @@ import { label } from "@/lib/constants";
 import { formatCurrency } from "@/lib/format";
 import { useAuth } from "@/components/auth-context";
 import { useToast } from "@/lib/toast-context";
+import { exportCsv } from "@/lib/export";
 
 interface VehicleRow {
   id: string;
@@ -20,6 +23,15 @@ interface VehicleRow {
   year: number;
   status: string;
   branch?: { name: string } | null;
+  currentDriver?: {
+    id: string;
+    fullName: string;
+    employeeId: string | null;
+    licenseNo: string | null;
+    phone: string | null;
+    department: { name: string } | null;
+    isActive: boolean;
+  } | null;
   ownerName: string;
   purchaseCost?: number | null;
 }
@@ -34,6 +46,7 @@ export function VehicleTable() {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(true);
+  const [driverDetail, setDriverDetail] = useState<VehicleRow['currentDriver'] | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [pageSize, setPageSize] = useState(15);
@@ -73,6 +86,23 @@ export function VehicleTable() {
     }
   }
 
+  function exportVehicles() {
+    exportCsv(`vehicles_${new Date().toISOString().slice(0, 10)}.csv`,
+      rows.map((v) => ({
+        Code: v.vehicleCode,
+        Plate: v.plateNumber,
+        Make: v.make,
+        Model: v.model,
+        Year: v.year,
+        Branch: v.branch?.name ?? "",
+        Driver: v.currentDriver?.fullName ?? "",
+        Owner: v.ownerName,
+        Cost: v.purchaseCost ?? "",
+        Status: label(v.status),
+      }))
+    );
+  }
+
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   return (
@@ -99,11 +129,18 @@ export function VehicleTable() {
             ]}
           />
         </div>
-        {can("vehicle:create") && (
-          <Link to="/vehicles/new" className="btn-primary justify-center">
-            <Plus className="h-4 w-4" /> Register Vehicle
-          </Link>
-        )}
+        <div className="flex items-center gap-2">
+          {rows.length > 0 && (
+            <button className="btn-outline justify-center text-xs" onClick={exportVehicles}>
+              <Download className="h-3.5 w-3.5" /> CSV
+            </button>
+          )}
+          {can("vehicle:create") && (
+            <Link to="/vehicles/new" className="btn-primary justify-center">
+              <Plus className="h-4 w-4" /> Register Vehicle
+            </Link>
+          )}
+        </div>
       </div>
 
       {loading ? (
@@ -135,9 +172,11 @@ export function VehicleTable() {
                   <Dropdown
                     align="right"
                     trigger={({ toggle }) => (
-                      <button onClick={toggle} className="rounded-md p-1 text-slate-500 hover:bg-slate-100">
-                        <MoreVertical className="h-4 w-4" />
-                      </button>
+                      <Tooltip content="Actions">
+                        <button onClick={toggle} className="rounded-md p-1 text-slate-500 hover:bg-slate-100">
+                          <MoreVertical className="h-4 w-4" />
+                        </button>
+                      </Tooltip>
                     )}
                     items={[
                       { label: "View", icon: <Eye className="h-4 w-4" />, href: `/vehicles/${v.id}` },
@@ -150,7 +189,13 @@ export function VehicleTable() {
                   <div><span className="font-mono text-slate-600">{v.vehicleCode}</span></div>
                   <div>{v.ownerName}</div>
                   <div className="truncate">{v.branch?.name ?? "-"}</div>
-                  <div>{v.purchaseCost != null ? formatCurrency(v.purchaseCost) : "-"}</div>
+                  <div className="truncate">
+                    {v.currentDriver ? (
+                      <button onClick={() => setDriverDetail(v.currentDriver)} className="text-primary hover:underline cursor-pointer">
+                        {v.currentDriver.fullName}
+                      </button>
+                    ) : "No driver"}
+                  </div>
                 </div>
               </div>
             ))}
@@ -168,6 +213,7 @@ export function VehicleTable() {
                       <th className="px-4 py-3">Make / Model</th>
                       <th className="px-4 py-3">Year</th>
                       <th className="px-4 py-3">Branch</th>
+                      <th className="px-4 py-3">Driver</th>
                       <th className="px-4 py-3">Owner</th>
                       <th className="px-4 py-3">Cost</th>
                       <th className="px-4 py-3">Status</th>
@@ -182,6 +228,13 @@ export function VehicleTable() {
                         <td className="px-4 py-3">{v.make} {v.model}</td>
                         <td className="px-4 py-3">{v.year}</td>
                         <td className="px-4 py-3 text-slate-600">{v.branch?.name ?? "-"}</td>
+                        <td className="px-4 py-3 text-slate-600">
+                          {v.currentDriver ? (
+                            <button onClick={() => setDriverDetail(v.currentDriver)} className="text-primary hover:underline cursor-pointer">
+                              {v.currentDriver.fullName}
+                            </button>
+                          ) : "—"}
+                        </td>
                         <td className="px-4 py-3 text-slate-600">{v.ownerName}</td>
                         <td className="px-4 py-3">{v.purchaseCost != null ? formatCurrency(v.purchaseCost) : "-"}</td>
                         <td className="px-4 py-3"><StatusBadge status={v.status} /></td>
@@ -213,13 +266,17 @@ export function VehicleTable() {
           <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3 text-sm text-slate-500">
             <span>{total} vehicle(s)</span>
             <div className="flex items-center gap-2">
-              <button className="btn-outline px-2 py-1" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
-                <ChevronLeft className="h-4 w-4" />
-              </button>
+              <Tooltip content="Previous page">
+                <button className="btn-outline px-2 py-1" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+              </Tooltip>
               <span>Page {page} / {totalPages}</span>
-              <button className="btn-outline px-2 py-1" disabled={page >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>
-                <ChevronRight className="h-4 w-4" />
-              </button>
+              <Tooltip content="Next page">
+                <button className="btn-outline px-2 py-1" disabled={page >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </Tooltip>
             </div>
           </div>
         </>
@@ -234,6 +291,31 @@ export function VehicleTable() {
         message="This will permanently remove the vehicle and its linked records. This cannot be undone."
         confirmLabel="Delete"
       />
+
+      <Modal open={!!driverDetail} onClose={() => setDriverDetail(null)} title={driverDetail?.fullName ?? ""} description="Driver details" size="sm">
+        <dl className="space-y-3 text-sm">
+          <div className="flex justify-between border-b border-slate-100 pb-2">
+            <dt className="text-slate-500">Employee ID</dt>
+            <dd className="font-medium text-slate-800">{driverDetail?.employeeId ?? "—"}</dd>
+          </div>
+          <div className="flex justify-between border-b border-slate-100 pb-2">
+            <dt className="text-slate-500">License No</dt>
+            <dd className="font-medium text-slate-800">{driverDetail?.licenseNo ?? "—"}</dd>
+          </div>
+          <div className="flex justify-between border-b border-slate-100 pb-2">
+            <dt className="text-slate-500">Phone</dt>
+            <dd className="font-medium text-slate-800">{driverDetail?.phone ?? "—"}</dd>
+          </div>
+          <div className="flex justify-between border-b border-slate-100 pb-2">
+            <dt className="text-slate-500">Department</dt>
+            <dd className="font-medium text-slate-800">{driverDetail?.department?.name ?? "—"}</dd>
+          </div>
+          <div className="flex justify-between border-b border-slate-100 pb-2">
+            <dt className="text-slate-500">Status</dt>
+            <dd className="font-medium">{driverDetail?.isActive ? <span className="text-emerald-600">Active</span> : <span className="text-red-500">Inactive</span>}</dd>
+          </div>
+        </dl>
+      </Modal>
     </div>
   );
 }

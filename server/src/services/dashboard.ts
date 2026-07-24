@@ -127,7 +127,7 @@ export async function getDashboardKpis(): Promise<DashboardKpis> {
     prisma.vehicle.count({ where: { status: "ASSIGNED" } }),
     prisma.vehicle.count({ where: { status: "UNDER_MAINTENANCE" } }),
     prisma.vehicle.count({ where: { status: "DISPOSED" } }),
-    prisma.vehicleRegistration.count({ where: { status: REGISTRATION_STATUS.EXPIRED } }),
+    prisma.vehicleRegistration.count({ where: { expiryDate: { lt: new Date() } } }),
     prisma.vehicleRegistration.count({ where: { status: REGISTRATION_STATUS.PENDING_RENEWAL } }),
     prisma.vehicleRegistration.count({ where: { status: REGISTRATION_STATUS.SUSPENDED } }),
     prisma.vehicleInsurance.count({ where: { endDate: { lt: new Date() } } }),

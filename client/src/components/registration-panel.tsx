@@ -4,6 +4,7 @@ import { RefreshCw, Ban } from "lucide-react";
 import { StatusBadge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
 import { Dropdown } from "@/components/ui/dropdown";
+import { Tooltip } from "@/components/ui/tooltip";
 import { DatePicker } from "@/components/ui/datepicker";
 import { MoreVertical } from "lucide-react";
 import { formatDate, daysUntil } from "@/lib/format";
@@ -71,7 +72,7 @@ export function RegistrationPanel({ vehicleId, initial, canRenew, canSuspend }: 
                 <StatusBadge status={eff} />
                 {(canRenew || canSuspend) && (
                   <Dropdown align="right"
-                    trigger={({ toggle }) => (<button onClick={toggle} className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100"><MoreVertical className="h-4 w-4" /></button>)}
+                    trigger={({ toggle }) => (<Tooltip content="Actions"><button onClick={toggle} className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100"><MoreVertical className="h-4 w-4" /></button></Tooltip>)}
                     items={[
                       ...(canRenew ? [{ label: "Renew", icon: <RefreshCw className="h-4 w-4" />, onClick: () => setRenewId(r.id) }] : []),
                       ...(canSuspend ? [{ label: "Suspend", icon: <Ban className="h-4 w-4" />, danger: true, onClick: () => setSuspendId(r.id) }] : []),

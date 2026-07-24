@@ -8,6 +8,11 @@ export interface SelectOption {
   value: string;
   label: string;
   icon?: ReactNode;
+  description?: string;
+  indicator?: {
+    label: string;
+    variant: "warning" | "success" | "danger";
+  };
 }
 
 interface SelectProps {
@@ -143,21 +148,36 @@ export function Select({
               filtered.map((o) => {
                 const active = o.value === value;
                 return (
-                  <button
-                    key={o.value}
-                    type="button"
-                    role="option"
-                    aria-selected={active}
-                    onClick={() => choose(o.value)}
-                    className={cn(
-                      "flex w-full items-center gap-2 whitespace-nowrap px-3 py-2 text-left text-sm transition-colors",
-                      active ? "bg-primary/10 font-medium text-primary" : "text-slate-700 hover:bg-slate-50"
-                    )}
-                  >
-                    {o.icon}
-                    <span className="flex-1 truncate">{o.label}</span>
-                    {active && <Check className="h-4 w-4 text-primary" />}
-                  </button>
+                    <button
+                      key={o.value}
+                      type="button"
+                      role="option"
+                      aria-selected={active}
+                      onClick={() => choose(o.value)}
+                      className={cn(
+                        "flex w-full items-center gap-2 whitespace-nowrap px-3 py-2 text-left text-sm transition-colors",
+                        o.icon ? "font-semibold text-primary" : active && "bg-primary/10 font-medium text-primary"
+                      )}
+                    >
+                      {o.icon}
+                      <div className="flex-1 min-w-0">
+                        <span className="truncate">{o.label}</span>
+                        {o.description && (
+                          <span className="block text-xs text-slate-400 truncate">{o.description}</span>
+                        )}
+                      </div>
+                      {o.indicator && (
+                        <span className={cn(
+                          "ml-auto shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium leading-tight",
+                          o.indicator.variant === "warning" && "bg-amber-50 text-amber-700",
+                          o.indicator.variant === "success" && "bg-emerald-50 text-emerald-700",
+                          o.indicator.variant === "danger" && "bg-red-50 text-red-700"
+                        )}>
+                          {o.indicator.label}
+                        </span>
+                      )}
+                      {active && <Check className={cn("h-4 w-4 shrink-0", o.icon ? "text-primary" : "text-primary")} />}
+                    </button>
                 );
               })
             )}

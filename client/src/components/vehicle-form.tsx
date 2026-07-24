@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Check, ChevronLeft, ChevronRight, Eye } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, Eye, Plus } from "lucide-react";
 import { cn } from "@/lib/format";
 import { BrandLoader } from "@/components/ui/brand-loader";
 import { useToast } from "@/lib/toast-context";
 import { Field, Select } from "@/components/ui/field";
+import type { SelectOption } from "@/components/ui/field";
+import { Modal } from "@/components/ui/modal";
 import { DatePicker } from "@/components/ui/datepicker";
 import {
   FUEL_TYPE_OPTIONS,
@@ -113,6 +115,8 @@ const REQUIRED: Set<keyof VehicleFormData> = new Set([
   "engineNo", "chassisNo", "fuelType", "transmission", "ownerName",
 ]);
 
+const ADD_NEW = "__add_new__";
+
 function StepIndicator({ current }: { current: number }) {
   return (
     <div className="flex items-center justify-center gap-0">
@@ -152,48 +156,6 @@ function StepIndicator({ current }: { current: number }) {
   );
 }
 
-function renderField(
-  f: keyof VehicleFormData,
-  data: VehicleFormData,
-  onChange: (k: keyof VehicleFormData, v: string) => void,
-  branches: Option[],
-  departments: Option[],
-  drivers: Option[],
-) {
-  const value = data[f];
-  const set = (v: string) => onChange(f, v);
-
-  if (f === "fuelType")
-    return <Select value={value} onChange={set} options={FUEL_TYPE_OPTIONS.map((o) => ({ value: o, label: label(o) }))} />;
-  if (f === "transmission")
-    return <Select value={value} onChange={set} options={TRANSMISSION_OPTIONS.map((o) => ({ value: o, label: label(o) }))} />;
-  if (f === "driveType")
-    return <Select value={value} onChange={set} options={DRIVE_TYPE_OPTIONS.map((o) => ({ value: o, label: label(o) }))} />;
-  if (f === "status")
-    return <Select value={value} onChange={set} options={VEHICLE_STATUS_OPTIONS.map((o) => ({ value: o, label: label(o) }))} />;
-  if (f === "branchId")
-    return <Select value={value} onChange={set} options={branches} placeholder="Select branch" />;
-  if (f === "departmentId")
-    return <Select value={value} onChange={set} options={departments} placeholder="Select department" />;
-  if (f === "currentDriverId")
-    return <Select value={value} onChange={set} options={drivers} placeholder="Select driver" />;
-  if (f === "acquisitionDate")
-    return <DatePicker value={value} onChange={set} />;
-
-  return (
-    <input
-      className="input"
-      value={value}
-      onChange={(e) => set(e.target.value)}
-      inputMode={
-        f === "year" || f === "engineCC" || f === "odometer" || f === "purchaseCost"
-          ? "numeric"
-          : "text"
-      }
-    />
-  );
-}
-
 export function VehicleForm({ vehicleId }: { vehicleId?: string }) {
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -202,10 +164,14 @@ export function VehicleForm({ vehicleId }: { vehicleId?: string }) {
   const [data, setData] = useState<VehicleFormData>(EMPTY);
   const [branches, setBranches] = useState<Option[]>([]);
   const [departments, setDepartments] = useState<Option[]>([]);
-  const [drivers, setDrivers] = useState<Option[]>([]);
+  const [drivers, setDrivers] = useState<SelectOption[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  const [addModal, setAddModal] = useState<"branch" | "department" | "driver" | null>(null);
+  const [addBusy, setAddBusy] = useState(false);
+  const [addForm, setAddForm] = useState({ code: "", name: "", fullName: "", employeeId: "", licenseNo: "", phone: "" });
 
   useEffect(() => {
     fetch("/api/reference/lookups")
@@ -213,7 +179,7 @@ export function VehicleForm({ vehicleId }: { vehicleId?: string }) {
       .then((d) => {
         setBranches(d.branches ?? []);
         setDepartments(d.departments ?? []);
-        setDrivers(d.drivers ?? []);
+        setDrivers((d.drivers ?? []).map((dr: any) => ({ value: dr.value, label: dr.label, description: dr.phone || undefined, indicator: dr.occupied ? { label: "Occupied", variant: "warning" } : undefined })));
       });
     if (!vehicleId) {
       fetch("/api/settings/public")
@@ -262,8 +228,56 @@ export function VehicleForm({ vehicleId }: { vehicleId?: string }) {
   }, [vehicleId]);
 
   function onChange<K extends keyof VehicleFormData>(k: K, v: string) {
+    if (v === ADD_NEW) {
+      if (k === "branchId") { setAddForm({ code: "", name: "", fullName: "", employeeId: "", licenseNo: "", phone: "" }); setAddModal("branch"); }
+      if (k === "departmentId") { setAddForm({ code: "", name: "", fullName: "", employeeId: "", licenseNo: "", phone: "" }); setAddModal("department"); }
+      if (k === "currentDriverId") { setAddForm({ code: "", name: "", fullName: "", employeeId: "", licenseNo: "", phone: "" }); setAddModal("driver"); }
+      return;
+    }
     setData((d) => ({ ...d, [k]: v }));
     if (errors[k]) setErrors((prev) => ({ ...prev, [k]: "" }));
+  }
+
+  async function handleAddSave() {
+    setAddBusy(true);
+    let url = "";
+    let method = "POST";
+    let body: Record<string, string | undefined> = {};
+
+    if (addModal === "branch") {
+      url = "/api/reference/branches";
+      body = { code: addForm.code, name: addForm.name };
+    } else if (addModal === "department") {
+      url = "/api/reference/departments";
+      body = { code: addForm.code, name: addForm.name };
+    } else if (addModal === "driver") {
+      url = "/api/reference/drivers";
+      body = { fullName: addForm.fullName, employeeId: addForm.employeeId || undefined, licenseNo: addForm.licenseNo || undefined, phone: addForm.phone || undefined };
+    }
+
+    const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    setAddBusy(false);
+    if (!res.ok) {
+      const err = await res.json();
+      toast("error", err.error || "Failed to save");
+      return;
+    }
+    const record = await res.json();
+    const newOpt = { value: record.id, label: record.name || record.fullName };
+
+    if (addModal === "branch") {
+      setBranches((prev) => [...prev, newOpt]);
+      setData((d) => ({ ...d, branchId: record.id }));
+    } else if (addModal === "department") {
+      setDepartments((prev) => [...prev, newOpt]);
+      setData((d) => ({ ...d, departmentId: record.id }));
+    } else if (addModal === "driver") {
+      setDrivers((prev) => [...prev, newOpt]);
+      setData((d) => ({ ...d, currentDriverId: record.id }));
+    }
+
+    toast("success", `${addModal} added`);
+    setAddModal(null);
   }
 
   function validateStep(s: number): boolean {
@@ -322,6 +336,41 @@ export function VehicleForm({ vehicleId }: { vehicleId?: string }) {
     }
     toast("success", isEdit ? "Vehicle updated" : "Vehicle registered");
     navigate("/vehicles");
+  }
+
+  function renderField(f: keyof VehicleFormData) {
+    const value = data[f];
+    const set = (v: string) => onChange(f, v);
+
+    if (f === "fuelType")
+      return <Select value={value} onChange={set} options={FUEL_TYPE_OPTIONS.map((o) => ({ value: o, label: label(o) }))} />;
+    if (f === "transmission")
+      return <Select value={value} onChange={set} options={TRANSMISSION_OPTIONS.map((o) => ({ value: o, label: label(o) }))} />;
+    if (f === "driveType")
+      return <Select value={value} onChange={set} options={DRIVE_TYPE_OPTIONS.map((o) => ({ value: o, label: label(o) }))} />;
+    if (f === "status")
+      return <Select value={value} onChange={set} options={VEHICLE_STATUS_OPTIONS.map((o) => ({ value: o, label: label(o) }))} />;
+    if (f === "branchId")
+      return <Select searchable value={value} onChange={set} options={[{ value: ADD_NEW, label: "Add new branch", icon: <Plus className="h-4 w-4" /> }, ...branches]} placeholder="Select branch" />;
+    if (f === "departmentId")
+      return <Select searchable value={value} onChange={set} options={[{ value: ADD_NEW, label: "Add new department", icon: <Plus className="h-4 w-4" /> }, ...departments]} placeholder="Select department" />;
+    if (f === "currentDriverId")
+      return <Select searchable value={value} onChange={set} options={[{ value: ADD_NEW, label: "Add new driver", icon: <Plus className="h-4 w-4" /> }, ...drivers]} placeholder="Select driver" />;
+    if (f === "acquisitionDate")
+      return <DatePicker value={value} onChange={set} />;
+
+    return (
+      <input
+        className="input"
+        value={value}
+        onChange={(e) => set(e.target.value)}
+        inputMode={
+          f === "year" || f === "engineCC" || f === "odometer" || f === "purchaseCost"
+            ? "numeric"
+            : "text"
+        }
+      />
+    );
   }
 
   if (loading) {
@@ -401,9 +450,9 @@ export function VehicleForm({ vehicleId }: { vehicleId?: string }) {
           </h3>
           <div className="grid grid-cols-1 gap-x-4 gap-y-2.5 md:grid-cols-3">
             {STEP_FIELDS[step].map((f) => (
-              <Field key={f} label={LABELS[f]} error={errors[f]}
+              <Field key={f} label={LABELS[f]} error={errors[f]} required={REQUIRED.has(f)}
                 className={STEP_FIELDS[step].length === 1 ? "md:col-span-3" : ""}>
-                {renderField(f, data, onChange, branches, departments, drivers)}
+                {renderField(f)}
               </Field>
             ))}
           </div>
@@ -433,6 +482,92 @@ export function VehicleForm({ vehicleId }: { vehicleId?: string }) {
           )}
         </div>
       </div>
+
+      <Modal
+        open={addModal === "branch"}
+        onClose={() => setAddModal(null)}
+        title="New Branch"
+        size="sm"
+        footer={
+          <>
+            <button className="btn-outline" onClick={() => setAddModal(null)}>Cancel</button>
+            <button className="btn btn-primary" onClick={handleAddSave} disabled={addBusy}>
+              {addBusy ? "Saving..." : "Save"}
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-600">Code *</label>
+            <input className="input" value={addForm.code} onChange={(e) => setAddForm({ ...addForm, code: e.target.value })} placeholder="e.g. ADD-001" />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-600">Name *</label>
+            <input className="input" value={addForm.name} onChange={(e) => setAddForm({ ...addForm, name: e.target.value })} placeholder="e.g. Addis Ababa Main" />
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        open={addModal === "department"}
+        onClose={() => setAddModal(null)}
+        title="New Department"
+        size="sm"
+        footer={
+          <>
+            <button className="btn-outline" onClick={() => setAddModal(null)}>Cancel</button>
+            <button className="btn btn-primary" onClick={handleAddSave} disabled={addBusy}>
+              {addBusy ? "Saving..." : "Save"}
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-600">Code *</label>
+            <input className="input" value={addForm.code} onChange={(e) => setAddForm({ ...addForm, code: e.target.value })} placeholder="e.g. IT" />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-600">Name *</label>
+            <input className="input" value={addForm.name} onChange={(e) => setAddForm({ ...addForm, name: e.target.value })} placeholder="e.g. Information Technology" />
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        open={addModal === "driver"}
+        onClose={() => setAddModal(null)}
+        title="New Driver"
+        size="sm"
+        footer={
+          <>
+            <button className="btn-outline" onClick={() => setAddModal(null)}>Cancel</button>
+            <button className="btn btn-primary" onClick={handleAddSave} disabled={addBusy}>
+              {addBusy ? "Saving..." : "Save"}
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-600">Full Name *</label>
+            <input className="input" value={addForm.fullName} onChange={(e) => setAddForm({ ...addForm, fullName: e.target.value })} />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-600">Employee ID</label>
+            <input className="input" value={addForm.employeeId} onChange={(e) => setAddForm({ ...addForm, employeeId: e.target.value })} />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-600">License No.</label>
+            <input className="input" value={addForm.licenseNo} onChange={(e) => setAddForm({ ...addForm, licenseNo: e.target.value })} />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-600">Phone</label>
+            <input className="input" value={addForm.phone} onChange={(e) => setAddForm({ ...addForm, phone: e.target.value })} />
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

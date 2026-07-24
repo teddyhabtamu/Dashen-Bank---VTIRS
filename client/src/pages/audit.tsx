@@ -1,9 +1,13 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { History, ChevronDown, ChevronRight, Search } from "lucide-react";
+import { History, ChevronDown, ChevronRight, Search, Download } from "lucide-react";
 import { BrandLoader } from "@/components/ui/brand-loader";
+import { useBrand } from "@/lib/brand-context";
 import { Select } from "@/components/ui/select";
 import { DatePicker } from "@/components/ui/datepicker";
 import { formatDateTime } from "@/lib/format";
+import { exportCsv, exportXlsx, exportPdf, rowsToHtmlTable } from "@/lib/export";
+import { Dropdown } from "@/components/ui/dropdown";
+import { Tooltip } from "@/components/ui/tooltip";
 
 interface AuditRow {
   id: string;
@@ -31,6 +35,7 @@ const ACTION_COLORS: Record<string, string> = {
 };
 
 export default function AuditLogsPage() {
+  const { companyName } = useBrand();
   const [rows, setRows] = useState<AuditRow[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -71,6 +76,24 @@ export default function AuditLogsPage() {
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
+  function exportAudit(format: "csv" | "excel" | "pdf") {
+    const data = rows.map((r) => ({
+      Action: r.action,
+      Entity: r.entity,
+      "Entity ID": r.entityId ?? "",
+      "Vehicle Code": r.vehicleCode ?? "",
+      "Plate Number": r.plateNumber ?? "",
+      User: r.user,
+      "IP Address": r.ipAddress ?? "",
+      "User Agent": r.userAgent ?? "",
+      "Created At": r.createdAt,
+    }));
+    const stamp = new Date().toISOString().slice(0, 10);
+    if (format === "csv") exportCsv(`audit_${stamp}.csv`, data);
+    else if (format === "excel") exportXlsx(`audit_${stamp}.xlsx`, data);
+    else exportPdf(rowsToHtmlTable("Audit Logs", data), "Audit Logs", companyName);
+  }
+
   function toggle(id: string) {
     setExpanded((prev) => {
       const next = new Set(prev);
@@ -81,11 +104,23 @@ export default function AuditLogsPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <h2 className="mr-auto text-lg font-semibold text-slate-800 flex items-center gap-2">
-          <History className="h-5 w-5 text-primary" />
-          Audit Trail
-        </h2>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="flex items-center gap-2 text-lg font-semibold text-slate-800">
+            <History className="h-5 w-5 text-primary" />
+            Audit Trail
+          </h2>
+        </div>
+        {rows.length > 0 && (
+          <Dropdown align="right"
+            trigger={({ toggle }) => (<Tooltip content="Export"><button onClick={toggle} className="btn-outline text-xs"><Download className="h-3.5 w-3.5" /> Export</button></Tooltip>)}
+            items={[
+              { label: "CSV", onClick: () => exportAudit("csv") },
+              { label: "Excel", onClick: () => exportAudit("excel") },
+              { label: "PDF", onClick: () => exportAudit("pdf") },
+            ]}
+          />
+        )}
       </div>
 
       <div className="flex flex-wrap items-end gap-3 rounded-lg border bg-white p-4">
@@ -170,9 +205,11 @@ export default function AuditLogsPage() {
                   <tr className="group text-sm hover:bg-slate-50">
                     <td className="px-3 py-2.5">
                       {hasDiff && (
-                        <button onClick={() => toggle(row.id)} className="text-slate-300 hover:text-slate-600">
-                          {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                        </button>
+                        <Tooltip content={open ? "Hide details" : "Show details"}>
+                          <button onClick={() => toggle(row.id)} className="text-slate-300 hover:text-slate-600">
+                            {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                          </button>
+                        </Tooltip>
                       )}
                     </td>
                     <td className="px-3 py-2.5">
