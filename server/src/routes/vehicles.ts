@@ -6,6 +6,8 @@ import {
   listVehicles,
   updateVehicle,
   deleteVehicle,
+  bulkDeleteVehicles,
+  bulkUpdateVehicleStatus,
   DuplicateVehicleError,
 } from "../services/vehicle.js";
 import { listAssignments, assignDriver, returnDriver } from "../services/assignment.js";
@@ -105,7 +107,44 @@ router.delete(
   }
 );
 
-// ── Assignments ─────────────────────────────────────────────────────
+// ── Bulk operations ──────────────────────────────────────────
+
+router.delete(
+  "/bulk-delete",
+  requireAuth(PERMISSIONS.VEHICLE_DELETE),
+  async (req, res) => {
+    const { ids } = req.body as { ids: string[] };
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: "ids is required" });
+    }
+    const result = await bulkDeleteVehicles(ids, {
+      userId: req.session!.userId,
+      req,
+    });
+    res.json(result);
+  }
+);
+
+router.patch(
+  "/bulk-status",
+  requireAuth(PERMISSIONS.VEHICLE_EDIT),
+  async (req, res) => {
+    const { ids, status } = req.body as { ids: string[]; status: string };
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: "ids is required" });
+    }
+    if (!status) {
+      return res.status(400).json({ error: "status is required" });
+    }
+    const result = await bulkUpdateVehicleStatus(ids, status, {
+      userId: req.session!.userId,
+      req,
+    });
+    res.json(result);
+  }
+);
+
+// ── Assignments ────────────────────────────────────────────────────
 
 router.get("/:vehicleId/assignments", requireAuth(PERMISSIONS.VEHICLE_VIEW), async (req, res) => {
   const assignments = await listAssignments(req.params.vehicleId);

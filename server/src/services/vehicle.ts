@@ -213,6 +213,55 @@ export async function deleteVehicle(id: string, ctx: Context = {}) {
   return existing;
 }
 
+export async function bulkDeleteVehicles(
+  ids: string[],
+  ctx: Context = {}
+) {
+  const results = { deleted: 0 as number, failed: 0 as number, errors: [] as string[] };
+
+  for (const id of ids) {
+    try {
+      const deleted = await deleteVehicle(id, ctx);
+      if (deleted) {
+        results.deleted++;
+      } else {
+        results.failed++;
+        results.errors.push(`Vehicle ${id}: not found`);
+      }
+    } catch (e: any) {
+      results.failed++;
+      results.errors.push(`Vehicle ${id}: ${e.message}`);
+    }
+  }
+
+  return results;
+}
+
+export async function bulkUpdateVehicleStatus(
+  ids: string[],
+  status: string,
+  ctx: Context = {}
+) {
+  const results = { updated: 0 as number, failed: 0 as number, errors: [] as string[] };
+
+  for (const id of ids) {
+    try {
+      const updated = await updateVehicle(id, { status }, ctx);
+      if (updated) {
+        results.updated++;
+      } else {
+        results.failed++;
+        results.errors.push(`Vehicle ${id}: not found`);
+      }
+    } catch (e: any) {
+      results.failed++;
+      results.errors.push(`Vehicle ${id}: ${e.message}`);
+    }
+  }
+
+  return results;
+}
+
 // List with pagination + filtering for the registry table.
 export async function listVehicles(opts: {
   search?: string;
