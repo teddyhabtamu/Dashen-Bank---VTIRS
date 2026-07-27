@@ -9,7 +9,7 @@ import {
   deleteInsurance,
   DuplicateInsuranceError,
 } from "../services/insurance.js";
-import { insuranceSchema } from "../validation/registration.js";
+import { insuranceSchema } from "../validation/insurance.js";
 
 const router = Router();
 

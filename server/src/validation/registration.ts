@@ -23,14 +23,3 @@ export const registrationSchema = z.object({
 });
 
 export type RegistrationInput = z.infer<typeof registrationSchema>;
-
-export const insuranceSchema = z.object({
-  vehicleId: z.string().min(1, "Vehicle is required"),
-  company: z.string().min(1, "Insurance company is required"),
-  policyNo: z.string().min(1, "Policy number is required"),
-  coverage: z.string().min(1, "Coverage type is required"),
-  startDate: dateField,
-  endDate: dateField,
-});
-
-export type InsuranceInput = z.infer<typeof insuranceSchema>;
