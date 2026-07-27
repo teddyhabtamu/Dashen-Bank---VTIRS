@@ -25,14 +25,12 @@ export function csrfProtection(req: Request, res: Response, next: NextFunction) 
   const cookieToken = (req as Request & { cookies?: Record<string, string> }).cookies?.[CSRF_COOKIE];
   const headerToken = csrfTokenFromReq(req);
 
-  if (!cookieToken) {
-    const token = generateCsrfToken();
-    res.cookie(CSRF_COOKIE, token, {
-      httpOnly: false,
-      sameSite: "strict",
-      path: "/",
-    });
-  }
+  const token = cookieToken ?? generateCsrfToken();
+  res.cookie(CSRF_COOKIE, token, {
+    httpOnly: false,
+    sameSite: "lax",
+    path: "/",
+  });
 
   if (!STATE_CHANGING_METHODS.has(req.method)) {
     return next();
