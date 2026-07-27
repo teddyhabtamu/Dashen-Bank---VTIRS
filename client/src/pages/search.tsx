@@ -17,20 +17,16 @@ interface Result {
   total: number;
 }
 
-type Row =
-  | { kind: "vehicle"; id: string; title: string; sub: string; href: string; badges: React.ReactNode; meta: React.ReactNode }
-  | { kind: "registration"; id: string; title: string; sub: string; href: string; badges: React.ReactNode; meta: React.ReactNode }
-  | { kind: "insurance"; id: string; title: string; sub: string; href: string; badges: React.ReactNode; meta: React.ReactNode }
-  | { kind: "document"; id: string; title: string; sub: string; href: string; badges: React.ReactNode; meta: React.ReactNode };
-
 const KIND_META: Record<string, { label: string; icon: any; pill: string }> = {
-  vehicle: { label: "Vehicle", icon: Car, pill: "bg-primary/10 text-primary" },
-  registration: { label: "Registration", icon: ClipboardList, pill: "bg-blue-100 text-blue-700" },
+  vehicle: { label: "Vehicles", icon: Car, pill: "bg-primary/10 text-primary" },
+  registration: { label: "Registrations", icon: ClipboardList, pill: "bg-blue-100 text-blue-700" },
   insurance: { label: "Insurance", icon: ShieldCheck, pill: "bg-emerald-100 text-emerald-700" },
-  document: { label: "Document", icon: FileText, pill: "bg-purple-100 text-purple-700" },
+  document: { label: "Documents", icon: FileText, pill: "bg-purple-100 text-purple-700" },
 };
 
-function ExpiryPill({ date, label }: { date: string; label: string }) {
+const KIND_ORDER = ["vehicle", "registration", "insurance", "document"];
+
+function ExpiryPill({ date, label: lbl }: { date: string; label: string }) {
   const days = daysUntil(date);
   const state = expiryState(date);
   const cls =
@@ -41,7 +37,7 @@ function ExpiryPill({ date, label }: { date: string; label: string }) {
   const text = days !== null && days >= 0 ? `${days}d left` : "expired";
   return (
     <span className="text-xs text-slate-400">
-      {label}: <span className={`badge ${cls}`}>{text}</span>
+      {lbl}: <span className={`badge ${cls}`}>{text}</span>
     </span>
   );
 }
@@ -93,51 +89,21 @@ export default function SearchPage() {
   }
 
   const chips: { key: string; label: string; clear: () => void }[] = [];
-  if (q) chips.push({ key: "q", label: `“${q}”`, clear: () => setQ("") });
+  if (q) chips.push({ key: "q", label: `"${q}"`, clear: () => setQ("") });
   if (status) chips.push({ key: "status", label: `Status: ${label(status)}`, clear: () => setStatus("") });
   if (regStatus) chips.push({ key: "reg", label: `Reg: ${label(regStatus)}`, clear: () => setRegStatus("") });
   if (branchId) chips.push({ key: "branch", label: `Branch: ${branches.find((b) => b.value === branchId)?.label ?? "?"}`, clear: () => setBranchId("") });
   if (vehicleType) chips.push({ key: "type", label: `Type: ${vehicleType}`, clear: () => setVehicleType("") });
   if (year) chips.push({ key: "year", label: `Year: ${year}`, clear: () => setYear("") });
 
-  // Build a unified, ranked result list.
-  const rows: Row[] = [];
-  result?.vehicles.forEach((v) => rows.push({
-    kind: "vehicle",
-    id: v.id,
-    title: `${v.plateNumber}`,
-    sub: `${v.vehicleCode} · ${v.make} ${v.model} · ${v.branchName ?? "—"}`,
-    href: `/vehicles/${v.id}`,
-    badges: (<><StatusBadge status={v.status} />{v.registrationStatus && <StatusBadge status={v.registrationStatus} />}</>),
-    meta: v.registrationStatus === "ACTIVE" ? <ExpiryPill date={v.insuranceEnd ?? ""} label="Ins" /> : null,
-  }));
-  result?.registrations.forEach((r) => rows.push({
-    kind: "registration",
-    id: r.id,
-    title: r.regNumber,
-    sub: `Plate ${r.plateNumber}`,
-    href: `/vehicles/${r.vehicleId}`,
-    badges: <StatusBadge status={r.status} />,
-    meta: <ExpiryPill date={r.expiryDate} label="Expiry" />,
-  }));
-  result?.insurances.forEach((i) => rows.push({
-    kind: "insurance",
-    id: i.id,
-    title: i.company,
-    sub: `Policy ${i.policyNo} · ${i.plateNumber}`,
-    href: `/vehicles/${i.vehicleId}`,
-    badges: <span className="badge bg-emerald-50 text-emerald-700">{i.coverage}</span>,
-    meta: <ExpiryPill date={i.endDate} label="Expiry" />,
-  }));
-  result?.documents.forEach((d) => rows.push({
-    kind: "document",
-    id: d.id,
-    title: d.title,
-    sub: `${label(d.category)} · ${d.plateNumber}`,
-    href: `/vehicles/${d.vehicleId}`,
-    badges: null,
-    meta: <a href={`/api/documents/${d.id}`} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline">View</a>,
-  }));
+  // Group results by kind.
+  const grouped: Record<string, any[]> = { vehicle: [], registration: [], insurance: [], document: [] };
+  if (result) {
+    for (const v of result.vehicles) grouped.vehicle.push(v);
+    for (const r of result.registrations) grouped.registration.push(r);
+    for (const i of result.insurances) grouped.insurance.push(i);
+    for (const d of result.documents) grouped.document.push(d);
+  }
 
   return (
     <div className="space-y-4">
@@ -152,7 +118,7 @@ export default function SearchPage() {
           <SearchIcon className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
           <input
             className="h-12 w-full rounded-xl border border-slate-300 bg-white pl-12 pr-4 text-base outline-none transition focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
-            placeholder="Search plate, engine, chassis, vehicle ID, reg no, policy no, filename…"
+            placeholder="Search plate, driver, branch, policy no, filename…"
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
@@ -196,7 +162,7 @@ export default function SearchPage() {
           <SearchIcon className="mb-3 h-10 w-10 text-slate-300" />
           <h3 className="text-base font-semibold text-slate-700">No results found</h3>
           <p className="mt-1 max-w-sm text-sm text-slate-400">
-            {q ? `Nothing matched “${q}”` : "Nothing matched"}{chips.length > 0 ? " with the active filters." : "."} Try adjusting or clearing them.
+            {q ? `Nothing matched "${q}"` : "Nothing matched"}{chips.length > 0 ? " with the active filters." : "."} Try adjusting or clearing them.
           </p>
           {chips.length > 0 && (
             <button onClick={clearFilters} className="btn-outline mt-4">Clear all filters</button>
@@ -205,38 +171,133 @@ export default function SearchPage() {
       )}
 
       {!loading && result && result.total > 0 && (
-        <div className="card overflow-hidden">
-          <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3">
-            <span className="text-sm font-medium text-slate-600">{result.total} result(s)</span>
-            <span className="text-xs text-slate-400">Ranked across all record types</span>
+        <div className="space-y-4">
+          <div className="card overflow-hidden">
+            <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3">
+              <span className="text-sm font-medium text-slate-600">{result.total} result(s)</span>
+              <div className="flex items-center gap-3 text-xs text-slate-400">
+                {KIND_ORDER.filter((k) => grouped[k].length > 0).map((k) => (
+                  <span key={k} className="flex items-center gap-1">
+                    {(() => { const Icon = KIND_META[k].icon; return <Icon className="h-3 w-3" />; })()}
+                    {grouped[k].length}
+                  </span>
+                ))}
+              </div>
+            </div>
           </div>
-          <ul className="divide-y divide-slate-100">
-            {rows.map((r) => {
-              const meta = KIND_META[r.kind];
-              const Icon = meta.icon;
-              return (
-                <li key={`${r.kind}-${r.id}`}>
-                  <Link to={r.href} className="flex items-center gap-4 px-5 py-3 transition-colors hover:bg-slate-50">
-                    <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
-                      <Icon className="h-5 w-5" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                      <span className="truncate text-sm font-semibold text-slate-800">{r.title}</span>
-                      <span className={`badge flex-shrink-0 ${meta.pill}`}>{meta.label}</span>
-                      {r.badges}
-                    </div>
-                    <div className="truncate text-xs text-slate-400">{r.sub}</div>
-                  </div>
-                  <div className="flex flex-shrink-0 items-center gap-2 sm:gap-3">
-                    {r.meta}
-                    <ArrowRight className="h-4 w-4 flex-shrink-0 text-slate-300" />
-                  </div>
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
+
+          {KIND_ORDER.filter((k) => grouped[k].length > 0).map((kind) => {
+            const meta = KIND_META[kind];
+            const Icon = meta.icon;
+            return (
+              <div key={kind} className="card overflow-hidden">
+                <div className="flex items-center gap-2 border-b border-slate-100 px-5 py-3">
+                  <Icon className="h-4 w-4 text-slate-500" />
+                  <span className="text-sm font-semibold text-slate-700">{meta.label}</span>
+                  <span className="badge bg-slate-100 text-slate-500">{grouped[kind].length}</span>
+                </div>
+                <ul className="divide-y divide-slate-100">
+                  {kind === "vehicle" && grouped.vehicle.map((v: any) => (
+                    <li key={v.id}>
+                      <Link to={`/vehicles/${v.id}`} className="flex items-center gap-4 px-5 py-3 transition-colors hover:bg-slate-50">
+                        <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                          <Car className="h-5 w-5" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                            <span className="truncate text-sm font-semibold text-slate-800">{v.plateNumber}</span>
+                            <StatusBadge status={v.status} />
+                            {v.registrationStatus && <StatusBadge status={v.registrationStatus} />}
+                          </div>
+                          <div className="truncate text-xs text-slate-400">
+                            {v.vehicleCode} · {v.make} {v.model} · {v.year}
+                            {v.branchName && <> · {v.branchName}</>}
+                            {v.driverName && <> · Driver: {v.driverName}</>}
+                          </div>
+                        </div>
+                        <div className="flex flex-shrink-0 items-center gap-2 sm:gap-3">
+                          {v.registrationStatus === "ACTIVE" && <ExpiryPill date={v.insuranceEnd ?? ""} label="Ins" />}
+                          <ArrowRight className="h-4 w-4 flex-shrink-0 text-slate-300" />
+                        </div>
+                      </Link>
+                    </li>
+                  ))}
+
+                  {kind === "registration" && grouped.registration.map((r: any) => (
+                    <li key={r.id}>
+                      <Link to={`/vehicles/${r.vehicleId}`} className="flex items-center gap-4 px-5 py-3 transition-colors hover:bg-slate-50">
+                        <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+                          <ClipboardList className="h-5 w-5" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                            <span className="truncate text-sm font-semibold text-slate-800">{r.regNumber}</span>
+                            <span className={`badge flex-shrink-0 bg-blue-50 text-blue-700`}>Registration</span>
+                            <StatusBadge status={r.status} />
+                          </div>
+                          <div className="truncate text-xs text-slate-400">
+                            Plate {r.plateNumber}{r.office && <> · {r.office}</>}
+                          </div>
+                        </div>
+                        <div className="flex flex-shrink-0 items-center gap-2 sm:gap-3">
+                          <ExpiryPill date={r.expiryDate} label="Expiry" />
+                          <ArrowRight className="h-4 w-4 flex-shrink-0 text-slate-300" />
+                        </div>
+                      </Link>
+                    </li>
+                  ))}
+
+                  {kind === "insurance" && grouped.insurance.map((i: any) => (
+                    <li key={i.id}>
+                      <Link to={`/vehicles/${i.vehicleId}`} className="flex items-center gap-4 px-5 py-3 transition-colors hover:bg-slate-50">
+                        <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
+                          <ShieldCheck className="h-5 w-5" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                            <span className="truncate text-sm font-semibold text-slate-800">{i.company}</span>
+                            <span className={`badge flex-shrink-0 bg-emerald-50 text-emerald-700`}>Insurance</span>
+                            <span className="badge bg-emerald-50 text-emerald-700">{i.coverage}</span>
+                          </div>
+                          <div className="truncate text-xs text-slate-400">
+                            Policy {i.policyNo} · {i.plateNumber}
+                          </div>
+                        </div>
+                        <div className="flex flex-shrink-0 items-center gap-2 sm:gap-3">
+                          <ExpiryPill date={i.endDate} label="Expiry" />
+                          <ArrowRight className="h-4 w-4 flex-shrink-0 text-slate-300" />
+                        </div>
+                      </Link>
+                    </li>
+                  ))}
+
+                  {kind === "document" && grouped.document.map((d: any) => (
+                    <li key={d.id}>
+                      <Link to={`/vehicles/${d.vehicleId}`} className="flex items-center gap-4 px-5 py-3 transition-colors hover:bg-slate-50">
+                        <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-purple-50 text-purple-600">
+                          <FileText className="h-5 w-5" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                            <span className="truncate text-sm font-semibold text-slate-800">{d.title}</span>
+                            <span className={`badge flex-shrink-0 bg-purple-50 text-purple-700`}>Document</span>
+                            <span className="badge bg-purple-50 text-purple-700">{label(d.category)}</span>
+                          </div>
+                          <div className="truncate text-xs text-slate-400">
+                            {d.plateNumber}
+                          </div>
+                        </div>
+                        <div className="flex flex-shrink-0 items-center gap-2 sm:gap-3">
+                          <a href={`/api/documents/${d.id}`} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="text-xs text-primary hover:underline">View</a>
+                          <ArrowRight className="h-4 w-4 flex-shrink-0 text-slate-300" />
+                        </div>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
