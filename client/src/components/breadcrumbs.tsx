@@ -20,6 +20,7 @@ const CRUMB_MAP: Record<string, string> = {
   "/admin/users": "Users",
   "/admin/roles": "Roles & Permissions",
   "/admin/settings": "Settings",
+  "/admin/reference": "Reference Data",
 };
 
 const DYNAMIC_LABELS: { pattern: RegExp; label: string }[] = [

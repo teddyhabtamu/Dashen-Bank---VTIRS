@@ -1,5 +1,6 @@
 import { prisma } from "../lib/prisma.js";
 import { generateVehicleCode } from "../lib/ids.js";
+import { REGISTRATION_STATUS } from "../lib/constants.js";
 import { vehicleSchema, VehicleInput } from "../validation/vehicle.js";
 import { writeAudit, type AuditReq } from "../lib/audit.js";
 import { defaultPageSize } from "./setting.js";
@@ -169,6 +170,33 @@ export async function updateVehicle(
 export async function deleteVehicle(id: string, ctx: Context = {}) {
   const existing = await prisma.vehicle.findUnique({ where: { id } });
   if (!existing) return null;
+
+  const activeRegistrations = await prisma.vehicleRegistration.count({
+    where: { vehicleId: id, status: { not: REGISTRATION_STATUS.ARCHIVED } },
+  });
+  if (activeRegistrations > 0) {
+    throw new Error(
+      `Cannot delete vehicle: ${activeRegistrations} active registration(s) exist. Archive or resolve them first.`
+    );
+  }
+
+  const activeInsurances = await prisma.vehicleInsurance.count({
+    where: { vehicleId: id, endDate: { gte: new Date() } },
+  });
+  if (activeInsurances > 0) {
+    throw new Error(
+      `Cannot delete vehicle: ${activeInsurances} active insurance policy(ies) exist. Expire or cancel them first.`
+    );
+  }
+
+  const activeAssignments = await prisma.vehicleAssignment.count({
+    where: { vehicleId: id, returnedAt: null },
+  });
+  if (activeAssignments > 0) {
+    throw new Error(
+      `Cannot delete vehicle: ${activeAssignments} active driver assignment(s) exist. Return the vehicle(s) first.`
+    );
+  }
 
   await prisma.vehicle.delete({ where: { id } });
 
