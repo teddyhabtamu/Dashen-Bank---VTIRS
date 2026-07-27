@@ -18,6 +18,10 @@ export function csrfTokenFromReq(req: Request): string | undefined {
 }
 
 export function csrfProtection(req: Request, res: Response, next: NextFunction) {
+  if (req.path === "/api/auth/login" && req.method === "POST") {
+    return next();
+  }
+
   const cookieToken = (req as Request & { cookies?: Record<string, string> }).cookies?.[CSRF_COOKIE];
   const headerToken = csrfTokenFromReq(req);
 
