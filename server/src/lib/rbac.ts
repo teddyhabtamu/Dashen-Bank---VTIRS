@@ -9,7 +9,6 @@ export const PERMISSIONS = {
   VEHICLE_CREATE: "vehicle:create",
   VEHICLE_EDIT: "vehicle:edit",
   VEHICLE_DELETE: "vehicle:delete",
-  VEHICLE_APPROVE: "vehicle:approve",
 
   // Registration
   REGISTRATION_MANAGE: "registration:manage",
@@ -46,7 +45,6 @@ export const ROLE_PERMISSIONS: Record<string, PermissionCode[]> = {
     PERMISSIONS.VEHICLE_CREATE,
     PERMISSIONS.VEHICLE_EDIT,
     PERMISSIONS.VEHICLE_DELETE,
-    PERMISSIONS.VEHICLE_APPROVE,
     PERMISSIONS.REGISTRATION_MANAGE,
     PERMISSIONS.REGISTRATION_RENEW,
     PERMISSIONS.REGISTRATION_SUSPEND,
@@ -81,7 +79,6 @@ export const ROLE_PERMISSIONS: Record<string, PermissionCode[]> = {
     PERMISSIONS.VEHICLE_CREATE,
     PERMISSIONS.VEHICLE_EDIT,
     PERMISSIONS.VEHICLE_DELETE,
-    PERMISSIONS.VEHICLE_APPROVE,
     PERMISSIONS.REGISTRATION_MANAGE,
     PERMISSIONS.REGISTRATION_RENEW,
     PERMISSIONS.REGISTRATION_SUSPEND,
@@ -108,7 +105,7 @@ export const ROLE_DEFINITIONS: {
   {
     slug: "facilities_admin",
     name: "Facilities Administrator",
-    description: "Full CRUD, document upload, approvals, reports.",
+    description: "Full CRUD, document upload and reports.",
   },
   {
     slug: "facilities_officer",
