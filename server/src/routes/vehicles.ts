@@ -98,12 +98,19 @@ router.delete(
   "/:id",
   requireAuth(PERMISSIONS.VEHICLE_DELETE),
   async (req, res) => {
-    const deleted = await deleteVehicle(req.params.id, {
-      userId: req.session!.userId,
-      req,
-    });
-    if (!deleted) return res.status(404).json({ error: "Not found" });
-    res.json({ ok: true });
+    try {
+      const deleted = await deleteVehicle(req.params.id, {
+        userId: req.session!.userId,
+        req,
+      });
+      if (!deleted) return res.status(404).json({ error: "Not found" });
+      res.json({ ok: true });
+    } catch (e) {
+      if (e instanceof Error && e.message.startsWith("Cannot delete vehicle:")) {
+        return res.status(409).json({ error: e.message });
+      }
+      throw e;
+    }
   }
 );
 
@@ -117,11 +124,18 @@ router.delete(
     if (!ids || !Array.isArray(ids) || ids.length === 0) {
       return res.status(400).json({ error: "ids is required" });
     }
-    const result = await bulkDeleteVehicles(ids, {
-      userId: req.session!.userId,
-      req,
-    });
-    res.json(result);
+    try {
+      const result = await bulkDeleteVehicles(ids, {
+        userId: req.session!.userId,
+        req,
+      });
+      res.json(result);
+    } catch (e) {
+      if (e instanceof Error && e.message.startsWith("Cannot delete vehicle:")) {
+        return res.status(409).json({ error: e.message });
+      }
+      throw e;
+    }
   }
 );
 
