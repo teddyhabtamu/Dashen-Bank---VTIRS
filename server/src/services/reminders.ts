@@ -1,5 +1,6 @@
 import { getSetting } from "./setting.js";
 import { REGISTRATION_STATUS } from "../lib/constants.js";
+import { prisma } from "../lib/prisma.js";
 
 export type ExpiryState = "EXPIRED" | "CRITICAL" | "WARNING" | "OK";
 
@@ -47,4 +48,32 @@ export function effectiveRegistrationStatus(
   const days = daysUntil(expiryDate);
   if (days !== null && days < 0) return REGISTRATION_STATUS.EXPIRED;
   return status;
+}
+
+// Bulk auto-transition registrations based on expiry dates.
+// Called periodically from the server startup interval.
+export async function autoTransitionRegistrations(): Promise<{ transitioned: number }> {
+  const now = new Date();
+  const thirtyDaysFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+  const sevenDaysFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+  const [expiredResult, pendingResult] = await Promise.all([
+    prisma.vehicleRegistration.updateMany({
+      where: {
+        status: REGISTRATION_STATUS.ACTIVE,
+        expiryDate: { lt: now },
+      },
+      data: { status: REGISTRATION_STATUS.EXPIRED },
+    }),
+    prisma.vehicleRegistration.updateMany({
+      where: {
+        status: REGISTRATION_STATUS.ACTIVE,
+        expiryDate: { gte: sevenDaysFromNow, lt: thirtyDaysFromNow },
+      },
+      data: { status: REGISTRATION_STATUS.PENDING_RENEWAL },
+    }),
+  ]);
+
+  const total = expiredResult.count + pendingResult.count;
+  return { transitioned: total };
 }
