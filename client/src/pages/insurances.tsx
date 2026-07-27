@@ -1,6 +1,7 @@
 
 import { Link } from "react-router-dom";
 import { useCallback, useEffect, useState } from "react";
+import { csrfHeaders } from "@/lib/csrf";
 import { Download, Plus, Search, ShieldCheck, MoreVertical, CalendarRange } from "lucide-react";
 import { BrandLoader } from "@/components/ui/brand-loader";
 import { Dropdown } from "@/components/ui/dropdown";
@@ -120,7 +121,7 @@ export default function InsurancesPage() {
   async function doDelete() {
     if (!deleteId) return; setBusy(true);
     try {
-      await fetch(`/api/insurances/${deleteId}`, { method: "DELETE" });
+      await fetch(`/api/insurances/${deleteId}`, { method: "DELETE", headers: csrfHeaders() });
       toast("success", "Insurance policy deleted");
       await afterAction();
     } finally { setBusy(false); }

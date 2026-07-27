@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { FileText, Search, MoreVertical, Eye, Download, Pencil, Trash2 } from "lucide-react";
+import { csrfHeaders } from "@/lib/csrf";
 import { Select } from "@/components/ui/select";
 import { BrandLoader } from "@/components/ui/brand-loader";
 import { Modal } from "@/components/ui/modal";
@@ -65,7 +66,7 @@ export default function DocumentsPage() {
     if (editCat) body.category = editCat;
     const res = await fetch(`/api/documents/${editingDoc.id}`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...csrfHeaders() },
       body: JSON.stringify(body),
     });
     if (!res.ok) {
@@ -81,7 +82,7 @@ export default function DocumentsPage() {
   }
 
   async function handleDelete(id: string) {
-    const res = await fetch(`/api/documents/${id}`, { method: "DELETE" });
+    const res = await fetch(`/api/documents/${id}`, { method: "DELETE", headers: csrfHeaders() });
     if (!res.ok) { toast("error", "Failed to delete"); return; }
     setDocs((prev) => prev.filter((d) => d.id !== id));
     toast("success", "Document deleted");

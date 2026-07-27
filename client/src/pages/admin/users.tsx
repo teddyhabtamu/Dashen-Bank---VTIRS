@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Users, Search, Plus, MoreVertical, Pencil, Trash2, Download } from "lucide-react";
 import { BrandLoader } from "@/components/ui/brand-loader";
+import { csrfHeaders } from "@/lib/csrf";
 import { Select } from "@/components/ui/select";
 import { Modal } from "@/components/ui/modal";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
@@ -183,7 +184,7 @@ export default function UsersPage() {
     if (!deleteId) return;
     setBusy(true);
     try {
-      const res = await fetch(`/api/users/${deleteId}`, { method: "DELETE" });
+      const res = await fetch(`/api/users/${deleteId}`, { method: "DELETE", headers: csrfHeaders() });
       if (!res.ok) return;
       setDeleteId(null);
       toast("success", "User deleted");

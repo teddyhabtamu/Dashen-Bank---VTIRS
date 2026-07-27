@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Building2, Briefcase, UserCog, Search, Plus, MoreVertical, Pencil, Trash2, Download } from "lucide-react";
 import { BrandLoader } from "@/components/ui/brand-loader";
+import { csrfHeaders } from "@/lib/csrf";
 import { Modal } from "@/components/ui/modal";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { Dropdown } from "@/components/ui/dropdown";
@@ -97,7 +98,7 @@ export default function ReferencePage() {
     if (!deleteId) return;
     setBusy(true);
     try {
-      const res = await fetch(`/api/reference/${tab}/${deleteId}`, { method: "DELETE" });
+      const res = await fetch(`/api/reference/${tab}/${deleteId}`, { method: "DELETE", headers: csrfHeaders() });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to delete");
       toast("success", "Deleted successfully");

@@ -1,6 +1,7 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useCallback, useEffect, useState } from "react";
 import { Plus, Search, MoreVertical, History, RotateCcw, AlertCircle, Archive, RefreshCw, Download } from "lucide-react";
+import { csrfHeaders } from "@/lib/csrf";
 import { StatusBadge } from "@/components/ui/badge";
 import { BrandLoader } from "@/components/ui/brand-loader";
 import { useBrand } from "@/lib/brand-context";
@@ -98,7 +99,7 @@ export default function RegistrationsPage() {
     setBusy(true); setErr(null);
     try {
       const res = await fetch("/api/registrations", {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form),
+        method: "POST" as const, headers: { "Content-Type": "application/json", ...csrfHeaders() }, body: JSON.stringify(form),
       });
       if (!res.ok) { const d = await res.json(); setErr(d.error ?? "Failed to create"); return; }
       toast("success", "Registration created");
@@ -109,7 +110,7 @@ export default function RegistrationsPage() {
   async function doRenew(expiryDate: string) {
     if (!renewId) return; setBusy(true);
     try {
-      await fetch(`/api/registrations/${renewId}/renew`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ expiryDate }) });
+      await fetch(`/api/registrations/${renewId}/renew`, { method: "POST", headers: { "Content-Type": "application/json", ...csrfHeaders() }, body: JSON.stringify({ expiryDate }) });
       toast("success", "Registration renewed");
       await afterAction();
     } finally { setBusy(false); }
@@ -118,7 +119,7 @@ export default function RegistrationsPage() {
   async function doSuspend(note: string) {
     if (!suspendId) return; setBusy(true);
     try {
-      await fetch(`/api/registrations/${suspendId}/suspend`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ note }) });
+      await fetch(`/api/registrations/${suspendId}/suspend`, { method: "POST", headers: { "Content-Type": "application/json", ...csrfHeaders() }, body: JSON.stringify({ note }) });
       toast("warning", "Registration suspended");
       await afterAction();
     } finally { setBusy(false); }
@@ -127,7 +128,7 @@ export default function RegistrationsPage() {
   async function doDelete() {
     if (!deleteId) return; setBusy(true);
     try {
-      await fetch(`/api/registrations/${deleteId}`, { method: "DELETE" });
+      await fetch(`/api/registrations/${deleteId}`, { method: "DELETE", headers: csrfHeaders() });
       toast("success", "Registration deleted");
       await afterAction();
     } finally { setBusy(false); }
@@ -137,7 +138,7 @@ export default function RegistrationsPage() {
     if (!archiveId) return; setBusy(true);
     try {
       await fetch(`/api/registrations/${archiveId}/archive`, {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ note }),
+        method: "POST", headers: { "Content-Type": "application/json", ...csrfHeaders() }, body: JSON.stringify({ note }),
       });
       toast("info", "Registration archived");
       await afterAction();
@@ -147,7 +148,7 @@ export default function RegistrationsPage() {
   async function doRestore() {
     if (!restoreId) return; setBusy(true);
     try {
-      await fetch(`/api/registrations/${restoreId}/restore`, { method: "POST" });
+      await fetch(`/api/registrations/${restoreId}/restore`, { method: "POST", headers: { "Content-Type": "application/json", ...csrfHeaders() } });
       toast("success", "Registration restored");
       await afterAction();
     } finally { setBusy(false); }

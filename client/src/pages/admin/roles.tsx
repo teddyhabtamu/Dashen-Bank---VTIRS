@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Shield, Plus, ChevronDown, ChevronRight, Check, X, Save } from "lucide-react";
 import { BrandLoader } from "@/components/ui/brand-loader";
+import { csrfHeaders } from "@/lib/csrf";
 import { Modal } from "@/components/ui/modal";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { label } from "@/lib/constants";
@@ -131,7 +132,7 @@ export default function RolesPage() {
     if (!deleteId) return;
     setBusy(true);
     try {
-      const res = await fetch(`/api/roles/${deleteId}`, { method: "DELETE" });
+      const res = await fetch(`/api/roles/${deleteId}`, { method: "DELETE", headers: csrfHeaders() });
       if (!res.ok) {
         const data = await res.json();
         setErr(data.error ?? "Failed to delete");

@@ -3,6 +3,7 @@ import { Plus, MoreVertical, Pencil, Trash2 } from "lucide-react";
 import { Modal } from "@/components/ui/modal";
 import { Select } from "@/components/ui/select";
 import { DatePicker } from "@/components/ui/datepicker";
+import { csrfHeaders } from "@/lib/csrf";
 import { Tooltip } from "@/components/ui/tooltip";
 import { Dropdown } from "@/components/ui/dropdown";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
@@ -84,7 +85,7 @@ export function InsurancePanel({ vehicleId, initial, canManage }: {
       const body = { ...form, vehicleId };
       const url = editId ? `/api/insurances/${editId}` : "/api/insurances";
       const method = editId ? "PATCH" : "POST";
-      const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const res = await fetch(url, { method, headers: { "Content-Type": "application/json", ...csrfHeaders() }, body: JSON.stringify(body) });
       const data = await res.json();
       if (!res.ok) {
         setErr(data.issues ? Object.values(data.issues).flat().join(", ") : data.error ?? "Failed to save");
@@ -101,7 +102,7 @@ export function InsurancePanel({ vehicleId, initial, canManage }: {
     if (!deleteId) return;
     setBusy(true);
     try {
-      await fetch(`/api/insurances/${deleteId}`, { method: "DELETE" });
+      await fetch(`/api/insurances/${deleteId}`, { method: "DELETE", headers: { ...csrfHeaders() } });
       setDeleteId(null);
       await refresh();
     } finally {
