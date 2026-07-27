@@ -18,7 +18,7 @@ export function csrfTokenFromReq(req: Request): string | undefined {
 }
 
 export function csrfProtection(req: Request, res: Response, next: NextFunction) {
-  if (req.path === "/api/auth/login" && req.method === "POST") {
+  if ((req.path === "/api/auth/login" || req.path === "/api/auth/logout") && req.method === "POST") {
     return next();
   }
 
