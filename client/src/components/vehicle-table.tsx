@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { useState, useEffect, useCallback } from "react";
-import { Plus, Search, Car, Eye, Pencil, Trash2, ChevronLeft, ChevronRight, MoreVertical, Download, X, Check } from "lucide-react";
+import { Plus, Search, Car, Eye, Pencil, Trash2, ChevronLeft, ChevronRight, MoreVertical, Download } from "lucide-react";
 import { Tooltip } from "@/components/ui/tooltip";
 import { StatusBadge } from "@/components/ui/badge";
 import { BrandLoader } from "@/components/ui/brand-loader";

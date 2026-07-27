@@ -1,5 +1,5 @@
 import { prisma } from "../lib/prisma.js";
-import { insuranceSchema, InsuranceInput } from "../validation/registration.js";
+import { insuranceSchema, InsuranceInput } from "../validation/insurance.js";
 import { writeAudit, type AuditReq } from "../lib/audit.js";
 import { DuplicateInsuranceError } from "./errors.js";
 import { defaultPageSize } from "./setting.js";

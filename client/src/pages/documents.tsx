@@ -161,13 +161,14 @@ export default function DocumentsPage() {
           </p>
         </div>
       ) : (
-        <div className="card overflow-hidden">
-          <div className="border-b border-slate-100 px-5 py-3">
-            <span className="text-sm font-medium text-slate-600">{filtered.length} document(s)</span>
-          </div>
-          <ul className="divide-y divide-slate-100">
-            {filtered.map((d) => (
-              <li key={d.id} className="flex items-center gap-4 px-5 py-3 transition-colors hover:bg-slate-50">
+        <div>
+          <div className="card overflow-hidden">
+            <div className="border-b border-slate-100 px-5 py-3">
+              <span className="text-sm font-medium text-slate-600">{filtered.length} document(s)</span>
+            </div>
+            <ul className="divide-y divide-slate-100">
+              {filtered.map((d) => (
+                <li key={d.id} className="flex items-center gap-4 px-5 py-3 transition-colors hover:bg-slate-50">
                 {d.mimeType.startsWith("image/") ? (
                   <a
                     href={`/api/documents/${d.id}`}
@@ -219,6 +220,7 @@ export default function DocumentsPage() {
             <span>Page {docsPage} / {docsTotalPages}</span>
             <button className="btn-outline px-2 py-1" disabled={docsPage >= docsTotalPages} onClick={() => setDocsPage((p) => p + 1)}>Next</button>
           </div>
+        </div>
         </div>
       )}
 
