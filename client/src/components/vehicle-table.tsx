@@ -13,6 +13,7 @@ import { formatCurrency } from "@/lib/format";
 import { useAuth } from "@/components/auth-context";
 import { useToast } from "@/lib/toast-context";
 import { exportCsv } from "@/lib/export";
+import { csrfHeaders } from "@/lib/csrf";
 
 interface VehicleRow {
   id: string;
@@ -81,7 +82,7 @@ export function VehicleTable() {
     if (!deleteId) return;
     setDeleting(true);
     try {
-      await fetch(`/api/vehicles/${deleteId}`, { method: "DELETE" });
+      await fetch(`/api/vehicles/${deleteId}`, { method: "DELETE", headers: csrfHeaders() });
       setDeleteId(null);
       toast("success", "Vehicle deleted");
       load();
@@ -113,7 +114,7 @@ export function VehicleTable() {
     try {
       const res = await fetch("/api/vehicles/bulk-delete", {
         method: "DELETE",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...csrfHeaders() },
         body: JSON.stringify({ ids: Array.from(selectedIds) }),
       });
       if (res.ok) {
@@ -135,7 +136,7 @@ export function VehicleTable() {
     try {
       const res = await fetch("/api/vehicles/bulk-status", {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...csrfHeaders() },
         body: JSON.stringify({ ids: Array.from(selectedIds), status: bulkStatus }),
       });
       if (res.ok) {

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Check, ChevronLeft, ChevronRight, Eye, Plus } from "lucide-react";
 import { cn } from "@/lib/format";
+import { csrfHeaders } from "@/lib/csrf";
 import { BrandLoader } from "@/components/ui/brand-loader";
 import { useToast } from "@/lib/toast-context";
 import { Field, Select } from "@/components/ui/field";
@@ -255,7 +256,7 @@ export function VehicleForm({ vehicleId }: { vehicleId?: string }) {
       body = { fullName: addForm.fullName, employeeId: addForm.employeeId || undefined, licenseNo: addForm.licenseNo || undefined, phone: addForm.phone || undefined };
     }
 
-    const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const res = await fetch(url, { method, headers: { "Content-Type": "application/json", ...csrfHeaders() }, body: JSON.stringify(body) });
     setAddBusy(false);
     if (!res.ok) {
       const err = await res.json();
@@ -318,7 +319,7 @@ export function VehicleForm({ vehicleId }: { vehicleId?: string }) {
       isEdit ? `/api/vehicles/${vehicleId}` : "/api/vehicles",
       {
         method: isEdit ? "PATCH" : "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...csrfHeaders() },
         body: JSON.stringify(payload),
       }
     );
