@@ -9,7 +9,7 @@ import cookieParser from "cookie-parser";
 import { csrfProtection } from "./lib/csrf.js";
 import path from "node:path";
 import { attachSession } from "./lib/guard.js";
-import { autoTransitionRegistrations } from "./services/reminders.js";
+import { autoTransitionRegistrations, autoTransitionVehicleStatus } from "./services/reminders.js";
 import authRoutes from "./routes/auth.js";
 import vehicleRoutes from "./routes/vehicles.js";
 import registrationRoutes from "./routes/registrations.js";
@@ -84,7 +84,9 @@ app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
 app.listen(PORT, () => {
   console.log(`VTIRS API listening on http://localhost:${PORT}`);
   autoTransitionRegistrations().catch((e) => console.error("Auto-transition error:", e));
+  autoTransitionVehicleStatus().catch((e) => console.error("Vehicle status error:", e));
   setInterval(() => {
     autoTransitionRegistrations().catch((e) => console.error("Auto-transition error:", e));
+    autoTransitionVehicleStatus().catch((e) => console.error("Vehicle status error:", e));
   }, 60 * 60 * 1000);
 });

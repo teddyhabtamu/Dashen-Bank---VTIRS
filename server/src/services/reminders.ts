@@ -77,3 +77,24 @@ export async function autoTransitionRegistrations(): Promise<{ transitioned: num
   const total = expiredResult.count + pendingResult.count;
   return { transitioned: total };
 }
+
+export async function autoTransitionVehicleStatus(): Promise<{ transitioned: number }> {
+  const assignedResult = await prisma.vehicle.updateMany({
+    where: {
+      status: "ACTIVE",
+      assignments: { some: { returnedAt: null } },
+    },
+    data: { status: "ASSIGNED" },
+  });
+
+  const activeResult = await prisma.vehicle.updateMany({
+    where: {
+      status: "ASSIGNED",
+      assignments: { none: { returnedAt: null } },
+    },
+    data: { status: "ACTIVE" },
+  });
+
+  const total = assignedResult.count + activeResult.count;
+  return { transitioned: total };
+}
