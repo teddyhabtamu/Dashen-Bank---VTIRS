@@ -82,7 +82,12 @@ export function VehicleTable() {
     if (!deleteId) return;
     setDeleting(true);
     try {
-      await fetch(`/api/vehicles/${deleteId}`, { method: "DELETE", headers: csrfHeaders() });
+      const res = await fetch(`/api/vehicles/${deleteId}`, { method: "DELETE", headers: csrfHeaders() });
+      if (!res.ok) {
+        const data = await res.json();
+        toast("error", data.error || "Failed to delete");
+        return;
+      }
       setDeleteId(null);
       toast("success", "Vehicle deleted");
       load();
