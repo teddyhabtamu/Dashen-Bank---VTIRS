@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { useState, useEffect, useCallback } from "react";
-import { Plus, Search, Car, Eye, Pencil, Trash2, ChevronLeft, ChevronRight, MoreVertical, Download } from "lucide-react";
+import { Plus, Search, Car, Eye, Pencil, Trash2, ChevronLeft, ChevronRight, MoreVertical, Download, X, Check } from "lucide-react";
 import { Tooltip } from "@/components/ui/tooltip";
 import { StatusBadge } from "@/components/ui/badge";
 import { BrandLoader } from "@/components/ui/brand-loader";
@@ -50,6 +50,10 @@ export function VehicleTable() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [pageSize, setPageSize] = useState(15);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkStatus, setBulkStatus] = useState("");
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [bulkStatusing, setBulkStatusing] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -83,6 +87,68 @@ export function VehicleTable() {
       load();
     } finally {
       setDeleting(false);
+    }
+  }
+
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    if (selectedIds.size === rows.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(rows.map((v) => v.id)));
+    }
+  }
+
+  async function confirmBulkDelete() {
+    if (selectedIds.size === 0) return;
+    setBulkDeleting(true);
+    try {
+      const res = await fetch("/api/vehicles/bulk-delete", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: Array.from(selectedIds) }),
+      });
+      if (res.ok) {
+        toast("success", `${selectedIds.size} vehicle(s) deleted`);
+        setSelectedIds(new Set());
+        load();
+      } else {
+        const data = await res.json();
+        toast("error", data.error || "Bulk delete failed");
+      }
+    } finally {
+      setBulkDeleting(false);
+    }
+  }
+
+  async function confirmBulkStatus() {
+    if (selectedIds.size === 0 || !bulkStatus) return;
+    setBulkStatusing(true);
+    try {
+      const res = await fetch("/api/vehicles/bulk-status", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: Array.from(selectedIds), status: bulkStatus }),
+      });
+      if (res.ok) {
+        toast("success", `${selectedIds.size} vehicle(s) updated`);
+        setSelectedIds(new Set());
+        setBulkStatus("");
+        load();
+      } else {
+        const data = await res.json();
+        toast("error", data.error || "Bulk update failed");
+      }
+    } finally {
+      setBulkStatusing(false);
     }
   }
 
@@ -143,6 +209,51 @@ export function VehicleTable() {
         </div>
       </div>
 
+      {selectedIds.size > 0 && (
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-primary/20 bg-primary/5 px-4 py-2.5 text-sm">
+          <span className="font-medium text-primary">{selectedIds.size} selected</span>
+          <button
+            className="btn-outline text-xs"
+            onClick={() => setSelectedIds(new Set())}
+          >
+            Clear
+          </button>
+          {can("vehicle:delete") && (
+            <button
+              className="btn-danger text-xs"
+              onClick={confirmBulkDelete}
+              disabled={bulkDeleting}
+            >
+              {bulkDeleting ? "Deleting…" : "Delete Selected"}
+            </button>
+          )}
+          <label className="flex items-center gap-2 text-slate-600">
+            Status
+            <Select
+              value={bulkStatus}
+              onChange={(v) => setBulkStatus(v)}
+              placeholder="Change to…"
+              options={[
+                { value: "ACTIVE", label: "Active" },
+                { value: "ASSIGNED", label: "Assigned" },
+                { value: "RESERVED", label: "Reserved" },
+                { value: "UNDER_MAINTENANCE", label: "Under Maintenance" },
+                { value: "DISPOSED", label: "Disposed" },
+              ]}
+            />
+          </label>
+          {can("vehicle:edit") && bulkStatus && (
+            <button
+              className="btn-primary text-xs"
+              onClick={confirmBulkStatus}
+              disabled={bulkStatusing}
+            >
+              {bulkStatusing ? "Updating…" : "Apply"}
+            </button>
+          )}
+        </div>
+      )}
+
       {loading ? (
         <BrandLoader className="py-20" />
       ) : rows.length === 0 ? (
@@ -162,12 +273,20 @@ export function VehicleTable() {
             {rows.map((v) => (
               <div key={v.id} className="card p-4">
                 <div className="mb-2 flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="truncate text-sm font-semibold text-slate-800">{v.plateNumber}</span>
-                      <StatusBadge status={v.status} />
+                  <div className="flex items-start gap-2 min-w-0">
+                    <input
+                      type="checkbox"
+                      className="mt-1 h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
+                      checked={selectedIds.has(v.id)}
+                      onChange={() => toggleSelect(v.id)}
+                    />
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="truncate text-sm font-semibold text-slate-800">{v.plateNumber}</span>
+                        <StatusBadge status={v.status} />
+                      </div>
+                      <div className="truncate text-xs text-slate-400">{v.make} {v.model} · {v.year}</div>
                     </div>
-                    <div className="truncate text-xs text-slate-400">{v.make} {v.model} · {v.year}</div>
                   </div>
                   <Dropdown
                     align="right"
@@ -207,22 +326,38 @@ export function VehicleTable() {
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
-                    <tr>
-                      <th className="px-4 py-3">Code</th>
-                      <th className="px-4 py-3">Plate</th>
-                      <th className="px-4 py-3">Make / Model</th>
-                      <th className="px-4 py-3">Year</th>
-                      <th className="px-4 py-3">Branch</th>
-                      <th className="px-4 py-3">Driver</th>
-                      <th className="px-4 py-3">Owner</th>
-                      <th className="px-4 py-3">Cost</th>
-                      <th className="px-4 py-3">Status</th>
-                      <th className="px-4 py-3 text-right">Actions</th>
-                    </tr>
+                     <tr>
+                       <th className="px-4 py-3 w-10">
+                         <input
+                           type="checkbox"
+                           className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
+                           checked={rows.length > 0 && selectedIds.size === rows.length}
+                           onChange={toggleSelectAll}
+                         />
+                       </th>
+                       <th className="px-4 py-3">Code</th>
+                       <th className="px-4 py-3">Plate</th>
+                       <th className="px-4 py-3">Make / Model</th>
+                       <th className="px-4 py-3">Year</th>
+                       <th className="px-4 py-3">Branch</th>
+                       <th className="px-4 py-3">Driver</th>
+                       <th className="px-4 py-3">Owner</th>
+                       <th className="px-4 py-3">Cost</th>
+                       <th className="px-4 py-3">Status</th>
+                       <th className="px-4 py-3 text-right">Actions</th>
+                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {rows.map((v) => (
                       <tr key={v.id} className="hover:bg-slate-50">
+                        <td className="px-4 py-3">
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
+                            checked={selectedIds.has(v.id)}
+                            onChange={() => toggleSelect(v.id)}
+                          />
+                        </td>
                         <td className="px-4 py-3 font-mono text-xs text-slate-500">{v.vehicleCode}</td>
                         <td className="px-4 py-3 font-medium text-slate-800">{v.plateNumber}</td>
                         <td className="px-4 py-3">{v.make} {v.model}</td>
