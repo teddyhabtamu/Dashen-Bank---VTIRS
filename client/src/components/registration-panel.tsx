@@ -1,6 +1,7 @@
 
 import { useCallback, useState } from "react";
 import { RefreshCw, Ban } from "lucide-react";
+import { csrfHeaders } from "@/lib/csrf";
 import { StatusBadge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
 import { Dropdown } from "@/components/ui/dropdown";
@@ -45,12 +46,12 @@ export function RegistrationPanel({ vehicleId, initial, canRenew, canSuspend }: 
 
   async function doRenew(date: string) {
     if (!renewId) return; setBusy(true);
-    try { await fetch(`/api/registrations/${renewId}/renew`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ expiryDate: date }) }); await refresh(); }
+    try { await fetch(`/api/registrations/${renewId}/renew`, { method: "POST", headers: { "Content-Type": "application/json", ...csrfHeaders() }, body: JSON.stringify({ expiryDate: date }) }); await refresh(); }
     finally { setBusy(false); setRenewId(null); }
   }
   async function doSuspend(note: string) {
     if (!suspendId) return; setBusy(true);
-    try { await fetch(`/api/registrations/${suspendId}/suspend`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ note }) }); await refresh(); }
+    try { await fetch(`/api/registrations/${suspendId}/suspend`, { method: "POST", headers: { "Content-Type": "application/json", ...csrfHeaders() }, body: JSON.stringify({ note }) }); await refresh(); }
     finally { setBusy(false); setSuspendId(null); }
   }
 
