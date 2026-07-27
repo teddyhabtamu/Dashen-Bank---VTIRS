@@ -3,7 +3,6 @@ import { Plus, MoreVertical, UserCheck, Calendar, XCircle } from "lucide-react";
 import { Modal } from "@/components/ui/modal";
 import { Select } from "@/components/ui/select";
 import { Tooltip } from "@/components/ui/tooltip";
-import { csrfHeaders } from "@/lib/csrf";
 import { Dropdown } from "@/components/ui/dropdown";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { formatDate } from "@/lib/format";
@@ -67,7 +66,7 @@ export function AssignmentPanel({ vehicleId, initial, currentDriver, canManage }
     try {
       const res = await fetch(`/api/vehicles/${vehicleId}/assignments`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...csrfHeaders() },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ driverId: currentDriver.id, note: note || undefined }),
       });
       const data = await res.json();
@@ -92,7 +91,7 @@ export function AssignmentPanel({ vehicleId, initial, currentDriver, canManage }
     try {
       const res = await fetch(`/api/vehicles/${vehicleId}/assignments`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...csrfHeaders() },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ driverId: selectedDriver, note: note || undefined }),
       });
       const data = await res.json();
@@ -115,7 +114,7 @@ export function AssignmentPanel({ vehicleId, initial, currentDriver, canManage }
     if (!returnId) return;
     setBusy(true);
     try {
-      const res = await fetch(`/api/vehicles/${vehicleId}/assignments/${returnId}/return`, { method: "PATCH", headers: { ...csrfHeaders() } });
+      const res = await fetch(`/api/vehicles/${vehicleId}/assignments/${returnId}/return`, { method: "PATCH" });
       if (!res.ok) {
         const data = await res.json();
         setErr(data.error ?? "Failed to return driver");
@@ -309,7 +308,7 @@ export function AssignmentPanel({ vehicleId, initial, currentDriver, canManage }
           try {
             const res = await fetch(`/api/vehicles/${vehicleId}`, {
               method: "PATCH",
-              headers: { "Content-Type": "application/json", ...csrfHeaders() },
+              headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ currentDriverId: null }),
             });
             if (!res.ok) throw new Error("Failed to remove driver");

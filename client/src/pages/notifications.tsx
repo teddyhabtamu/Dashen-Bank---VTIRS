@@ -3,7 +3,6 @@ import { Link } from "react-router-dom";
 import { Bell, BellDot, MoreVertical, Check, Trash2 } from "lucide-react";
 import { BrandLoader } from "@/components/ui/brand-loader";
 import { Select } from "@/components/ui/select";
-import { csrfHeaders } from "@/lib/csrf";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { Dropdown } from "@/components/ui/dropdown";
 import { formatDateTime, label } from "@/lib/format";
@@ -52,25 +51,25 @@ export default function NotificationsPage() {
   useEffect(() => { load(); }, [load]);
 
   async function markOne(id: string) {
-    await fetch(`/api/notifications/${id}/read`, { method: "PATCH", headers: csrfHeaders() });
+    await fetch(`/api/notifications/${id}/read`, { method: "PATCH" });
     setRows((prev) => prev.map((n) => (n.id === id ? { ...n, isRead: true } : n)));
   }
 
   async function markAll() {
-    await fetch("/api/notifications/read-all", { method: "POST", headers: csrfHeaders() });
+    await fetch("/api/notifications/read-all", { method: "POST" });
     setRows((prev) => prev.map((n) => ({ ...n, isRead: true })));
     toast("success", "All notifications marked as read");
   }
 
   async function deleteOne(id: string) {
-    await fetch(`/api/notifications/${id}`, { method: "DELETE", headers: csrfHeaders() });
+    await fetch(`/api/notifications/${id}`, { method: "DELETE" });
     setRows((prev) => prev.filter((n) => n.id !== id));
     setTotal((prev) => prev - 1);
     toast("success", "Notification deleted");
   }
 
   async function clearAll() {
-    await fetch("/api/notifications/", { method: "DELETE", headers: csrfHeaders() });
+    await fetch("/api/notifications/", { method: "DELETE" });
     setRows([]);
     setTotal(0);
     toast("success", "All notifications cleared");

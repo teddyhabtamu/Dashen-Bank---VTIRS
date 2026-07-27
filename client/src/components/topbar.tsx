@@ -3,7 +3,6 @@ import { Link, useLocation } from "react-router-dom";
 import { Bell, Menu, PanelLeftClose, PanelLeftOpen, Check, BellDot, Search, Command } from "lucide-react";
 import { useAuth } from "./auth-context";
 import { useBrand } from "@/lib/brand-context";
-import { csrfHeaders } from "@/lib/csrf";
 import { formatDateTime } from "@/lib/format";
 import { Tooltip } from "@/components/ui/tooltip";
 
@@ -111,13 +110,13 @@ export function Topbar({
   }, [panelOpen]);
 
   async function markAll() {
-    await fetch("/api/notifications/read-all", { method: "POST", headers: { ...csrfHeaders() } });
+    await fetch("/api/notifications/read-all", { method: "POST" });
     setUnread(0);
     setNotifs([]);
   }
 
   async function markOne(id: string) {
-    await fetch(`/api/notifications/${id}/read`, { method: "PATCH", headers: { ...csrfHeaders() } });
+    await fetch(`/api/notifications/${id}/read`, { method: "PATCH" });
     setNotifs((prev) => prev.filter((n) => n.id !== id));
     setUnread((u) => Math.max(0, u - 1));
   }

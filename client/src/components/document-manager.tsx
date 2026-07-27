@@ -3,7 +3,6 @@ import { Upload, FileText, Image as ImageIcon, Trash2, Download, Eye, X } from "
 import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { Select } from "@/components/ui/select";
 import { DOCUMENT_CATEGORY_OPTIONS, label } from "@/lib/constants";
-import { csrfHeaders } from "@/lib/csrf";
 import { formatFileSize, formatDate } from "@/lib/format";
 import { useToast } from "@/lib/toast-context";
 import { Tooltip } from "@/components/ui/tooltip";
@@ -105,7 +104,7 @@ export function DocumentManager({
         fd.append("category", s.category);
         if (s.title.trim()) fd.append("title", s.title.trim());
         fd.append("kind", s.file.type.startsWith("image/") ? "image" : "document");
-        const res = await fetch("/api/documents", { method: "POST", headers: csrfHeaders(), body: fd });
+        const res = await fetch("/api/documents", { method: "POST", body: fd });
         if (!res.ok) {
           const d = await res.json();
           setErr(d.error ?? "Upload failed");
@@ -129,7 +128,7 @@ export function DocumentManager({
     if (!deleteId) return;
     setBusy(true);
     try {
-      await fetch(`/api/documents/${deleteId}`, { method: "DELETE", headers: csrfHeaders() });
+      await fetch(`/api/documents/${deleteId}`, { method: "DELETE" });
       await refresh();
     } finally { setBusy(false); setDeleteId(null); setDeleteInfo(null); }
   }
