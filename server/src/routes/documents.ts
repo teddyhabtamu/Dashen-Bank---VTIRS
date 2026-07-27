@@ -27,6 +27,9 @@ const upload = multer({
 
 router.get("/", requireAuth(PERMISSIONS.DOCUMENT_VIEW), async (req, res) => {
   const q = (req.query.search as string) ?? "";
+  const page = Number(req.query.page ?? "1");
+  const pageSize = Number(req.query.pageSize ?? "25");
+  const skip = (page - 1) * pageSize;
   const docWhere: any = q
     ? { OR: [{ title: { contains: q } }, { originalName: { contains: q } }] }
     : {};
@@ -36,19 +39,23 @@ router.get("/", requireAuth(PERMISSIONS.DOCUMENT_VIEW), async (req, res) => {
     select: { id: true, plateNumber: true, vehicleCode: true },
   };
 
-  const [docs, images] = await Promise.all([
+  const [docs, images, docTotal, imgTotal] = await Promise.all([
     prisma.vehicleDocument.findMany({
       where: docWhere,
       include: { vehicle: vehicleSelect },
       orderBy: { createdAt: "desc" },
-      take: 100,
+      skip,
+      take: pageSize,
     }),
     prisma.vehicleImage.findMany({
       where: imgWhere,
       include: { vehicle: vehicleSelect },
       orderBy: { createdAt: "desc" },
-      take: 100,
+      skip,
+      take: pageSize,
     }),
+    prisma.vehicleDocument.count({ where: docWhere }),
+    prisma.vehicleImage.count({ where: imgWhere }),
   ]);
 
   // Normalize images into the same shape the client uses for documents so
@@ -66,12 +73,14 @@ router.get("/", requireAuth(PERMISSIONS.DOCUMENT_VIEW), async (req, res) => {
     vehicle: img.vehicle,
   }));
 
-  const documents = [...docs, ...normalizedImages].sort(
+  const allDocs = [...docs, ...normalizedImages].sort(
     (a, b) =>
       new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
   );
+  const total = docTotal + imgTotal;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
-  res.json({ documents });
+  res.json({ documents: allDocs, total, page, pageSize, totalPages });
 });
 
 router.post(

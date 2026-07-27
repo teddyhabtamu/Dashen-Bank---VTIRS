@@ -33,16 +33,28 @@ export default function DocumentsPage() {
   const [editTitle, setEditTitle] = useState("");
   const [editCat, setEditCat] = useState("");
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [docsPage, setDocsPage] = useState(1);
+  const [docsPageSize, setDocsPageSize] = useState(25);
+  const [docsTotal, setDocsTotal] = useState(0);
+  const [docsTotalPages, setDocsTotalPages] = useState(1);
 
   useEffect(() => {
     setLoading(true);
     const qs = new URLSearchParams();
     if (search) qs.set("search", search);
+    qs.set("page", String(docsPage));
+    qs.set("pageSize", String(docsPageSize));
     fetch(`/api/documents?${qs.toString()}`)
       .then((r) => r.json())
-      .then((d) => setDocs(d.documents ?? []))
+      .then((d) => {
+        setDocs(d.documents ?? []);
+        setDocsTotal(d.total ?? 0);
+        setDocsPage(d.page ?? 1);
+        setDocsPageSize(d.pageSize ?? 25);
+        setDocsTotalPages(d.totalPages ?? 1);
+      })
       .finally(() => setLoading(false));
-  }, [search]);
+  }, [search, docsPage, docsPageSize]);
 
   const filtered = cat ? docs.filter((d) => d.category === cat) : docs;
 
@@ -199,6 +211,14 @@ export default function DocumentsPage() {
               </li>
             ))}
           </ul>
+        </div>
+        <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3 text-sm text-slate-500">
+          <span>{docsTotal} document(s)</span>
+          <div className="flex items-center gap-2">
+            <button className="btn-outline px-2 py-1" disabled={docsPage <= 1} onClick={() => setDocsPage((p) => Math.max(1, p - 1))}>Prev</button>
+            <span>Page {docsPage} / {docsTotalPages}</span>
+            <button className="btn-outline px-2 py-1" disabled={docsPage >= docsTotalPages} onClick={() => setDocsPage((p) => p + 1)}>Next</button>
+          </div>
         </div>
       )}
 
