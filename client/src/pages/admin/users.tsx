@@ -8,7 +8,9 @@ import { Dropdown } from "@/components/ui/dropdown";
 import { useAuth } from "@/components/auth-context";
 import { useToast } from "@/lib/toast-context";
 import { formatDateTime } from "@/lib/format";
-import { exportCsv } from "@/lib/export";
+import { exportCsv, exportXlsx, exportPdf, rowsToHtmlTable } from "@/lib/export";
+import { useBrand } from "@/lib/brand-context";
+import { Tooltip } from "@/components/ui/tooltip";
 
 interface UserRow {
   id: string;
@@ -39,6 +41,7 @@ const STATUS_OPTIONS = [
 export default function UsersPage() {
   const { can } = useAuth();
   const { toast } = useToast();
+  const { companyName } = useBrand();
   const [rows, setRows] = useState<UserRow[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -92,19 +95,21 @@ export default function UsersPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  function exportUsers() {
-    exportCsv(`users_${new Date().toISOString().slice(0, 10)}.csv`,
-      rows.map((u) => ({
-        Username: u.username,
-        "Full Name": u.fullName,
-        Email: u.email,
-        Role: u.roleName,
-        Branch: u.branchName ?? "",
-        Status: u.status,
-        "Last Login": u.lastLoginAt ?? "",
-        "Created At": u.createdAt,
-      }))
-    );
+  function exportUsers(format: "csv" | "excel" | "pdf") {
+    const data = rows.map((u) => ({
+      Username: u.username,
+      "Full Name": u.fullName,
+      Email: u.email,
+      Role: u.roleName,
+      Branch: u.branchName ?? "",
+      Status: u.status,
+      "Last Login": u.lastLoginAt ?? "",
+      "Created At": u.createdAt,
+    }));
+    const stamp = new Date().toISOString().slice(0, 10);
+    if (format === "csv") exportCsv(`users_${stamp}.csv`, data);
+    else if (format === "excel") exportXlsx(`users_${stamp}.xlsx`, data);
+    else exportPdf(rowsToHtmlTable("Users", data), "Users", companyName);
   }
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
@@ -204,9 +209,14 @@ export default function UsersPage() {
         </div>
         <div className="flex items-center gap-2">
           {rows.length > 0 && (
-            <button className="btn-outline text-xs" onClick={exportUsers}>
-              <Download className="h-3.5 w-3.5" /> CSV
-            </button>
+            <Dropdown align="right"
+              trigger={({ toggle }) => (<Tooltip content="Export"><button onClick={toggle} className="btn-outline text-xs"><Download className="h-3.5 w-3.5" /> Export</button></Tooltip>)}
+              items={[
+                { label: "CSV", onClick: () => exportUsers("csv") },
+                { label: "Excel", onClick: () => exportUsers("excel") },
+                { label: "PDF", onClick: () => exportUsers("pdf") },
+              ]}
+            />
           )}
           {can("user:manage") && (
             <button className="btn-primary" onClick={openCreate}>

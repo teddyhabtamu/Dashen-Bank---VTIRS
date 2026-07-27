@@ -9,7 +9,9 @@ import { Dropdown } from "@/components/ui/dropdown";
 import { DOCUMENT_CATEGORY_OPTIONS, label } from "@/lib/constants";
 import { formatFileSize, formatDate } from "@/lib/format";
 import { useToast } from "@/lib/toast-context";
-import { exportCsv } from "@/lib/export";
+import { exportCsv, exportXlsx, exportPdf, rowsToHtmlTable } from "@/lib/export";
+import { useBrand } from "@/lib/brand-context";
+import { Tooltip } from "@/components/ui/tooltip";
 
 interface Doc {
   id: string;
@@ -26,6 +28,7 @@ interface Doc {
 
 export default function DocumentsPage() {
   const { toast } = useToast();
+  const { companyName } = useBrand();
   const [docs, setDocs] = useState<Doc[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -89,19 +92,21 @@ export default function DocumentsPage() {
     setDeleteId(null);
   }
 
-  function exportDocuments() {
-    exportCsv(`documents_${new Date().toISOString().slice(0, 10)}.csv`,
-      filtered.map((d) => ({
-        Title: d.title,
-        Category: label(d.category),
-        "File Name": d.originalName,
-        Type: d.mimeType,
-        Size: String(d.sizeBytes),
-        Version: d.version,
-        Vehicle: `${d.vehicle.plateNumber} (${d.vehicle.vehicleCode})`,
-        "Created At": d.createdAt,
-      }))
-    );
+  function exportDocuments(format: "csv" | "excel" | "pdf") {
+    const data = filtered.map((d) => ({
+      Title: d.title,
+      Category: label(d.category),
+      "File Name": d.originalName,
+      Type: d.mimeType,
+      Size: String(d.sizeBytes),
+      Version: d.version,
+      Vehicle: `${d.vehicle.plateNumber} (${d.vehicle.vehicleCode})`,
+      "Created At": d.createdAt,
+    }));
+    const stamp = new Date().toISOString().slice(0, 10);
+    if (format === "csv") exportCsv(`documents_${stamp}.csv`, data);
+    else if (format === "excel") exportXlsx(`documents_${stamp}.xlsx`, data);
+    else exportPdf(rowsToHtmlTable("Documents", data), "Documents", companyName);
   }
 
   const chips: { key: string; label: string; clear: () => void }[] = [];
@@ -116,9 +121,14 @@ export default function DocumentsPage() {
           <p className="text-sm text-slate-500">Fleet-wide document repository</p>
         </div>
         {filtered.length > 0 && (
-          <button className="btn-outline text-xs" onClick={exportDocuments}>
-            <Download className="h-3.5 w-3.5" /> CSV
-          </button>
+          <Dropdown align="right"
+            trigger={({ toggle }) => (<Tooltip content="Export"><button onClick={toggle} className="btn-outline text-xs"><Download className="h-3.5 w-3.5" /> Export</button></Tooltip>)}
+            items={[
+              { label: "CSV", onClick: () => exportDocuments("csv") },
+              { label: "Excel", onClick: () => exportDocuments("excel") },
+              { label: "PDF", onClick: () => exportDocuments("pdf") },
+            ]}
+          />
         )}
       </div>
 

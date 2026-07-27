@@ -12,7 +12,8 @@ import { label } from "@/lib/constants";
 import { formatCurrency } from "@/lib/format";
 import { useAuth } from "@/components/auth-context";
 import { useToast } from "@/lib/toast-context";
-import { exportCsv } from "@/lib/export";
+import { exportCsv, exportXlsx, exportPdf, rowsToHtmlTable } from "@/lib/export";
+import { useBrand } from "@/lib/brand-context";
 
 interface VehicleRow {
   id: string;
@@ -39,6 +40,7 @@ interface VehicleRow {
 export function VehicleTable() {
   const { can } = useAuth();
   const { toast } = useToast();
+  const { companyName } = useBrand();
 
   const [rows, setRows] = useState<VehicleRow[]>([]);
   const [total, setTotal] = useState(0);
@@ -157,21 +159,23 @@ export function VehicleTable() {
     }
   }
 
-  function exportVehicles() {
-    exportCsv(`vehicles_${new Date().toISOString().slice(0, 10)}.csv`,
-      rows.map((v) => ({
-        Code: v.vehicleCode,
-        Plate: v.plateNumber,
-        Make: v.make,
-        Model: v.model,
-        Year: v.year,
-        Branch: v.branch?.name ?? "",
-        Driver: v.currentDriver?.fullName ?? "",
-        Owner: v.ownerName,
-        Cost: v.purchaseCost ?? "",
-        Status: label(v.status),
-      }))
-    );
+  function exportVehicles(format: "csv" | "excel" | "pdf") {
+    const data = rows.map((v) => ({
+      Code: v.vehicleCode,
+      Plate: v.plateNumber,
+      Make: v.make,
+      Model: v.model,
+      Year: v.year,
+      Branch: v.branch?.name ?? "",
+      Driver: v.currentDriver?.fullName ?? "",
+      Owner: v.ownerName,
+      Cost: v.purchaseCost ?? "",
+      Status: label(v.status),
+    }));
+    const stamp = new Date().toISOString().slice(0, 10);
+    if (format === "csv") exportCsv(`vehicles_${stamp}.csv`, data);
+    else if (format === "excel") exportXlsx(`vehicles_${stamp}.xlsx`, data);
+    else exportPdf(rowsToHtmlTable("Vehicles", data), "Vehicles", companyName);
   }
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
@@ -202,9 +206,14 @@ export function VehicleTable() {
         </div>
         <div className="flex items-center gap-2">
           {rows.length > 0 && (
-            <button className="btn-outline justify-center text-xs" onClick={exportVehicles}>
-              <Download className="h-3.5 w-3.5" /> CSV
-            </button>
+            <Dropdown align="right"
+              trigger={({ toggle }) => (<Tooltip content="Export"><button onClick={toggle} className="btn-outline justify-center text-xs"><Download className="h-3.5 w-3.5" /> Export</button></Tooltip>)}
+              items={[
+                { label: "CSV", onClick: () => exportVehicles("csv") },
+                { label: "Excel", onClick: () => exportVehicles("excel") },
+                { label: "PDF", onClick: () => exportVehicles("pdf") },
+              ]}
+            />
           )}
           {can("vehicle:create") && (
             <Link to="/vehicles/new" className="btn-primary justify-center">

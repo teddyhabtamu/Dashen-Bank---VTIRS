@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import ReactECharts from "echarts-for-react";
-import { Download, FileSpreadsheet, Printer, CalendarRange } from "lucide-react";
+import { Download, CalendarRange } from "lucide-react";
 import { Select } from "@/components/ui/select";
 import { DatePicker } from "@/components/ui/datepicker";
 import { BrandLoader } from "@/components/ui/brand-loader";
+import { Dropdown } from "@/components/ui/dropdown";
+import { Tooltip } from "@/components/ui/tooltip";
 import { useAuth } from "@/components/auth-context";
 import { useBrand } from "@/lib/brand-context";
 import { VEHICLE_STATUS_OPTIONS, label } from "@/lib/constants";
@@ -129,17 +131,14 @@ export default function ReportsPage() {
           <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
             <h3 className="text-sm font-semibold text-slate-800">{activeMeta?.title}</h3>
             {can("report:export") && (
-              <div className="flex gap-1">
-                <button className="btn-outline inline-flex items-center gap-1 px-2.5 py-1 text-xs" onClick={() => exportAll("csv")}>
-                  <Download className="h-3.5 w-3.5" /> CSV
-                </button>
-                <button className="btn-outline inline-flex items-center gap-1 px-2.5 py-1 text-xs" onClick={() => exportAll("excel")}>
-                  <FileSpreadsheet className="h-3.5 w-3.5" /> Excel
-                </button>
-                <button className="btn-outline inline-flex items-center gap-1 px-2.5 py-1 text-xs" onClick={() => exportAll("pdf")}>
-                  <Printer className="h-3.5 w-3.5" /> PDF
-                </button>
-              </div>
+              <Dropdown align="right"
+                trigger={({ toggle }) => (<Tooltip content="Export"><button onClick={toggle} className="btn-outline text-xs"><Download className="h-3.5 w-3.5" /> Export</button></Tooltip>)}
+                items={[
+                  { label: "CSV", onClick: () => exportAll("csv") },
+                  { label: "Excel", onClick: () => exportAll("excel") },
+                  { label: "PDF", onClick: () => exportAll("pdf") },
+                ]}
+              />
             )}
           </div>
           <div className="p-4">
