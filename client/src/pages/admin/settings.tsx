@@ -13,6 +13,13 @@ interface SettingItem {
 
 type Grouped = Record<string, SettingItem[]>;
 
+const REMINDER_LABELS: Record<string, string> = {
+  reminder_days_90: "Primary reminder window",
+  reminder_days_60: "Secondary reminder window",
+  reminder_days_30: "Warning reminder window",
+  reminder_days_7: "Critical reminder window",
+};
+
 const GROUP_ICONS: Record<string, typeof Building2> = {
   General: Building2,
   Reminders: Bell,
@@ -31,10 +38,10 @@ function helps(key: string): string {
   const H: Record<string, string> = {
     company_name: "Displayed in the sidebar, login page, and PDF exports",
     system_name: "System acronym used across the UI and page titles",
-    reminder_days_90: "Earliest window for expiry notifications",
-    reminder_days_60: "Mid-range expiry notification window",
-    reminder_days_30: "Warning window for upcoming expiries",
-    reminder_days_7: "Critical window — items expiring within this period",
+    reminder_days_90: "Set the number of days before expiry for the earliest reminder",
+    reminder_days_60: "Set the number of days before expiry for the mid-range reminder",
+    reminder_days_30: "Set the number of days before expiry for the warning reminder",
+    reminder_days_7: "Set the number of days before expiry for the critical reminder",
     items_per_page: "Number of rows shown in tables and list views",
     session_timeout_minutes: "0 = never expires",
     default_owner_name: "Pre-filled owner when registering a new vehicle",
@@ -87,6 +94,10 @@ export default function SettingsPage() {
 
   function isBooleanKey(key: string): boolean {
     return ["notify_registration", "notify_insurance"].includes(key);
+  }
+
+  function displayLabel(item: SettingItem): string {
+    return REMINDER_LABELS[item.key] ?? item.label ?? item.key;
   }
 
   async function save() {
@@ -159,7 +170,10 @@ export default function SettingsPage() {
                   </div>
                   <div>
                     <h3 className="text-sm font-semibold text-slate-800">{group}</h3>
-                    <p className="text-xs text-slate-400">{GROUP_DESCRIPTIONS[group] ?? ""}</p>
+                    <p className="text-xs text-slate-400">
+                      {GROUP_DESCRIPTIONS[group] ?? ""}
+                      {group === "Reminders" ? " Values are editable days before expiry." : ""}
+                    </p>
                   </div>
                 </div>
                 <div className="divide-y divide-slate-100">
@@ -168,7 +182,7 @@ export default function SettingsPage() {
                       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                         <div className="flex-1 min-w-0">
                           <label htmlFor={`setting-${item.id}`} className="text-sm font-medium text-slate-700">
-                            {item.label ?? item.key}
+                            {displayLabel(item)}
                           </label>
                           {helps(item.key) && (
                             <p className="text-xs text-slate-400">{helps(item.key)}</p>

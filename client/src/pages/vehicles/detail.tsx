@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useParams, useBlocker } from "react-router-dom";
-import { Pencil } from "lucide-react";
+import { Pencil, History, ArrowRight } from "lucide-react";
 import { StatusBadge } from "@/components/ui/badge";
 import { BrandLoader } from "@/components/ui/brand-loader";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
@@ -10,8 +10,16 @@ import { AssignmentPanel } from "@/components/assignment-panel";
 import { DocumentManager } from "@/components/document-manager";
 import { useAuth } from "@/components/auth-context";
 import { label } from "@/lib/constants";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatCurrency, formatDate, formatDateTime } from "@/lib/format";
 import { PERMISSIONS } from "@/lib/rbac";
+
+type AuditRow = {
+  id: string;
+  action: string;
+  entity: string;
+  user: string;
+  createdAt: string;
+};
 
 function Attr({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -30,6 +38,8 @@ export default function VehicleDetailPage() {
   const [notFound, setNotFound] = useState(false);
   const [pendingUploads, setPendingUploads] = useState(false);
   const [blockConfirm, setBlockConfirm] = useState(false);
+  const [activity, setActivity] = useState<AuditRow[]>([]);
+  const [activityLoading, setActivityLoading] = useState(false);
   const blocker = useBlocker(pendingUploads);
 
   useEffect(() => {
@@ -61,6 +71,25 @@ export default function VehicleDetailPage() {
       .finally(() => setLoading(false));
   }, [id]);
 
+  useEffect(() => {
+    if (!v?.vehicleCode || !can(PERMISSIONS.AUDIT_VIEW)) {
+      setActivity([]);
+      return;
+    }
+
+    const controller = new AbortController();
+    setActivityLoading(true);
+    fetch(`/api/audit?search=${encodeURIComponent(v.vehicleCode)}&pageSize=5`, {
+      signal: controller.signal,
+    })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("Failed to load activity"))))
+      .then((d) => setActivity(d.items ?? []))
+      .catch(() => setActivity([]))
+      .finally(() => setActivityLoading(false));
+
+    return () => controller.abort();
+  }, [v?.vehicleCode, can]);
+
   if (loading) return <BrandLoader />;
 
   if (notFound || !v) {
@@ -73,6 +102,11 @@ export default function VehicleDetailPage() {
   }
 
   const documents = (v.documents ?? []) as any[];
+  const latestRegistration = (v.registrations ?? [])[0];
+  const auditLink = {
+    pathname: "/audit",
+    search: `?search=${encodeURIComponent(v.vehicleCode)}`,
+  };
 
   return (
     <div className="mx-auto max-w-5xl space-y-10">
@@ -105,11 +139,26 @@ export default function VehicleDetailPage() {
               {v.chassisNo && <><span className="text-slate-300">·</span><span className="font-mono">VIN {v.chassisNo.slice(0, 8)}</span></>}
             </div>
           </div>
-          {can(PERMISSIONS.VEHICLE_EDIT) && (
-            <Link to={`/vehicles/${v.id}/edit`} className="btn-primary flex-shrink-0 gap-1.5 text-xs px-3 py-1.5">
-              <Pencil className="h-3.5 w-3.5" /> Edit
-            </Link>
-          )}
+          <div className="flex flex-shrink-0 flex-wrap items-center gap-2">
+            {can(PERMISSIONS.AUDIT_VIEW) && (
+              <Link to={auditLink} className="btn-outline flex-shrink-0 gap-1.5 px-3 py-1.5 text-xs">
+                <History className="h-3.5 w-3.5" /> Audit Trail
+              </Link>
+            )}
+            {latestRegistration && (
+              <Link
+                to={`/registrations/${latestRegistration.id}/history`}
+                className="btn-outline flex-shrink-0 gap-1.5 px-3 py-1.5 text-xs"
+              >
+                <ArrowRight className="h-3.5 w-3.5" /> Registration History
+              </Link>
+            )}
+            {can(PERMISSIONS.VEHICLE_EDIT) && (
+              <Link to={`/vehicles/${v.id}/edit`} className="btn-primary flex-shrink-0 gap-1.5 px-3 py-1.5 text-xs">
+                <Pencil className="h-3.5 w-3.5" /> Edit
+              </Link>
+            )}
+          </div>
         </div>
       </div>
 
@@ -227,6 +276,48 @@ export default function VehicleDetailPage() {
           />
         </div>
       </section>
+
+      {/* Activity & History */}
+      {can(PERMISSIONS.AUDIT_VIEW) && (
+        <section>
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-[18px] font-semibold text-slate-700">Activity &amp; History</h2>
+              <p className="text-sm text-slate-500">Recent audit events tied to this vehicle</p>
+            </div>
+            <Link to={auditLink} className="text-sm font-medium text-primary hover:underline">
+              Open full audit trail
+            </Link>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 bg-white p-4">
+            {activityLoading ? (
+              <BrandLoader label="Loading activity…" />
+            ) : activity.length === 0 ? (
+              <p className="py-4 text-sm text-slate-400">No recent audit activity found for this vehicle.</p>
+            ) : (
+              <ul className="grid gap-3 sm:grid-cols-2">
+                {activity.map((row) => (
+                  <li key={row.id} className="flex items-start gap-3 rounded-lg border border-slate-100 px-3 py-2.5">
+                    <div className="mt-0.5 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                      <History className="h-3.5 w-3.5" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="badge bg-slate-100 text-slate-600">{row.action}</span>
+                        <span className="text-sm font-medium text-slate-700">{label(row.entity)}</span>
+                      </div>
+                      <div className="mt-1 text-xs text-slate-400">
+                        {row.user} · {formatDateTime(row.createdAt)}
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </section>
+      )}
 
       <ConfirmModal
         open={blockConfirm}

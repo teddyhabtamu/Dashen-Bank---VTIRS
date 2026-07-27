@@ -51,6 +51,7 @@ export default function RegistrationsPage() {
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(true);
   const [pageSize, setPageSize] = useState(15);
+  const [reminderWindows, setReminderWindows] = useState<number[]>([90, 60, 30, 7]);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [renewId, setRenewId] = useState<string | null>(null);
@@ -75,6 +76,18 @@ export default function RegistrationsPage() {
   }, [page, search, status]);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    fetch("/api/settings/public")
+      .then((r) => r.json())
+      .then((data) => {
+        const windows = data?.reminderWindows?.registration;
+        if (Array.isArray(windows) && windows.length > 0) {
+          setReminderWindows(windows.map((n: unknown) => Number(n)).filter((n: number) => Number.isFinite(n) && n > 0));
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   async function afterAction() {
     setCreateOpen(false); setRenewId(null); setSuspendId(null); setDeleteId(null); setArchiveId(null); setRestoreId(null);
@@ -199,6 +212,10 @@ export default function RegistrationsPage() {
       </div>
 
       <div className="card p-4">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-xs text-slate-500">
+          <span className="font-medium text-slate-600">Reminder windows driven by settings</span>
+          <span>{reminderWindows.map((w) => `${w}d`).join(" · ")}</span>
+        </div>
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative min-w-[200px] flex-1">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />

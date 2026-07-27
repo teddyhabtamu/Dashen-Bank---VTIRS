@@ -2,17 +2,26 @@ import { Router } from "express";
 import { requireAuth } from "../lib/guard.js";
 import { PERMISSIONS } from "../lib/rbac.js";
 import { listSettings, updateSettings, getSetting } from "../services/setting.js";
+import { getReminderWindows } from "../services/reminders.js";
 
 const router = Router();
 
 // Public endpoint — no auth required. Returns branding info used by the UI.
 router.get("/public", async (_req, res) => {
-  const [companyName, systemName, defaultOwnerName] = await Promise.all([
+  const [companyName, systemName, defaultOwnerName, reminderWindows] = await Promise.all([
     getSetting("company_name", "Dashen Bank"),
     getSetting("system_name", "VTIRS"),
     getSetting("default_owner_name", "Dashen Bank"),
+    getReminderWindows(),
   ]);
-  res.json({ companyName, systemName, defaultOwnerName });
+  res.json({
+    companyName,
+    systemName,
+    defaultOwnerName,
+    reminderWindows: {
+      registration: reminderWindows,
+    },
+  });
 });
 
 router.get(

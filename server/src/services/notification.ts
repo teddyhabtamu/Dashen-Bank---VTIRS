@@ -37,14 +37,15 @@ export async function generateNotifications(userId: string) {
     for (const reg of expiringRegs) {
       const days = daysUntil(reg.expiryDate);
       const expired = days !== null && days < 0;
+      const stage = getReminderStage(days, horizonDays);
       const title = expired ? "Registration Expired" : "Registration Expiring Soon";
       const message = expired
         ? `${reg.vehicle.plateNumber} (${reg.vehicle.vehicleCode}) registration expired on ${reg.expiryDate.toLocaleDateString("en-GB")}. Renew immediately.`
         : `${reg.vehicle.plateNumber} (${reg.vehicle.vehicleCode}) registration expires in ${days} day${days === 1 ? "" : "s"}.`;
       const link = `/vehicles/${reg.vehicle.id}`;
-      const meta = JSON.stringify({ vehicleId: reg.vehicle.id, plateNumber: reg.vehicle.plateNumber, vehicleCode: reg.vehicle.vehicleCode });
+      const meta = JSON.stringify({ vehicleId: reg.vehicle.id, plateNumber: reg.vehicle.plateNumber, vehicleCode: reg.vehicle.vehicleCode, stage });
 
-      if (await shouldCreate(userId, "REGISTRATION_REMINDER", link, title)) {
+      if (await shouldCreate(userId, "REGISTRATION_REMINDER", link, title, stage)) {
         await create(userId, "REGISTRATION_REMINDER", title, message, link, meta);
         count++;
       }
@@ -55,14 +56,15 @@ export async function generateNotifications(userId: string) {
     for (const ins of expiringIns) {
       const days = daysUntil(ins.endDate);
       const expired = days !== null && days < 0;
+      const stage = getReminderStage(days, horizonDays);
       const title = expired ? "Insurance Expired" : "Insurance Expiring Soon";
       const message = expired
         ? `${ins.vehicle.plateNumber} (${ins.vehicle.vehicleCode}) insurance expired on ${ins.endDate.toLocaleDateString("en-GB")}. Renew immediately.`
         : `${ins.vehicle.plateNumber} (${ins.vehicle.vehicleCode}) insurance expires in ${days} day${days === 1 ? "" : "s"}.`;
       const link = `/vehicles/${ins.vehicle.id}`;
-      const meta = JSON.stringify({ vehicleId: ins.vehicle.id, plateNumber: ins.vehicle.plateNumber, vehicleCode: ins.vehicle.vehicleCode });
+      const meta = JSON.stringify({ vehicleId: ins.vehicle.id, plateNumber: ins.vehicle.plateNumber, vehicleCode: ins.vehicle.vehicleCode, stage });
 
-      if (await shouldCreate(userId, "INSURANCE_REMINDER", link, title)) {
+      if (await shouldCreate(userId, "INSURANCE_REMINDER", link, title, stage)) {
         await create(userId, "INSURANCE_REMINDER", title, message, link, meta);
         count++;
       }
@@ -72,19 +74,47 @@ export async function generateNotifications(userId: string) {
   return count;
 }
 
+export async function generateNotificationsForAllUsers() {
+  const users = await prisma.user.findMany({
+    where: { status: "ACTIVE" },
+    select: { id: true },
+  });
+
+  let created = 0;
+  for (const user of users) {
+    created += await generateNotifications(user.id).catch(() => 0);
+  }
+
+  return created;
+}
+
 // Only create if no matching unread or dismissed notification exists, or if
 // the status changed (e.g. "Expiring Soon" → "Expired") so we can send an
 // update.
-async function shouldCreate(userId: string, type: string, link: string, title: string): Promise<boolean> {
+async function shouldCreate(userId: string, type: string, link: string, title: string, stage: string | null): Promise<boolean> {
   const latest = await prisma.notification.findFirst({
     where: { userId, type, link },
     orderBy: { createdAt: "desc" },
   });
   if (!latest) return true;
   if (latest.title !== title) return true;
-  if (!latest.isRead) return false;
-  if (latest.dismissed) return false;
+
+  const metaRaw = typeof latest.meta === "string" ? safeParse(latest.meta) : latest.meta;
+  const metaObj = (metaRaw && typeof metaRaw === "object" ? metaRaw : {}) as Record<string, unknown>;
+  const previousStage = metaObj.stage ?? null;
+  if (previousStage !== stage) return true;
+
   return false;
+}
+
+function getReminderStage(days: number | null, horizonDays: number): string {
+  if (days === null) return "unknown";
+  if (days < 0) return "expired";
+  if (days <= 7) return "critical";
+  if (days <= 30) return "warning";
+  if (days <= 60) return "secondary";
+  if (days <= horizonDays) return "primary";
+  return "outside_horizon";
 }
 
 async function create(

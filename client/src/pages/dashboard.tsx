@@ -128,10 +128,15 @@ export default function DashboardPage() {
               </p>
             </div>
           </div>
-          <div className="flex flex-shrink-0 gap-2">
+          <div className="flex flex-shrink-0 flex-wrap gap-2">
             {kpis.expiredRegistrations > 0 && (
               <Link to="/registrations" className="btn-outline whitespace-nowrap border-amber-300 text-amber-800 hover:bg-amber-100">
                 Review registrations
+              </Link>
+            )}
+            {kpis.expiredInsurance > 0 && (
+              <Link to="/insurances" className="btn-outline whitespace-nowrap border-amber-300 text-amber-800 hover:bg-amber-100">
+                Review insurances
               </Link>
             )}
           </div>
@@ -218,7 +223,10 @@ export default function DashboardPage() {
       </div>
 
       <div className="card p-5">
-        <div className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-slate-500"><ShieldCheck className="h-4 w-4" /> Insurance</div>
+        <div className="mb-3 flex items-center justify-between">
+          <div className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-slate-500"><ShieldCheck className="h-4 w-4" /> Insurance</div>
+          <Link to="/insurances" className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:gap-2 transition-all">View all <ChevronRight className="h-3.5 w-3.5" /></Link>
+        </div>
         {ins.length === 0 ? <p className="py-6 text-center text-sm text-slate-400">No upcoming insurance.</p> : (
           <ul className="divide-y divide-slate-100">
             {ins.map((i) => (

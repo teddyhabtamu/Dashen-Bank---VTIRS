@@ -156,7 +156,7 @@ function StepIndicator({ current }: { current: number }) {
   );
 }
 
-export function VehicleForm({ vehicleId }: { vehicleId?: string }) {
+export function VehicleForm({ vehicleId, returnTo = "/vehicles" }: { vehicleId?: string; returnTo?: string }) {
   const navigate = useNavigate();
   const { toast } = useToast();
   const isEdit = Boolean(vehicleId);
@@ -335,7 +335,7 @@ export function VehicleForm({ vehicleId }: { vehicleId?: string }) {
       return;
     }
     toast("success", isEdit ? "Vehicle updated" : "Vehicle registered");
-    navigate("/vehicles");
+    navigate(returnTo);
   }
 
   function renderField(f: keyof VehicleFormData) {

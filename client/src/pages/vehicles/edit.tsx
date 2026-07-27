@@ -14,7 +14,7 @@ export default function EditVehiclePage() {
         <h2 className="text-xl font-semibold text-slate-800">Edit Vehicle</h2>
         <p className="mt-1 text-sm text-slate-500">Update the vehicle master record.</p>
       </div>
-      <VehicleForm vehicleId={id} />
+      <VehicleForm vehicleId={id} returnTo={id ? `/vehicles/${id}` : "/vehicles"} />
     </div>
   );
 }

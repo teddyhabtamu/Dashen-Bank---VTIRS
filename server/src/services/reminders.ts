@@ -14,8 +14,8 @@ export async function getReminderWindows(): Promise<[number, number, number, num
 
 // Shortcut for the max horizon window (used by notification generation).
 export async function getReminderHorizonDays(): Promise<number> {
-  const [w90] = await getReminderWindows();
-  return w90;
+  const windows = await getReminderWindows();
+  return Math.max(...windows);
 }
 
 // Days from today until `date` (negative = already past).
@@ -54,8 +54,9 @@ export function effectiveRegistrationStatus(
 // Called periodically from the server startup interval.
 export async function autoTransitionRegistrations(): Promise<{ transitioned: number }> {
   const now = new Date();
-  const thirtyDaysFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
-  const sevenDaysFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+  const [, , w30, w7] = await getReminderWindows();
+  const thirtyDaysFromNow = new Date(now.getTime() + w30 * 24 * 60 * 60 * 1000);
+  const sevenDaysFromNow = new Date(now.getTime() + w7 * 24 * 60 * 60 * 1000);
 
   const [expiredResult, pendingResult] = await Promise.all([
     prisma.vehicleRegistration.updateMany({

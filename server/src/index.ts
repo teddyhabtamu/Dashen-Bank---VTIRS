@@ -9,6 +9,7 @@ import cookieParser from "cookie-parser";
 import path from "node:path";
 import { attachSession } from "./lib/guard.js";
 import { autoTransitionRegistrations, autoTransitionVehicleStatus } from "./services/reminders.js";
+import { generateNotificationsForAllUsers } from "./services/notification.js";
 import authRoutes from "./routes/auth.js";
 import vehicleRoutes from "./routes/vehicles.js";
 import registrationRoutes from "./routes/registrations.js";
@@ -83,8 +84,10 @@ app.listen(PORT, () => {
   console.log(`VTIRS API listening on http://localhost:${PORT}`);
   autoTransitionRegistrations().catch((e) => console.error("Auto-transition error:", e));
   autoTransitionVehicleStatus().catch((e) => console.error("Vehicle status error:", e));
+  generateNotificationsForAllUsers().catch((e) => console.error("Notification sweep error:", e));
   setInterval(() => {
     autoTransitionRegistrations().catch((e) => console.error("Auto-transition error:", e));
     autoTransitionVehicleStatus().catch((e) => console.error("Vehicle status error:", e));
+    generateNotificationsForAllUsers().catch((e) => console.error("Notification sweep error:", e));
   }, 60 * 60 * 1000);
 });

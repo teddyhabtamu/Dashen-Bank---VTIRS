@@ -34,6 +34,7 @@ export interface SearchResult {
     id: string;
     policyNo: string;
     company: string;
+    coverage: string;
     vehicleId: string;
     plateNumber: string;
     endDate: string;
@@ -151,6 +152,7 @@ export async function globalSearch(filters: SearchFilters): Promise<SearchResult
     id: i.id,
     policyNo: i.policyNo,
     company: i.company,
+    coverage: i.coverage,
     vehicleId: i.vehicleId,
     plateNumber: i.vehicle.plateNumber,
     endDate: i.endDate.toISOString(),

@@ -126,7 +126,7 @@ export default function SearchPage() {
     title: i.company,
     sub: `Policy ${i.policyNo} · ${i.plateNumber}`,
     href: `/vehicles/${i.vehicleId}`,
-    badges: null,
+    badges: <span className="badge bg-emerald-50 text-emerald-700">{i.coverage}</span>,
     meta: <ExpiryPill date={i.endDate} label="Expiry" />,
   }));
   result?.documents.forEach((d) => rows.push({

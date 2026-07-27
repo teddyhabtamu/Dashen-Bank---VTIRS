@@ -10,7 +10,6 @@ import {
   Users,
   Shield,
   Settings,
-  Database,
   History,
   LogOut,
 } from "lucide-react";
@@ -64,7 +63,6 @@ const SECTIONS: NavSection[] = [
       { href: "/admin/users", label: "Users", icon: Users, perm: PERMISSIONS.USER_MANAGE },
       { href: "/admin/roles", label: "Roles & Permissions", icon: Shield, perm: PERMISSIONS.ROLE_MANAGE },
       { href: "/admin/settings", label: "Settings", icon: Settings, perm: PERMISSIONS.SETTING_MANAGE },
-      { href: "/admin/reference", label: "Reference Data", icon: Database, perm: PERMISSIONS.BRANCH_MANAGE },
     ],
   },
 ];

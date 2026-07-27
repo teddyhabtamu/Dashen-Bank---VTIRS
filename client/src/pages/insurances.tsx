@@ -1,7 +1,7 @@
 
 import { Link } from "react-router-dom";
 import { useCallback, useEffect, useState } from "react";
-import { Download, Plus, Search, ShieldCheck, MoreVertical, CalendarRange } from "lucide-react";
+import { Download, Plus, Search, ShieldCheck, MoreVertical, CalendarRange, Pencil, Trash2 } from "lucide-react";
 import { BrandLoader } from "@/components/ui/brand-loader";
 import { Dropdown } from "@/components/ui/dropdown";
 import { Select } from "@/components/ui/select";
@@ -246,8 +246,8 @@ export default function InsurancesPage() {
                     <Dropdown align="right"
                       trigger={({ toggle }) => (<button onClick={toggle} className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100" title="Actions"><MoreVertical className="h-4 w-4" /></button>)}
                       items={[
-                        { label: "Edit", icon: <ShieldCheck className="h-4 w-4" />, onClick: () => openEdit(r) },
-                        { label: "Delete", icon: <ShieldCheck className="h-4 w-4" />, danger: true, onClick: () => setDeleteId(r.id) },
+                        { label: "Edit", icon: <Pencil className="h-4 w-4" />, onClick: () => openEdit(r) },
+                        { label: "Delete", icon: <Trash2 className="h-4 w-4" />, danger: true, onClick: () => setDeleteId(r.id) },
                       ]}
                     />
                   )}

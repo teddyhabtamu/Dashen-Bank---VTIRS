@@ -22,7 +22,6 @@ import UsersPage from "@/pages/admin/users";
 import NotificationsPage from "@/pages/notifications";
 import RolesPage from "@/pages/admin/roles";
 import SettingsPage from "@/pages/admin/settings";
-import ReferencePage from "@/pages/admin/reference";
 import "./index.css";
 
 const router = createBrowserRouter([
@@ -47,7 +46,6 @@ const router = createBrowserRouter([
       { path: "notifications", element: <NotificationsPage /> },
       { path: "admin/roles", element: <RolesPage /> },
       { path: "admin/settings", element: <SettingsPage /> },
-      { path: "admin/reference", element: <ReferencePage /> },
     ],
   },
   { path: "*", element: <Navigate to="/dashboard" replace /> },
