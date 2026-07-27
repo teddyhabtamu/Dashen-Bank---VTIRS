@@ -68,7 +68,7 @@ router.get("/", requireAuth(PERMISSIONS.DOCUMENT_VIEW), async (req, res) => {
     originalName: img.originalName,
     mimeType: img.mimeType,
     sizeBytes: img.sizeBytes,
-    version: 1,
+    version: img.version,
     createdAt: img.createdAt,
     vehicle: img.vehicle,
   }));
@@ -77,10 +77,53 @@ router.get("/", requireAuth(PERMISSIONS.DOCUMENT_VIEW), async (req, res) => {
     (a, b) =>
       new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
   );
+
+  // Determine which documents are the latest version in their group.
+  const docPairs = docs.map((d) => ({ title: d.title, category: d.category }));
+  const imgPairs = normalizedImages.map((i) => ({ title: i.title, category: i.category }));
+  const allPairs = [...docPairs, ...imgPairs];
+  const uniquePairs = allPairs.filter(
+    (p, i) => allPairs.findIndex((q) => q.title === p.title && q.category === p.category) === i
+  );
+
+  const maxVersions = new Map<string, number>();
+  if (uniquePairs.length > 0) {
+    const conditions = uniquePairs.map(
+      (p) => `("title" = '${p.title.replace(/'/g, "''")}' AND "category" = '${p.category.replace(/'/g, "''")}')`
+    );
+    const rows = await prisma.$queryRawUnsafe<Array<{ title: string; category: string; maxversion: number }>>(
+      `SELECT "title", "category", MAX("version") as "maxversion" FROM "VehicleDocument" WHERE ${conditions.join(" OR ")} GROUP BY "title", "category"`
+    );
+    for (const r of rows) {
+      maxVersions.set(`${r.title}|||${r.category}`, Number(r.maxversion));
+    }
+  }
+  // Images also need max version check.
+  if (uniquePairs.length > 0) {
+    const conditions = uniquePairs.map(
+      (p) => `("originalName" = '${p.title.replace(/'/g, "''")}' AND "category" = '${p.category.replace(/'/g, "''")}')`
+    );
+    const imgRows = await prisma.$queryRawUnsafe<Array<{ originalname: string; category: string; maxversion: number }>>(
+      `SELECT "originalName", "category", MAX("version") as "maxversion" FROM "VehicleImage" WHERE ${conditions.join(" OR ")} GROUP BY "originalName", "category"`
+    );
+    for (const r of imgRows) {
+      const key = `${r.originalname}|||${r.category}`;
+      // Store separately to avoid cross-contamination with document keys.
+      maxVersions.set(`img|||${key}`, Number(r.maxversion));
+    }
+  }
+
+  const enriched = allDocs.map((d) => {
+    const isImage = d.mimeType?.startsWith("image/");
+    const key = `${d.title}|||${d.category}`;
+    const maxVer = isImage ? maxVersions.get(`img|||${key}`) : maxVersions.get(key);
+    return { ...d, isLatest: maxVer === undefined || d.version >= maxVer };
+  });
+
   const total = docTotal + imgTotal;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
-  res.json({ documents: allDocs, total, page, pageSize, totalPages });
+  res.json({ documents: enriched, total, page, pageSize, totalPages });
 });
 
 router.post(
@@ -124,6 +167,11 @@ router.post(
 
     let record: any;
     if (kind === "image") {
+      const existingImg = await prisma.vehicleImage.findFirst({
+        where: { vehicleId, originalName: file.originalname, category: cat },
+        orderBy: { version: "desc" },
+      });
+      const imgVersion = existingImg ? existingImg.version + 1 : 1;
       record = await prisma.vehicleImage.create({
         data: {
           vehicleId,
@@ -133,6 +181,7 @@ router.post(
           mimeType: file.mimetype,
           sizeBytes: file.size,
           path: path.join(sub, storedName),
+          version: imgVersion,
           uploadedById: req.session!.userId,
         },
       });
@@ -229,6 +278,71 @@ router.delete(
     });
     if (!deleted) return res.status(404).json({ error: "Not found" });
     res.json({ ok: true });
+  }
+);
+
+router.post(
+  "/:id/restore",
+  requireAuth(PERMISSIONS.DOCUMENT_UPLOAD),
+  async (req, res) => {
+    const doc = await prisma.vehicleDocument.findUnique({ where: { id: req.params.id } });
+    const img = doc ? null : await prisma.vehicleImage.findUnique({ where: { id: req.params.id } });
+    const source = doc ?? img;
+    if (!source) return res.status(404).json({ error: "Not found" });
+
+    const srcPath = path.join(uploadRoot(), source.path);
+    if (!existsSync(srcPath)) {
+      return res.status(404).json({ error: "Source file missing on disk" });
+    }
+
+    const ext = path.extname(source.originalName) || "";
+    const storedName = `${randomUUID()}${ext}`;
+    const sub = source.path.startsWith("images") ? "images" : "documents";
+    const destDir = path.join(uploadRoot(), sub);
+    await mkdir(destDir, { recursive: true });
+
+    const { readFile } = await import("node:fs/promises");
+    const buf = await readFile(srcPath);
+    await writeFile(path.join(destDir, storedName), buf);
+
+    const docTitle = doc?.title ?? source.originalName;
+    const existing = await prisma.vehicleDocument.findFirst({
+      where: { vehicleId: source.vehicleId, title: docTitle, category: source.category },
+      orderBy: { version: "desc" },
+    });
+    const version = existing ? existing.version + 1 : 1;
+
+    const record = await prisma.vehicleDocument.create({
+      data: {
+        vehicleId: source.vehicleId,
+        category: source.category,
+        title: docTitle,
+        fileName: storedName,
+        originalName: source.originalName,
+        mimeType: source.mimeType,
+        sizeBytes: source.sizeBytes,
+        path: path.join(sub, storedName),
+        version,
+        uploadedById: req.session!.userId,
+      },
+    });
+
+    await writeAudit({
+      action: "RESTORE",
+      entity: "VehicleDocument",
+      entityId: record.id,
+      vehicleId: source.vehicleId,
+      userId: req.session!.userId,
+      newValue: {
+        title: record.title,
+        category: record.category,
+        version: record.version,
+        restoredFrom: source.id,
+      },
+      req,
+    });
+
+    res.status(201).json({ ok: true, record });
   }
 );
 

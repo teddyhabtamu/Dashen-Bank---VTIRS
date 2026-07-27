@@ -19,6 +19,7 @@ interface Doc {
   mimeType: string;
   sizeBytes: number;
   version: number;
+  isLatest: boolean;
   createdAt: string;
   vehicle: { id: string; plateNumber: string; vehicleCode: string };
 }
@@ -189,6 +190,7 @@ export default function DocumentsPage() {
                     <span className="truncate text-sm font-semibold text-slate-800">{d.title}</span>
                     <span className="badge bg-primary/10 text-primary">{label(d.category)}</span>
                     <span className="badge bg-slate-100 text-slate-500">v{d.version}</span>
+                    {d.isLatest && <span className="badge bg-green-100 text-green-700">Latest</span>}
                   </div>
                   <div className="truncate text-xs text-slate-400">
                     <Link to={`/vehicles/${d.vehicle.id}`} className="text-blue-600 hover:underline">{d.vehicle.plateNumber}</Link>

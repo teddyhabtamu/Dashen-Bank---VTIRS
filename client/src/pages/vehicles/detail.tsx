@@ -268,7 +268,7 @@ export default function VehicleDetailPage() {
             }))}
             initialImages={(v.images ?? []).map((i: any) => ({
               id: i.id, category: i.category, originalName: i.originalName,
-              mimeType: i.mimeType, sizeBytes: i.sizeBytes, createdAt: i.createdAt,
+              mimeType: i.mimeType, sizeBytes: i.sizeBytes, version: i.version, createdAt: i.createdAt,
             }))}
             canUpload={can(PERMISSIONS.DOCUMENT_UPLOAD)}
             canDelete={can(PERMISSIONS.DOCUMENT_DELETE)}

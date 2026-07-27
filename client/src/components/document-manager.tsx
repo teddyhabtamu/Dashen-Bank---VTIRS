@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Upload, FileText, Image as ImageIcon, Trash2, Download, Eye, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Upload, FileText, Image as ImageIcon, Trash2, Download, Eye, X, ChevronDown, ChevronRight, RotateCcw } from "lucide-react";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { Select } from "@/components/ui/select";
-import { DOCUMENT_CATEGORY_OPTIONS, label } from "@/lib/constants";
+import { DOCUMENT_CATEGORY_OPTIONS, IMAGE_CATEGORY_OPTIONS, label } from "@/lib/constants";
 import { formatFileSize, formatDate } from "@/lib/format";
 import { useToast } from "@/lib/toast-context";
 import { Tooltip } from "@/components/ui/tooltip";
@@ -24,6 +24,7 @@ interface ImgItem {
   originalName: string;
   mimeType: string;
   sizeBytes: number;
+  version: number;
   createdAt: string;
 }
 
@@ -36,6 +37,34 @@ interface StagedFile {
 function titleFromName(name: string): string {
   const dot = name.lastIndexOf(".");
   return dot > 0 ? name.slice(0, dot) : name;
+}
+
+function groupByKey(docs: DocItem[]): Map<string, DocItem[]> {
+  const map = new Map<string, DocItem[]>();
+  for (const d of docs) {
+    const key = `${d.title}|||${d.category}`;
+    const arr = map.get(key) ?? [];
+    arr.push(d);
+    map.set(key, arr);
+  }
+  for (const arr of map.values()) {
+    arr.sort((a, b) => b.version - a.version);
+  }
+  return map;
+}
+
+function groupImagesByKey(imgs: ImgItem[]): Map<string, ImgItem[]> {
+  const map = new Map<string, ImgItem[]>();
+  for (const img of imgs) {
+    const key = `${img.originalName}|||${img.category}`;
+    const arr = map.get(key) ?? [];
+    arr.push(img);
+    map.set(key, arr);
+  }
+  for (const arr of map.values()) {
+    arr.sort((a, b) => b.version - a.version);
+  }
+  return map;
 }
 
 export function DocumentManager({
@@ -60,6 +89,9 @@ export function DocumentManager({
   const [err, setErr] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleteInfo, setDeleteInfo] = useState<{ id: string; name: string } | null>(null);
+  const [expandedDocs, setExpandedDocs] = useState<Set<string>>(new Set());
+  const [expandedImgs, setExpandedImgs] = useState<Set<string>>(new Set());
+  const [restoreId, setRestoreId] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -73,13 +105,21 @@ export function DocumentManager({
     setImages(data.vehicle.images ?? []);
   }, [vehicleId]);
 
+  const docGroups = useMemo(() => groupByKey(docs), [docs]);
+  const imgGroups = useMemo(() => groupImagesByKey(images), [images]);
+
+  const nonImageDocs = useMemo(() => docs.filter((d) => !d.mimeType.startsWith("image/")), [docs]);
+
   function pickFiles(files: FileList | null) {
     if (!files || files.length === 0) return;
-    const next: StagedFile[] = Array.from(files).map((f) => ({
-      file: f,
-      category: DOCUMENT_CATEGORY_OPTIONS[0],
-      title: titleFromName(f.name),
-    }));
+    const next: StagedFile[] = Array.from(files).map((f) => {
+      const isImage = f.type.startsWith("image/");
+      return {
+        file: f,
+        category: isImage ? IMAGE_CATEGORY_OPTIONS[0] : DOCUMENT_CATEGORY_OPTIONS[0],
+        title: titleFromName(f.name),
+      };
+    });
     setStaged((prev) => [...prev, ...next]);
     if (fileRef.current) fileRef.current.value = "";
   }
@@ -129,11 +169,40 @@ export function DocumentManager({
     setBusy(true);
     try {
       await fetch(`/api/documents/${deleteId}`, { method: "DELETE" });
+      toast("success", "Document deleted");
       await refresh();
     } finally { setBusy(false); setDeleteId(null); setDeleteInfo(null); }
   }
 
-  const isImg = (m: string) => m.startsWith("image/");
+  async function doRestore() {
+    if (!restoreId) return;
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/documents/${restoreId}/restore`, { method: "POST" });
+      if (res.ok) {
+        toast("success", "Version restored as new document");
+        await refresh();
+      } else {
+        const d = await res.json();
+        toast("error", d.error ?? "Restore failed");
+      }
+    } finally { setBusy(false); setRestoreId(null); }
+  }
+
+  function toggleDocGroup(key: string) {
+    setExpandedDocs((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  }
+  function toggleImgGroup(key: string) {
+    setExpandedImgs((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  }
 
   return (
     <div className="space-y-4">
@@ -153,47 +222,51 @@ export function DocumentManager({
             <div className="mt-3">
               <p className="mb-2 text-xs font-semibold text-slate-500">{staged.length} file(s) selected</p>
               <div className="space-y-2">
-                {staged.map((s, i) => (
-                  <div key={i} className="rounded-lg border border-slate-200 bg-white p-3">
-                    <div className="flex items-start gap-3">
-                      {s.file.type.startsWith("image/") ? (
-                        <ImageIcon className="mt-1 h-5 w-5 shrink-0 text-slate-400" />
-                      ) : (
-                        <FileText className="mt-1 h-5 w-5 shrink-0 text-slate-400" />
-                      )}
-                      <div className="min-w-0 flex-1 space-y-2">
-                        <div className="flex items-center gap-2">
-                          <span className="truncate text-sm font-medium text-slate-700">{s.file.name}</span>
-                          <span className="shrink-0 text-xs text-slate-400">{formatFileSize(s.file.size)}</span>
-                        </div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Select
-                            value={s.category}
-                            onChange={(v) => updateStaged(i, { category: v })}
-                            options={DOCUMENT_CATEGORY_OPTIONS.map((c) => ({ value: c, label: label(c) }))}
-                            placeholder="Category"
-                            className="w-40"
-                            searchable={false}
-                          />
-                          <input
-                            value={s.title}
-                            onChange={(e) => updateStaged(i, { title: e.target.value })}
-                            placeholder="Title (optional)"
-                            className="min-w-0 flex-1 rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-600 placeholder:text-slate-400 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
-                          />
-                          <Tooltip content="Remove file">
-                            <button
-                              onClick={() => removeStaged(i)}
-                              className="shrink-0 rounded p-1 text-red-400 hover:bg-red-50 hover:text-red-600"
-                            >
-                              <X className="h-3.5 w-3.5" />
-                            </button>
-                          </Tooltip>
+                {staged.map((s, i) => {
+                  const isImage = s.file.type.startsWith("image/");
+                  const catOptions = isImage ? IMAGE_CATEGORY_OPTIONS : DOCUMENT_CATEGORY_OPTIONS;
+                  return (
+                    <div key={i} className="rounded-lg border border-slate-200 bg-white p-3">
+                      <div className="flex items-start gap-3">
+                        {isImage ? (
+                          <ImageIcon className="mt-1 h-5 w-5 shrink-0 text-slate-400" />
+                        ) : (
+                          <FileText className="mt-1 h-5 w-5 shrink-0 text-slate-400" />
+                        )}
+                        <div className="min-w-0 flex-1 space-y-2">
+                          <div className="flex items-center gap-2">
+                            <span className="truncate text-sm font-medium text-slate-700">{s.file.name}</span>
+                            <span className="shrink-0 text-xs text-slate-400">{formatFileSize(s.file.size)}</span>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Select
+                              value={s.category}
+                              onChange={(v) => updateStaged(i, { category: v })}
+                              options={catOptions.map((c) => ({ value: c, label: label(c) }))}
+                              placeholder="Category"
+                              className="w-40"
+                              searchable={false}
+                            />
+                            <input
+                              value={s.title}
+                              onChange={(e) => updateStaged(i, { title: e.target.value })}
+                              placeholder="Title (optional)"
+                              className="min-w-0 flex-1 rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-600 placeholder:text-slate-400 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
+                            />
+                            <Tooltip content="Remove file">
+                              <button
+                                onClick={() => removeStaged(i)}
+                                className="shrink-0 rounded p-1 text-red-400 hover:bg-red-50 hover:text-red-600"
+                              >
+                                <X className="h-3.5 w-3.5" />
+                              </button>
+                            </Tooltip>
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
               <div className="mt-3 flex items-center gap-2">
                 <button className="btn-primary" onClick={doUpload} disabled={busy}>
@@ -207,45 +280,99 @@ export function DocumentManager({
         </div>
       )}
 
-      {/* Documents (images filtered out — shown in Photos below) */}
+      {/* Documents */}
       <div>
         <div className="flex items-center gap-2 px-4 text-sm font-semibold text-slate-600">
-          <FileText className="h-4 w-4" /> Documents ({docs.filter((d) => !isImg(d.mimeType)).length})
+          <FileText className="h-4 w-4" /> Documents ({nonImageDocs.length})
         </div>
-        {docs.filter((d) => !isImg(d.mimeType)).length === 0 ? (
+        {nonImageDocs.length === 0 ? (
           <p className="mt-2 px-4 text-sm text-slate-400">No documents uploaded.</p>
         ) : (
           <ul className="mt-2 divide-y divide-slate-100 rounded-xl border border-slate-100">
-            {docs.filter((d) => !isImg(d.mimeType)).map((d) => (
-              <li key={d.id} className="flex items-center gap-3 px-4 py-3">
-                <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
-                  {isImg(d.mimeType) ? <ImageIcon className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="truncate text-sm font-medium text-slate-800">{d.title}</span>
-                    <span className="badge bg-slate-100 text-slate-500">v{d.version}</span>
-                    <span className="badge bg-primary/10 text-primary">{label(d.category)}</span>
-                  </div>
-                  <div className="truncate text-xs text-slate-400">
-                    {d.originalName} · {formatFileSize(d.sizeBytes)} · {formatDate(d.createdAt)}
-                  </div>
-                </div>
-                <div className="flex items-center gap-1">
-                  <a href={`/api/documents/${d.id}`} target="_blank" rel="noreferrer" className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100" title="Preview">
-                    <Eye className="h-4 w-4" />
-                  </a>
-                  <a href={`/api/documents/${d.id}?download=1`} className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100" title="Download">
-                    <Download className="h-4 w-4" />
-                  </a>
-                  {canDelete && (
-                    <button onClick={() => askDelete(d.id, d.title)} className="rounded-md p-1.5 text-red-500 hover:bg-red-50" title="Delete">
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  )}
-                </div>
-              </li>
-            ))}
+            {Array.from(docGroups.entries())
+              .filter(([key]) => {
+                const [title, cat] = key.split("|||");
+                return nonImageDocs.some((d) => d.title === title && d.category === cat);
+              })
+              .map(([key, versions]) => {
+                const latest = versions[0];
+                const hasHistory = versions.length > 1;
+                const expanded = expandedDocs.has(key);
+                return (
+                  <li key={key}>
+                    <div className="flex items-center gap-3 px-4 py-3">
+                      <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
+                        <FileText className="h-4 w-4" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="truncate text-sm font-medium text-slate-800">{latest.title}</span>
+                          <span className="badge bg-slate-100 text-slate-500">v{latest.version}</span>
+                          {hasHistory && (
+                            <span className="badge bg-blue-50 text-blue-600">{versions.length} versions</span>
+                          )}
+                          <span className="badge bg-primary/10 text-primary">{label(latest.category)}</span>
+                        </div>
+                        <div className="truncate text-xs text-slate-400">
+                          {latest.originalName} · {formatFileSize(latest.sizeBytes)} · {formatDate(latest.createdAt)}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <a href={`/api/documents/${latest.id}`} target="_blank" rel="noreferrer" className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100" title="Preview">
+                          <Eye className="h-4 w-4" />
+                        </a>
+                        <a href={`/api/documents/${latest.id}?download=1`} className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100" title="Download">
+                          <Download className="h-4 w-4" />
+                        </a>
+                        {canDelete && (
+                          <button onClick={() => askDelete(latest.id, latest.title)} className="rounded-md p-1.5 text-red-500 hover:bg-red-50" title="Delete">
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
+                        {hasHistory && (
+                          <button onClick={() => toggleDocGroup(key)} className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100" title="Version history">
+                            {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    {expanded && hasHistory && (
+                      <ul className="border-t border-slate-50 bg-slate-50/50">
+                        {versions.slice(1).map((v) => (
+                          <li key={v.id} className="flex items-center gap-3 px-4 py-2.5 pl-16">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-medium text-slate-600">v{v.version}</span>
+                                <span className="text-xs text-slate-400">{formatDate(v.createdAt)}</span>
+                                <span className="text-xs text-slate-400">{formatFileSize(v.sizeBytes)}</span>
+                              </div>
+                              <div className="truncate text-xs text-slate-400">{v.originalName}</div>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <a href={`/api/documents/${v.id}`} target="_blank" rel="noreferrer" className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100" title="Preview">
+                                <Eye className="h-3.5 w-3.5" />
+                              </a>
+                              <a href={`/api/documents/${v.id}?download=1`} className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100" title="Download">
+                                <Download className="h-3.5 w-3.5" />
+                              </a>
+                              <Tooltip content="Restore this version">
+                                <button onClick={() => setRestoreId(v.id)} className="rounded-md p-1.5 text-amber-600 hover:bg-amber-50" title="Restore">
+                                  <RotateCcw className="h-3.5 w-3.5" />
+                                </button>
+                              </Tooltip>
+                              {canDelete && (
+                                <button onClick={() => askDelete(v.id, v.title)} className="rounded-md p-1.5 text-red-500 hover:bg-red-50" title="Delete">
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              )}
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </li>
+                );
+              })}
           </ul>
         )}
       </div>
@@ -257,39 +384,93 @@ export function DocumentManager({
             <ImageIcon className="h-4 w-4" /> Photos ({images.length})
           </div>
           <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {images.map((img) => (
-              <div key={img.id} className="flex flex-col overflow-hidden rounded-xl border border-slate-100">
-                <a
-                  href={`/api/documents/${img.id}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="flex h-32 items-center justify-center bg-slate-50"
-                  title="Open full image"
-                >
-                  <img
-                    src={`/api/documents/${img.id}`}
-                    alt={img.originalName}
-                    className="max-h-32 max-w-full object-contain"
-                  />
-                </a>
-                <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 bg-white px-3 py-2">
-                  <span className="badge max-w-full truncate bg-primary/10 text-primary">{label(img.category)}</span>
-                  <div className="flex flex-shrink-0 items-center gap-1">
-                    <a href={`/api/documents/${img.id}`} target="_blank" rel="noreferrer" className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100" title="View">
-                      <Eye className="h-4 w-4" />
-                    </a>
-                    <a href={`/api/documents/${img.id}?download=1`} className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100" title="Download">
-                      <Download className="h-4 w-4" />
-                    </a>
-                    {canDelete && (
-                      <button onClick={() => askDelete(img.id, img.originalName)} className="rounded-md p-1.5 text-red-500 hover:bg-red-50" title="Delete">
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+            {Array.from(imgGroups.entries()).map(([key, versions]) => {
+              const latest = versions[0];
+              const hasHistory = versions.length > 1;
+              const expanded = expandedImgs.has(key);
+              return (
+                <div key={key} className="flex flex-col overflow-hidden rounded-xl border border-slate-100">
+                  <a
+                    href={`/api/documents/${latest.id}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex h-32 items-center justify-center bg-slate-50"
+                    title="Open full image"
+                  >
+                    <img
+                      src={`/api/documents/${latest.id}`}
+                      alt={latest.originalName}
+                      className="max-h-32 max-w-full object-contain"
+                    />
+                  </a>
+                  <div className="border-t border-slate-100 bg-white px-3 py-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5">
+                          <span className="badge max-w-full truncate bg-primary/10 text-primary">{label(latest.category)}</span>
+                          <span className="badge bg-slate-100 text-slate-500">v{latest.version}</span>
+                          {hasHistory && (
+                            <span className="badge bg-blue-50 text-blue-600">{versions.length} versions</span>
+                          )}
+                        </div>
+                        <div className="truncate text-xs text-slate-400">{formatFileSize(latest.sizeBytes)} · {formatDate(latest.createdAt)}</div>
+                      </div>
+                      <div className="flex flex-shrink-0 items-center gap-1">
+                        <a href={`/api/documents/${latest.id}`} target="_blank" rel="noreferrer" className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100" title="View">
+                          <Eye className="h-4 w-4" />
+                        </a>
+                        <a href={`/api/documents/${latest.id}?download=1`} className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100" title="Download">
+                          <Download className="h-4 w-4" />
+                        </a>
+                        {canDelete && (
+                          <button onClick={() => askDelete(latest.id, latest.originalName)} className="rounded-md p-1.5 text-red-500 hover:bg-red-50" title="Delete">
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
+                        {hasHistory && (
+                          <button onClick={() => toggleImgGroup(key)} className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100" title="Version history">
+                            {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    {expanded && hasHistory && (
+                      <div className="mt-2 space-y-1.5 border-t border-slate-100 pt-2">
+                        {versions.slice(1).map((v) => (
+                          <div key={v.id} className="flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2 text-xs">
+                                <span className="font-medium text-slate-600">v{v.version}</span>
+                                <span className="text-slate-400">{formatDate(v.createdAt)}</span>
+                                <span className="text-slate-400">{formatFileSize(v.sizeBytes)}</span>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <a href={`/api/documents/${v.id}`} target="_blank" rel="noreferrer" className="rounded-md p-1 text-slate-500 hover:bg-slate-100" title="View">
+                                <Eye className="h-3.5 w-3.5" />
+                              </a>
+                              <a href={`/api/documents/${v.id}?download=1`} className="rounded-md p-1 text-slate-500 hover:bg-slate-100" title="Download">
+                                <Download className="h-3.5 w-3.5" />
+                              </a>
+                              <Tooltip content="Restore this version">
+                                <button onClick={() => setRestoreId(v.id)} className="rounded-md p-1 text-amber-600 hover:bg-amber-50" title="Restore">
+                                  <RotateCcw className="h-3.5 w-3.5" />
+                                </button>
+                              </Tooltip>
+                              {canDelete && (
+                                <button onClick={() => askDelete(v.id, v.originalName)} className="rounded-md p-1 text-red-500 hover:bg-red-50" title="Delete">
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     )}
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
@@ -302,6 +483,16 @@ export function DocumentManager({
         title="Delete Document"
         message={`Delete "${deleteInfo?.name ?? ""}"? The file will be permanently removed.`}
         confirmLabel="Delete"
+      />
+
+      <ConfirmModal
+        open={restoreId !== null}
+        onClose={() => setRestoreId(null)}
+        onConfirm={doRestore}
+        loading={busy}
+        title="Restore Version"
+        message="This will create a new document entry from the selected version. The current latest version is preserved."
+        confirmLabel="Restore"
       />
     </div>
   );

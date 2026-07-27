@@ -59,8 +59,8 @@ router.get("/:id", requireAuth(PERMISSIONS.VEHICLE_VIEW), async (req, res) => {
       currentDriver: true,
       registrations: { orderBy: { createdAt: "desc" }, take: 5 },
       insurances: { orderBy: { endDate: "desc" }, take: 5 },
-      documents: true,
-      images: true,
+      documents: { orderBy: { createdAt: "desc" } },
+      images: { orderBy: { createdAt: "desc" } },
       assignments: {
         orderBy: { assignedAt: "desc" },
         include: { driver: true, branch: true },
