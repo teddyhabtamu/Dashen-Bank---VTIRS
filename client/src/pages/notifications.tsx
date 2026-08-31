@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Bell, BellDot, MoreVertical, Check, Trash2 } from "lucide-react";
+import { BellDot, MoreVertical, Check, Trash2 } from "lucide-react";
 import { BrandLoader } from "@/components/ui/brand-loader";
 import { Select } from "@/components/ui/select";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
@@ -80,13 +80,13 @@ export default function NotificationsPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <h2 className="mr-auto flex items-center gap-2 text-lg font-semibold text-slate-800">
-          <Bell className="h-5 w-5 text-primary" />
-          Notifications
-        </h2>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-semibold text-slate-800">Notifications</h2>
+          <p className="text-sm text-slate-500">Alerts &amp; reminders</p>
+        </div>
         {rows.length > 0 && (
-          <>
+          <div className="flex items-center gap-2">
             {unreadCount > 0 && (
               <button className="btn-outline text-xs" onClick={markAll}>
                 <Check className="mr-1 h-3.5 w-3.5" /> Mark all read
@@ -95,11 +95,11 @@ export default function NotificationsPage() {
             <button className="btn-outline text-xs text-red-600 hover:bg-red-50" onClick={() => setClearConfirmOpen(true)}>
               <Trash2 className="mr-1 h-3.5 w-3.5" /> Clear all
             </button>
-          </>
+          </div>
         )}
       </div>
 
-      <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-white p-4">
+      <div className="card flex flex-wrap items-center gap-3 p-4">
         <Select
           className="w-full sm:w-52"
           value={typeFilter}
@@ -115,14 +115,14 @@ export default function NotificationsPage() {
         </span>
       </div>
 
-      <div className="overflow-hidden rounded-lg border bg-white">
+      <div className="card overflow-hidden">
         {loading ? (
-          <div className="flex justify-center py-16"><BrandLoader /></div>
+          <BrandLoader />
         ) : rows.length === 0 ? (
-          <div className="flex flex-col items-center py-16 text-slate-400">
-            <BellDot className="mb-2 h-10 w-10" />
-            <p className="text-base font-medium text-slate-600">All caught up!</p>
-            <p className="mt-1 text-sm">No notifications match the current filter.</p>
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <BellDot className="mb-3 h-10 w-10 text-slate-300" />
+            <h3 className="text-base font-semibold text-slate-700">All caught up!</h3>
+            <p className="mt-1 text-sm text-slate-400">No notifications match the current filter.</p>
           </div>
         ) : (
           <>
@@ -222,20 +222,18 @@ export default function NotificationsPage() {
                 </div>
               ))}
             </div>
+
+            <div className="flex items-center justify-between border-t border-slate-100 px-5 py-3 text-sm text-slate-500">
+              <span className="text-sm font-medium text-slate-600">{total} notification(s)</span>
+              <span className="text-xs text-slate-400">Page {page} / {totalPages}</span>
+              <div className="flex gap-2">
+                <button className="btn-outline px-3 py-1" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Prev</button>
+                <button className="btn-outline px-3 py-1" disabled={page >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>Next</button>
+              </div>
+            </div>
           </>
         )}
       </div>
-
-      {!loading && rows.length > 0 && (
-        <div className="flex items-center justify-between">
-          <span className="text-sm font-medium text-slate-600">{total} notification(s)</span>
-          <span className="text-xs text-slate-400">Page {page} / {totalPages}</span>
-          <div className="flex gap-2">
-            <button className="btn-outline px-3 py-1" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Prev</button>
-            <button className="btn-outline px-3 py-1" disabled={page >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>Next</button>
-          </div>
-        </div>
-      )}
 
       <ConfirmModal
         open={clearConfirmOpen}

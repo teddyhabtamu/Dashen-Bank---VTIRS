@@ -23,6 +23,7 @@ const TITLES: Record<string, string> = {
   "/admin/users": "User Management",
   "/admin/roles": "Roles & Permissions",
   "/admin/settings": "System Settings",
+  "/profile": "My Profile",
 };
 
 interface Notif {
@@ -237,8 +238,9 @@ export function Topbar({
         )}
 
         <div className="flex items-center gap-2">
-          <div
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-sm font-semibold text-white"
+          <Link
+            to="/profile"
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-sm font-semibold text-white transition-opacity hover:opacity-80"
             title={user?.fullName ?? "User"}
           >
             {user?.fullName
@@ -248,7 +250,7 @@ export function Topbar({
               .slice(0, 2)
               .join("")
               .toUpperCase() || "?"}
-          </div>
+          </Link>
         </div>
       </div>
     </header>

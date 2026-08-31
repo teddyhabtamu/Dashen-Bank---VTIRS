@@ -108,9 +108,11 @@ export default function SearchPage() {
   return (
     <div className="space-y-4">
       {/* Hero search */}
-      <div>
-        <h2 className="text-xl font-semibold text-slate-800">Global Search</h2>
-        <p className="text-sm text-slate-500">Find vehicles, registrations, insurance &amp; documents</p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-semibold text-slate-800">Global Search</h2>
+          <p className="text-sm text-slate-500">Find vehicles, registrations, insurance &amp; documents</p>
+        </div>
       </div>
 
       <div className="card p-4">

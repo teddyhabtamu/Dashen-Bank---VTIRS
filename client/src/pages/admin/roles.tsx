@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Shield, Plus, ChevronDown, ChevronRight, Check, X, Save } from "lucide-react";
+import { Plus, ChevronDown, ChevronRight, Check, X, Save } from "lucide-react";
 import { BrandLoader } from "@/components/ui/brand-loader";
 import { Modal } from "@/components/ui/modal";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
@@ -146,18 +146,20 @@ export default function RolesPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <h2 className="mr-auto flex items-center gap-2 text-lg font-semibold text-slate-800">
-          <Shield className="h-5 w-5 text-primary" />
-          Roles & Permissions
-        </h2>
-        <button className="btn-primary" onClick={() => setCreateOpen(true)}>
-          <Plus className="mr-1 h-4 w-4" /> New Role
-        </button>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-semibold text-slate-800">Roles &amp; Permissions</h2>
+          <p className="text-sm text-slate-500">Define roles and their access rights</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button className="btn-primary" onClick={() => setCreateOpen(true)}>
+            <Plus className="mr-1 h-4 w-4" /> New Role
+          </button>
+        </div>
       </div>
 
       {loading ? (
-        <div className="flex justify-center py-16"><BrandLoader /></div>
+        <BrandLoader />
       ) : (
         <div className="space-y-3">
           {roles.map((role) => {

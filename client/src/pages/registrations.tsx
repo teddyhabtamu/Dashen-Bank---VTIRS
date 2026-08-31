@@ -1,6 +1,6 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useCallback, useEffect, useState } from "react";
-import { Plus, Search, MoreVertical, History, RotateCcw, AlertCircle, Archive, RefreshCw, Download } from "lucide-react";
+import { Plus, Search, MoreVertical, History, RotateCcw, AlertCircle, Archive, RefreshCw, Download, ClipboardList } from "lucide-react";
 import { StatusBadge } from "@/components/ui/badge";
 import { BrandLoader } from "@/components/ui/brand-loader";
 import { useBrand } from "@/lib/brand-context";
@@ -51,7 +51,6 @@ export default function RegistrationsPage() {
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(true);
   const [pageSize, setPageSize] = useState(15);
-  const [reminderWindows, setReminderWindows] = useState<number[]>([90, 60, 30, 7]);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [renewId, setRenewId] = useState<string | null>(null);
@@ -76,18 +75,6 @@ export default function RegistrationsPage() {
   }, [page, search, status]);
 
   useEffect(() => { load(); }, [load]);
-
-  useEffect(() => {
-    fetch("/api/settings/public")
-      .then((r) => r.json())
-      .then((data) => {
-        const windows = data?.reminderWindows?.registration;
-        if (Array.isArray(windows) && windows.length > 0) {
-          setReminderWindows(windows.map((n: unknown) => Number(n)).filter((n: number) => Number.isFinite(n) && n > 0));
-        }
-      })
-      .catch(() => {});
-  }, []);
 
   async function afterAction() {
     setCreateOpen(false); setRenewId(null); setSuspendId(null); setDeleteId(null); setArchiveId(null); setRestoreId(null);
@@ -212,10 +199,6 @@ export default function RegistrationsPage() {
       </div>
 
       <div className="card p-4">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-xs text-slate-500">
-          <span className="font-medium text-slate-600">Reminder windows driven by settings</span>
-          <span>{reminderWindows.map((w) => `${w}d`).join(" · ")}</span>
-        </div>
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative min-w-[200px] flex-1">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -266,14 +249,11 @@ export default function RegistrationsPage() {
           <div className="divide-y divide-slate-100">
             {rows.map((r) => {
               const eff = effectiveRegistrationStatus(r.status, r.expiryDate);
-              const border =
-                eff === "EXPIRED" ? "border-l-red-400"
-                  : eff === "CRITICAL" || eff === "WARNING" ? "border-l-amber-400"
-                    : eff === "SUSPENDED" ? "border-l-slate-400"
-                      : eff === "ARCHIVED" ? "border-l-slate-300"
-                        : "border-l-emerald-400";
               return (
-                <div key={r.id} className={`flex items-center gap-4 border-l-2 px-5 py-3.5 transition-colors hover:bg-slate-50 ${border}`}>
+                <div key={r.id} className="flex items-center gap-4 px-5 py-3.5 transition-colors hover:bg-slate-50">
+                  <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
+                    <ClipboardList className="h-5 w-5" />
+                  </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="truncate text-sm font-semibold text-slate-800">{r.regNumber}</span>

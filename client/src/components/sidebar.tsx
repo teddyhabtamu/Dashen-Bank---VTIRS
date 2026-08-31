@@ -12,8 +12,10 @@ import {
   Settings,
   History,
   LogOut,
+  User,
+  ChevronUp,
 } from "lucide-react";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "./auth-context";
 import { PERMISSIONS } from "@/lib/rbac";
 import { cn } from "@/lib/format";
@@ -62,7 +64,6 @@ const SECTIONS: NavSection[] = [
     items: [
       { href: "/admin/users", label: "Users", icon: Users, perm: PERMISSIONS.USER_MANAGE },
       { href: "/admin/roles", label: "Roles & Permissions", icon: Shield, perm: PERMISSIONS.ROLE_MANAGE },
-      { href: "/admin/settings", label: "Settings", icon: Settings, perm: PERMISSIONS.SETTING_MANAGE },
     ],
   },
 ];
@@ -82,6 +83,8 @@ export function Sidebar({
   const [confirmSignOut, setConfirmSignOut] = useState(false);
   const [tooltip, setTooltip] = useState<{ label: string; top: number } | null>(null);
   const tooltipTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
 
   const showTooltip = useCallback((label: string, e: React.MouseEvent<HTMLElement>) => {
     if (tooltipTimer.current) clearTimeout(tooltipTimer.current);
@@ -97,6 +100,24 @@ export function Sidebar({
     if (href === "/dashboard") return pathname === href;
     return pathname.startsWith(href) && href !== "/";
   }
+
+  useEffect(() => {
+    if (!userMenuOpen) return;
+    function onDocClick(e: MouseEvent) {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+        setUserMenuOpen(false);
+      }
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setUserMenuOpen(false);
+    }
+    document.addEventListener("mousedown", onDocClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDocClick);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [userMenuOpen]);
 
   return (
     <>
@@ -199,10 +220,11 @@ export function Sidebar({
           })}
         </nav>
 
-        <div className="shrink-0 border-t border-white/10 px-2 pb-2 pt-2">
-          <div
+        <div ref={userMenuRef} className="relative shrink-0 border-t border-white/10 px-2 pb-3 pt-2">
+          <button
+            onClick={() => setUserMenuOpen((o) => !o)}
             className={cn(
-              "flex items-center gap-3 rounded-lg px-2 py-1.5",
+              "flex w-full items-center gap-3 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-white/10",
               collapsed && "lg:justify-center"
             )}
             onMouseEnter={(e) => collapsed && user?.fullName && showTooltip(user.fullName, e)}
@@ -223,20 +245,48 @@ export function Sidebar({
               </div>
               <div className="truncate text-xs text-white/50">{user?.roleName}</div>
             </div>
-          </div>
-
-          <button
-            onClick={() => setConfirmSignOut(true)}
-            onMouseEnter={(e) => collapsed && showTooltip("Sign out", e)}
-            onMouseLeave={hideTooltip}
-            className={cn(
-              "mt-0.5 flex w-full items-center gap-3 rounded-lg px-2 py-1.5 text-sm font-medium text-white/40 transition-all duration-150 hover:bg-white/10 hover:text-white/70",
-              collapsed && "lg:justify-center"
-            )}
-          >
-            <LogOut className="h-[18px] w-[18px] shrink-0" />
-            <span className={cn(collapsed && "lg:hidden")}>Sign out</span>
+            <ChevronUp
+              className={cn(
+                "h-4 w-4 shrink-0 text-white/40 transition-transform duration-200",
+                collapsed && "lg:hidden",
+                !userMenuOpen && "rotate-180"
+              )}
+            />
           </button>
+
+          {userMenuOpen && (
+            <div
+              className={cn(
+                "absolute bottom-full mb-2 w-56 overflow-hidden rounded-xl border border-white/10 bg-primary shadow-2xl",
+                collapsed ? "left-[80px]" : "left-0 right-0"
+              )}
+              style={{ zIndex: 60 }}
+            >
+              <Link
+                to="/profile"
+                onClick={() => { setUserMenuOpen(false); onCloseMobile(); }}
+                className="flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-white/80 transition-colors hover:bg-white/10 hover:text-white"
+              >
+                <User className="h-4 w-4 shrink-0" />
+                My Profile
+              </Link>
+              <Link
+                to="/admin/settings"
+                onClick={() => { setUserMenuOpen(false); onCloseMobile(); }}
+                className="flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-white/80 transition-colors hover:bg-white/10 hover:text-white"
+              >
+                <Settings className="h-4 w-4 shrink-0" />
+                Settings
+              </Link>
+              <button
+                onClick={() => { setUserMenuOpen(false); setConfirmSignOut(true); }}
+                className="flex w-full items-center gap-3 border-t border-white/10 px-3 py-2.5 text-sm font-medium text-red-300 transition-colors hover:bg-white/10 hover:text-red-200"
+              >
+                <LogOut className="h-4 w-4 shrink-0" />
+                Sign out
+              </button>
+            </div>
+          )}
         </div>
 
         {tooltip && collapsed && (

@@ -106,10 +106,8 @@ export default function AuditLogsPage() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="flex items-center gap-2 text-lg font-semibold text-slate-800">
-            <History className="h-5 w-5 text-primary" />
-            Audit Trail
-          </h2>
+          <h2 className="text-xl font-semibold text-slate-800">Audit Trail</h2>
+          <p className="text-sm text-slate-500">System-wide activity &amp; change history</p>
         </div>
         {rows.length > 0 && (
           <Dropdown align="right"
@@ -123,7 +121,7 @@ export default function AuditLogsPage() {
         )}
       </div>
 
-      <div className="flex flex-wrap items-end gap-3 rounded-lg border bg-white p-4">
+      <div className="card flex flex-wrap items-end gap-3 p-4">
         <div className="relative min-w-[160px] flex-1">
           <label className="mb-1 block text-xs font-medium text-slate-500">Search</label>
           <Search className="absolute left-3 top-[34px] h-4 w-4 text-slate-400" />
@@ -172,13 +170,14 @@ export default function AuditLogsPage() {
         )}
       </div>
 
-      <div className="overflow-hidden rounded-lg border bg-white">
+      <div className="card overflow-hidden">
         {loading ? (
-          <div className="flex justify-center py-16"><BrandLoader /></div>
+          <BrandLoader />
         ) : rows.length === 0 ? (
-          <div className="flex flex-col items-center py-16 text-slate-400">
-            <History className="mb-2 h-10 w-10" />
-            <p>No audit logs found</p>
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <History className="mb-3 h-10 w-10 text-slate-300" />
+            <h3 className="text-base font-semibold text-slate-700">No audit logs found</h3>
+            <p className="mt-1 max-w-sm text-sm text-slate-400">No activity matches the current filters.</p>
           </div>
         ) : (
 <>
@@ -312,18 +311,16 @@ export default function AuditLogsPage() {
           })}
         </div>
 
+          <div className="flex items-center justify-between border-t border-slate-100 px-5 py-3 text-sm text-slate-500">
+            <span className="text-sm font-medium text-slate-600">{total} log(s)</span>
+            <span className="text-xs text-slate-400">Page {page} / {totalPages}</span>
+            <div className="flex gap-2">
+              <button className="btn-outline px-3 py-1" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Prev</button>
+              <button className="btn-outline px-3 py-1" disabled={page >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>Next</button>
+            </div>
+          </div>
           </>
         )}
-      </div>
-
-      {/* Pagination */}
-      <div className="flex items-center justify-between">
-        <span className="text-sm font-medium text-slate-600">{total} log(s)</span>
-        <span className="text-xs text-slate-400">Page {page} / {totalPages}</span>
-        <div className="flex gap-2">
-          <button className="btn-outline px-3 py-1" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Prev</button>
-          <button className="btn-outline px-3 py-1" disabled={page >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>Next</button>
-        </div>
       </div>
     </div>
   );

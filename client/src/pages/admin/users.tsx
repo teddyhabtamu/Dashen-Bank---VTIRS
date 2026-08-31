@@ -202,10 +202,8 @@ export default function UsersPage() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="flex items-center gap-2 text-lg font-semibold text-slate-800">
-            <Users className="h-5 w-5 text-primary" />
-            User Management
-          </h2>
+          <h2 className="text-xl font-semibold text-slate-800">User Management</h2>
+          <p className="text-sm text-slate-500">Manage system users, roles &amp; access</p>
         </div>
         <div className="flex items-center gap-2">
           {rows.length > 0 && (
@@ -226,7 +224,7 @@ export default function UsersPage() {
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-white p-4">
+      <div className="card flex flex-wrap items-center gap-3 p-4">
         <div className="relative flex-1 sm:max-w-xs">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <input
@@ -255,7 +253,21 @@ export default function UsersPage() {
         />
       </div>
 
-      <div className="overflow-hidden rounded-lg border bg-white">
+      <div className="card overflow-hidden">
+        {loading ? (
+          <BrandLoader />
+        ) : rows.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <Users className="mb-3 h-10 w-10 text-slate-300" />
+            <h3 className="text-base font-semibold text-slate-700">No users found</h3>
+            <p className="mt-1 max-w-sm text-sm text-slate-400">No users match the current filters.</p>
+          </div>
+        ) : (
+          <>
+        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3">
+          <span className="text-sm font-medium text-slate-600">{total} user(s)</span>
+          <span className="text-xs text-slate-400">Page {page} / {totalPages}</span>
+        </div>
         <div className="hidden min-w-0 sm:block">
           <table className="w-full">
             <thead>
@@ -346,26 +358,16 @@ export default function UsersPage() {
           ))}
         </div>
 
-        {!loading && rows.length === 0 && (
-          <div className="flex flex-col items-center py-16 text-slate-400">
-            <Users className="mb-2 h-10 w-10" />
-            <p>No users found</p>
+        <div className="flex items-center justify-between border-t border-slate-100 px-5 py-3 text-sm text-slate-500">
+          <span className="text-sm font-medium text-slate-600">{total} user(s)</span>
+          <span className="text-xs text-slate-400">Page {page} / {totalPages}</span>
+          <div className="flex gap-2">
+            <button className="btn-outline px-3 py-1" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Prev</button>
+            <button className="btn-outline px-3 py-1" disabled={page >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>Next</button>
           </div>
-        )}
-
-        {loading && (
-          <div className="flex justify-center py-12"><BrandLoader /></div>
-        )}
-      </div>
-
-      {/* Pagination */}
-      <div className="flex items-center justify-between">
-        <span className="text-sm font-medium text-slate-600">{total} user(s)</span>
-        <span className="text-xs text-slate-400">Page {page} / {totalPages}</span>
-        <div className="flex gap-2">
-          <button className="btn-outline px-3 py-1" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Prev</button>
-          <button className="btn-outline px-3 py-1" disabled={page >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>Next</button>
         </div>
+          </>
+        )}
       </div>
 
       {/* Create / Edit modal */}
