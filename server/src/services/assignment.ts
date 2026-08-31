@@ -39,6 +39,14 @@ export async function assignDriver(vehicleId: string, input: AssignmentInput, ct
       });
     }
 
+    // A driver cannot be actively assigned to two different vehicles at once.
+    const driverActiveElsewhere = await tx.vehicleAssignment.findFirst({
+      where: { driverId: input.driverId, returnedAt: null, NOT: { vehicleId } },
+    });
+    if (driverActiveElsewhere) {
+      throw new Error("Driver is already assigned to another vehicle");
+    }
+
     const assignment = await tx.vehicleAssignment.create({
       data: {
         vehicleId,

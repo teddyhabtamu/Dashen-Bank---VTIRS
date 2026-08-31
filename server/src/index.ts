@@ -8,8 +8,9 @@ import cors from "cors";
 import cookieParser from "cookie-parser";
 import path from "node:path";
 import { attachSession } from "./lib/guard.js";
+import { schedule, runScheduledJob } from "./lib/scheduler.js";
 import { autoTransitionRegistrations, autoTransitionVehicleStatus } from "./services/reminders.js";
-import { generateNotificationsForAllUsers } from "./services/notification.js";
+import { generateNotificationsForAllUsers, cleanupOldNotifications } from "./services/notification.js";
 import authRoutes from "./routes/auth.js";
 import vehicleRoutes from "./routes/vehicles.js";
 import registrationRoutes from "./routes/registrations.js";
@@ -82,12 +83,15 @@ app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
 
 app.listen(PORT, () => {
   console.log(`VTIRS API listening on http://localhost:${PORT}`);
-  autoTransitionRegistrations().catch((e) => console.error("Auto-transition error:", e));
-  autoTransitionVehicleStatus().catch((e) => console.error("Vehicle status error:", e));
-  generateNotificationsForAllUsers().catch((e) => console.error("Notification sweep error:", e));
-  setInterval(() => {
-    autoTransitionRegistrations().catch((e) => console.error("Auto-transition error:", e));
-    autoTransitionVehicleStatus().catch((e) => console.error("Vehicle status error:", e));
-    generateNotificationsForAllUsers().catch((e) => console.error("Notification sweep error:", e));
-  }, 60 * 60 * 1000);
+
+  // Run once on startup to catch anything missed while the app was down.
+  runScheduledJob("registration-transition", () => autoTransitionRegistrations().then(() => undefined));
+  runScheduledJob("vehicle-status-transition", () => autoTransitionVehicleStatus().then(() => undefined));
+  runScheduledJob("notification-sweep", () => generateNotificationsForAllUsers().then(() => undefined));
+
+  // Durable fixed schedules (node-cron). Single-process, guarded against overlap.
+  schedule("0 1 * * *", "registration-transition", () => autoTransitionRegistrations().then(() => undefined));
+  schedule("5 1 * * *", "vehicle-status-transition", () => autoTransitionVehicleStatus().then(() => undefined));
+  schedule("15 * * * *", "notification-sweep", () => generateNotificationsForAllUsers().then(() => undefined));
+  schedule("30 1 * * *", "notification-cleanup", () => cleanupOldNotifications().then(() => undefined));
 });

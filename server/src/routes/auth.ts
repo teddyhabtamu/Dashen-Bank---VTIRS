@@ -2,9 +2,9 @@ import { Router } from "express";
 import { prisma } from "../lib/prisma.js";
 import { hashPassword, verifyPassword } from "../lib/password.js";
 import { setSessionCookie, clearSessionCookie } from "../lib/auth.js";
-import { ROLE_PERMISSIONS } from "../lib/rbac.js";
 import { writeAudit } from "../lib/audit.js";
-import { requireAuth } from "../lib/guard.js";
+import { ROLE_PERMISSIONS } from "../lib/rbac.js";
+import { requireAuth, resolveSession } from "../lib/guard.js";
 import { getSetting } from "../services/setting.js";
 
 const failedAttempts = new Map<string, { count: number; last: number }>();
@@ -49,18 +49,12 @@ router.post("/login", async (req, res) => {
     });
   }
 
-  const explicit = user.role.permissions.map((p) => p.code);
-  const roleDefault = ROLE_PERMISSIONS[user.role.slug] ?? [];
-  const permissions = Array.from(new Set([...explicit, ...roleDefault]));
+  const session = await resolveSession(user.id);
+  if (!session) {
+    return res.status(403).json({ error: "Account is inactive or locked. Contact your administrator." });
+  }
 
-  await setSessionCookie(res, {
-    userId: user.id,
-    username: user.username,
-    roleSlug: user.role.slug,
-    roleName: user.role.name,
-    fullName: user.fullName,
-    permissions,
-  });
+  await setSessionCookie(res, session);
 
   await prisma.user.update({
     where: { id: user.id },
@@ -82,7 +76,7 @@ router.post("/login", async (req, res) => {
       fullName: user.fullName,
       role: user.role.slug,
       roleName: user.role.name,
-      permissions,
+      permissions: session.permissions,
     },
   });
 });
@@ -92,7 +86,7 @@ router.post("/logout", (_req, res) => {
   res.json({ ok: true });
 });
 
-router.get("/me", requireAuth(), (req, res) => {
+router.get("/me", requireAuth(), async (req, res) => {
   const session = req.session!;
   res.json({
     user: {

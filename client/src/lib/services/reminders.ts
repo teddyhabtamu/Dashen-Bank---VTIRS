@@ -1,6 +1,9 @@
 import { REGISTRATION_STATUS } from "@/lib/constants";
 
 export type ExpiryState = "EXPIRED" | "CRITICAL" | "WARNING" | "OK";
+export type ReminderWindows = [number, number, number, number];
+
+export const DEFAULT_REMINDER_WINDOWS: ReminderWindows = [90, 60, 30, 7];
 
 // Days from today until `date` (negative = already past).
 export function daysUntil(date: Date | string | null | undefined): number | null {
@@ -11,14 +14,27 @@ export function daysUntil(date: Date | string | null | undefined): number | null
   return Math.ceil(ms / (1000 * 60 * 60 * 24));
 }
 
-// Classify an expiry date into a state for badges/highlighting.
-export function expiryState(date: Date | string | null | undefined): ExpiryState {
-  const days = daysUntil(date);
+// Pure expiry classifier. Driven by the (possibly configured) reminder windows
+// so badge/severity thresholds stay aligned with the admin's settings instead
+// of being hardcoded.
+export function classifyExpiryState(
+  days: number | null,
+  windows: ReminderWindows = DEFAULT_REMINDER_WINDOWS
+): ExpiryState {
   if (days === null) return "OK";
   if (days < 0) return "EXPIRED";
-  if (days <= 7) return "CRITICAL";
-  if (days <= 30) return "WARNING";
+  const [, , w30, w7] = windows;
+  if (days <= w7) return "CRITICAL";
+  if (days <= w30) return "WARNING";
   return "OK";
+}
+
+// Classify an expiry date into a state for badges/highlighting.
+export function expiryState(
+  date: Date | string | null | undefined,
+  windows: ReminderWindows = DEFAULT_REMINDER_WINDOWS
+): ExpiryState {
+  return classifyExpiryState(daysUntil(date), windows);
 }
 
 // Derive a registration's effective status from its expiry date if still active.

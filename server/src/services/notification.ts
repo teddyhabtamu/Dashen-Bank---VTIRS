@@ -1,11 +1,12 @@
 import { prisma } from "../lib/prisma.js";
-import { daysUntil, getReminderHorizonDays } from "./reminders.js";
+import { daysUntil, getReminderWindows, DEFAULT_REMINDER_WINDOWS, type ReminderWindows } from "./reminders.js";
 import { defaultPageSize, getSetting } from "./setting.js";
 
 // ---------- generation ----------
 
 export async function generateNotifications(userId: string) {
-  const horizonDays = await getReminderHorizonDays();
+  const windows = await getReminderWindows();
+  const horizonDays = Math.max(...windows);
   const horizon = new Date(Date.now() + horizonDays * 24 * 60 * 60 * 1000);
 
   const [enableReg, enableIns] = await Promise.all([
@@ -37,7 +38,7 @@ export async function generateNotifications(userId: string) {
     for (const reg of expiringRegs) {
       const days = daysUntil(reg.expiryDate);
       const expired = days !== null && days < 0;
-      const stage = getReminderStage(days, horizonDays);
+      const stage = getReminderStage(days, windows, horizonDays);
       const title = expired ? "Registration Expired" : "Registration Expiring Soon";
       const message = expired
         ? `${reg.vehicle.plateNumber} (${reg.vehicle.vehicleCode}) registration expired on ${reg.expiryDate.toLocaleDateString("en-GB")}. Renew immediately.`
@@ -56,7 +57,7 @@ export async function generateNotifications(userId: string) {
     for (const ins of expiringIns) {
       const days = daysUntil(ins.endDate);
       const expired = days !== null && days < 0;
-      const stage = getReminderStage(days, horizonDays);
+      const stage = getReminderStage(days, windows, horizonDays);
       const title = expired ? "Insurance Expired" : "Insurance Expiring Soon";
       const message = expired
         ? `${ins.vehicle.plateNumber} (${ins.vehicle.vehicleCode}) insurance expired on ${ins.endDate.toLocaleDateString("en-GB")}. Renew immediately.`
@@ -107,12 +108,18 @@ async function shouldCreate(userId: string, type: string, link: string, title: s
   return false;
 }
 
-function getReminderStage(days: number | null, horizonDays: number): string {
+function getReminderStage(
+  days: number | null,
+  windows: ReminderWindows = DEFAULT_REMINDER_WINDOWS,
+  horizonDays: number = Math.max(...DEFAULT_REMINDER_WINDOWS),
+): string {
   if (days === null) return "unknown";
   if (days < 0) return "expired";
-  if (days <= 7) return "critical";
-  if (days <= 30) return "warning";
-  if (days <= 60) return "secondary";
+  const [w90, w60, w30, w7] = windows;
+  if (days <= w7) return "critical";
+  if (days <= w30) return "warning";
+  if (days <= w60) return "secondary";
+  if (days <= w90) return "primary";
   if (days <= horizonDays) return "primary";
   return "outside_horizon";
 }
@@ -149,7 +156,6 @@ export async function listNotifications(
   }
 ) {
   const ps = pageSize ?? await defaultPageSize();
-  await generateNotifications(userId).catch(() => {});
 
   const where: Record<string, unknown> = { userId };
   if (type) where.type = type;
@@ -185,7 +191,6 @@ export async function listNotifications(
 }
 
 export async function getUnreadCount(userId: string): Promise<number> {
-  await generateNotifications(userId).catch(() => {});
   return prisma.notification.count({ where: { userId, isRead: false, dismissed: false } as any });
 }
 
@@ -224,6 +229,20 @@ export async function getNotificationTypes(userId: string): Promise<string[]> {
     _count: { _all: true },
   });
   return rows.map((r) => r.type).sort();
+}
+
+// Hard-delete dismissed notifications older than `retentionDays` so the table
+// does not grow unbounded. Dismissed rows no longer suppress regeneration, so
+// removing them is safe.
+export async function cleanupOldNotifications(retentionDays = 30): Promise<{ deleted: number }> {
+  const cutoff = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000);
+  const result = await prisma.notification.deleteMany({
+    where: {
+      dismissed: true,
+      createdAt: { lt: cutoff },
+    } as any,
+  });
+  return { deleted: result.count };
 }
 
 function safeParse(json: string): unknown {
