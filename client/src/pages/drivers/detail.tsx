@@ -9,8 +9,17 @@ import { useAuth } from "@/components/auth-context";
 import { useToast } from "@/lib/toast-context";
 import { formatDate } from "@/lib/format";
 import { PERMISSIONS } from "@/lib/rbac";
+import { label } from "@/lib/constants";
 
-interface VehicleOption { id: string; plateNumber: string; vehicleCode: string; make?: string | null; model?: string | null; }
+interface VehicleOption { id: string; plateNumber: string; vehicleCode: string; make?: string | null; model?: string | null; status: string; branch?: { name: string } | null; }
+
+const VEHICLE_STATUS_VARIANT: Record<string, "warning" | "success" | "danger"> = {
+  ACTIVE: "success",
+  ASSIGNED: "success",
+  RESERVED: "warning",
+  UNDER_MAINTENANCE: "warning",
+  DISPOSED: "danger",
+};
 
 interface AssignRow {
   id: string;
@@ -106,6 +115,8 @@ export default function DriverDetailPage() {
         vehicleCode: v.vehicleCode,
         make: v.make,
         model: v.model,
+        status: v.status,
+        branch: v.branch,
       }))))
       .catch(() => setVehicles([]));
   }
@@ -349,6 +360,8 @@ export default function DriverDetailPage() {
                 options={vehicles.map((v) => ({
                   value: v.id,
                   label: `${v.plateNumber} (${v.vehicleCode})${v.make && v.model ? ` · ${v.make} ${v.model}` : ""}`,
+                  description: v.branch?.name ?? undefined,
+                  indicator: { label: label(v.status), variant: VEHICLE_STATUS_VARIANT[v.status] ?? "warning" },
                 }))}
               />
             </div>
