@@ -31,9 +31,24 @@ router.get("/", requireAuth(PERMISSIONS.DOCUMENT_VIEW), async (req, res) => {
   const pageSize = Number(req.query.pageSize ?? "25");
   const skip = (page - 1) * pageSize;
   const docWhere: any = q
-    ? { OR: [{ title: { contains: q } }, { originalName: { contains: q } }] }
+    ? {
+        OR: [
+          { title: { contains: q, mode: "insensitive" } },
+          { originalName: { contains: q, mode: "insensitive" } },
+          { vehicle: { plateNumber: { contains: q, mode: "insensitive" } } },
+          { vehicle: { vehicleCode: { contains: q, mode: "insensitive" } } },
+        ],
+      }
     : {};
-  const imgWhere: any = q ? { originalName: { contains: q } } : {};
+  const imgWhere: any = q
+    ? {
+        OR: [
+          { originalName: { contains: q, mode: "insensitive" } },
+          { vehicle: { plateNumber: { contains: q, mode: "insensitive" } } },
+          { vehicle: { vehicleCode: { contains: q, mode: "insensitive" } } },
+        ],
+      }
+    : {};
 
   const vehicleSelect = {
     select: { id: true, plateNumber: true, vehicleCode: true },
