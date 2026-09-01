@@ -7,6 +7,10 @@
     {
       "source": "/uploads/:path*",
       "destination": "https://vtirs-api.onrender.com/uploads/:path*"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ]
 }
