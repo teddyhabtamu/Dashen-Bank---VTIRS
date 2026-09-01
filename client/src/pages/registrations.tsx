@@ -11,7 +11,7 @@ import { DatePicker } from "@/components/ui/datepicker";
 import { Modal } from "@/components/ui/modal";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { useAuth } from "@/components/auth-context";
-import { REGISTRATION_STATUS_OPTIONS, label } from "@/lib/constants";
+import { REGISTRATION_STATUS, REGISTRATION_STATUS_OPTIONS, label } from "@/lib/constants";
 import { formatDate, daysUntil } from "@/lib/format";
 import { useToast } from "@/lib/toast-context";
 import { exportCsv, exportXlsx, exportPdf, rowsToHtmlTable } from "@/lib/export";
@@ -48,7 +48,7 @@ export default function RegistrationsPage() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
-  const [status, setStatus] = useState("");
+  const [status, setStatus] = useState("ACTIVE");
   const [loading, setLoading] = useState(true);
   const [pageSize, setPageSize] = useState(15);
 
@@ -100,10 +100,31 @@ export default function RegistrationsPage() {
   const [form, setForm] = useState({ vehicleId: "", regNumber: "", regDate: "", expiryDate: "", office: "", status: "ACTIVE" });
   const [vehicles, setVehicles] = useState<{ value: string; label: string }[]>([]);
   const [err, setErr] = useState<string | null>(null);
+  const [supersedeRegs, setSupersedeRegs] = useState<string[]>([]);
+  const [confirmSupersede, setConfirmSupersede] = useState(false);
+
+  // If the selected vehicle already has a live (non-archived) registration, a
+  // new one will supersede it — surface that before the create is allowed.
+  async function checkSupersede(vehicleId: string) {
+    setSupersedeRegs([]);
+    setConfirmSupersede(false);
+    if (!vehicleId) return;
+    try {
+      const res = await fetch(`/api/vehicles/${vehicleId}`);
+      const d = await res.json();
+      const regs: { status: string; regNumber: string }[] = d?.vehicle?.registrations ?? [];
+      const live = regs.filter((r) => r.status !== REGISTRATION_STATUS.ARCHIVED);
+      setSupersedeRegs(live.map((r) => r.regNumber));
+    } catch {
+      setSupersedeRegs([]);
+    }
+  }
 
   async function openCreate() {
     setErr(null);
     setForm({ vehicleId: "", regNumber: "", regDate: "", expiryDate: "", office: "", status: "ACTIVE" });
+    setSupersedeRegs([]);
+    setConfirmSupersede(false);
     const res = await fetch("/api/vehicles?pageSize=9999");
     const data = await res.json();
     setVehicles((data.items ?? []).map((v: any) => ({ value: v.id, label: `${v.plateNumber} (${v.vehicleCode})` })));
@@ -114,7 +135,7 @@ export default function RegistrationsPage() {
     setBusy(true); setErr(null);
     try {
       const res = await fetch("/api/registrations", {
-        method: "POST" as const, headers: { "Content-Type": "application/json" }, body: JSON.stringify(form),
+        method: "POST" as const, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...form, confirmSupersede }),
       });
       if (!res.ok) { const d = await res.json(); setErr(d.error ?? "Failed to create"); return; }
       toast("success", "Registration created");
@@ -320,7 +341,9 @@ export default function RegistrationsPage() {
                     </div>
                   </div>
                   <div className="flex flex-shrink-0 items-center gap-3">
-                    <ExpiryPill date={r.expiryDate} windows={reminderWindows} />
+                    {(["ACTIVE", "PENDING_RENEWAL", "EXPIRED"] as string[]).includes(eff) && (
+                      <ExpiryPill date={r.expiryDate} windows={reminderWindows} />
+                    )}
                     <Dropdown align="right"
                       trigger={({ toggle }) => (
                         <button onClick={toggle} className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600" title="Actions">
@@ -353,13 +376,24 @@ export default function RegistrationsPage() {
       {/* Modals (unchanged) */}
       <Modal open={createOpen} onClose={() => !busy && setCreateOpen(false)} title="New Registration" footer={
         <><button className="btn-outline" onClick={() => setCreateOpen(false)} disabled={busy}>Cancel</button>
-        <button className="btn-primary" onClick={submitCreate} disabled={busy}>Create</button></>
+        <button className="btn-primary" onClick={submitCreate} disabled={busy || (supersedeRegs.length > 0 && !confirmSupersede)}>Create</button></>
       }>
         {err && <div className="mb-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-600">{err}</div>}
+        {supersedeRegs.length > 0 && (
+          <div className="mb-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
+            This vehicle already has a live registration ({supersedeRegs.join(", ")}). Creating a new one will automatically archive it.
+          </div>
+        )}
+        {supersedeRegs.length > 0 && (
+          <label className="mb-3 flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50/60 px-3 py-2 text-sm text-slate-700">
+            <input type="checkbox" className="mt-0.5" checked={confirmSupersede} onChange={(e) => setConfirmSupersede(e.target.checked)} />
+            I confirm this will replace the current registration.
+          </label>
+        )}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <label className="text-sm sm:col-span-2">Vehicle <span className="text-red-400">*</span>
             <div className="mt-1">
-              <Select className="w-full" value={form.vehicleId} onChange={(v) => setForm({ ...form, vehicleId: v })}
+              <Select className="w-full" value={form.vehicleId} onChange={(v) => { setForm({ ...form, vehicleId: v }); checkSupersede(v); }}
                 placeholder="Select vehicle…" options={vehicles} searchable />
             </div>
           </label>

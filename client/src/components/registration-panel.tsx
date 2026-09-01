@@ -83,6 +83,7 @@ export function RegistrationPanel({ vehicleId, initial, canRenew, canSuspend }: 
         const eff = effectiveRegistrationStatus(r.status, r.expiryDate);
         const state = expiryState(r.expiryDate, reminderWindows);
         const days = daysUntil(r.expiryDate);
+        const showLivePill = ["ACTIVE", "PENDING_RENEWAL", "EXPIRED"].includes(eff);
         return (
           <div key={r.id} className="rounded-lg border border-slate-100 p-3">
             <div className="flex items-center justify-between">
@@ -104,7 +105,7 @@ export function RegistrationPanel({ vehicleId, initial, canRenew, canSuspend }: 
               <div>Reg Date: <span className="text-slate-800">{formatDate(r.regDate)}</span></div>
               <div>Office: <span className="text-slate-800">{r.office ?? "-"}</span></div>
               <div className="sm:col-span-2">
-                Expiry: <span className={`badge ${EXPIRY_BADGE[state]}`}>{formatDate(r.expiryDate)} · {days !== null && days >= 0 ? `${days}d left` : "expired"}</span>
+                Expiry: <span className={showLivePill ? `badge ${EXPIRY_BADGE[state]}` : "text-slate-400"}>{formatDate(r.expiryDate)}{showLivePill ? ` · ${days !== null && days >= 0 ? `${days}d left` : "expired"}` : " · no longer current"}</span>
               </div>
             </div>
           </div>

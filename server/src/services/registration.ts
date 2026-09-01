@@ -97,17 +97,24 @@ export async function createRegistration(input: RegistrationInput, ctx: Context 
   const expiryDate = toDate(data.expiryDate)!;
   assertValidRegistrationDates(regDate, expiryDate, status);
 
-  const { reg, archived } = await prisma.$transaction(async (tx) => {
-    // One current registration per vehicle: registering again supersedes any
-    // existing non-archived registration(s) for the vehicle.
-    const prior = await tx.vehicleRegistration.findMany({
-      where: {
-        vehicleId: data.vehicleId,
-        NOT: { status: REGISTRATION_STATUS.ARCHIVED },
-      },
-      orderBy: { expiryDate: "desc" },
-    });
+  // One current registration per vehicle: registering again supersedes any
+  // existing non-archived registration(s) for the vehicle. Require explicit
+  // confirmation before silently archiving a live registration.
+  const prior = await prisma.vehicleRegistration.findMany({
+    where: {
+      vehicleId: data.vehicleId,
+      NOT: { status: REGISTRATION_STATUS.ARCHIVED },
+    },
+    orderBy: { expiryDate: "desc" },
+  });
+  if (prior.length > 0 && data.confirmSupersede !== true) {
+    throw new ValidationError(
+      "This vehicle already has a live registration. Creating a new one will archive it — confirm to continue.",
+      "confirmSupersede"
+    );
+  }
 
+  const { reg, archived } = await prisma.$transaction(async (tx) => {
     const archivedList = [];
     for (const p of prior) {
       const updated = { ...p, status: REGISTRATION_STATUS.ARCHIVED };
