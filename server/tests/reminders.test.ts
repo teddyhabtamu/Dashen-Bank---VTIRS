@@ -13,7 +13,9 @@ describe("reminders", () => {
       const today = new Date();
       today.setHours(12, 0, 0, 0);
       const result = daysUntil(today);
-      expect(result === 0 || result === -0).toBe(true);
+      // Depending on the current time of day, noon today is either a fraction
+      // of a day in the past (ceil -> 0) or a fraction in the future (ceil -> 1).
+      expect([0, 1].includes(result)).toBe(true);
     });
     it("returns positive for future dates", () => {
       const future = new Date();

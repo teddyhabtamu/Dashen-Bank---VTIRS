@@ -325,12 +325,6 @@ export default function RegistrationsPage() {
           <label className="text-sm">Expiry Date <span className="text-red-400">*</span>
             <div className="mt-1"><DatePicker value={form.expiryDate} onChange={(v) => setForm({ ...form, expiryDate: v })} /></div>
           </label>
-          <label className="text-sm sm:col-span-2">Status
-            <div className="mt-1">
-              <Select className="w-full" value={form.status} onChange={(v) => setForm({ ...form, status: v })}
-                options={REGISTRATION_STATUS_OPTIONS.map((s) => ({ value: s, label: label(s) }))} />
-            </div>
-          </label>
         </div>
       </Modal>
 

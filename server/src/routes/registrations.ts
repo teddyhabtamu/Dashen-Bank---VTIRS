@@ -13,6 +13,7 @@ import {
   restoreRegistration,
   DuplicateRegistrationError,
 } from "../services/registration.js";
+import { ValidationError } from "../services/errors.js";
 import { registrationSchema } from "../validation/registration.js";
 
 const router = Router();
@@ -53,6 +54,9 @@ router.post(
       if (e instanceof DuplicateRegistrationError) {
         return res.status(409).json({ error: e.message, field: e.field });
       }
+      if (e instanceof ValidationError) {
+        return res.status(422).json({ error: e.message, field: e.field });
+      }
       throw e;
     }
   }
@@ -89,6 +93,9 @@ router.patch(
     } catch (e) {
       if (e instanceof DuplicateRegistrationError) {
         return res.status(409).json({ error: e.message, field: e.field });
+      }
+      if (e instanceof ValidationError) {
+        return res.status(422).json({ error: e.message, field: e.field });
       }
       throw e;
     }

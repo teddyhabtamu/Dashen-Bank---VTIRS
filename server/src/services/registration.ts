@@ -2,7 +2,7 @@ import { prisma } from "../lib/prisma.js";
 import { registrationSchema, RegistrationInput } from "../validation/registration.js";
 import { REGISTRATION_STATUS } from "../lib/constants.js";
 import { writeAudit, type AuditReq } from "../lib/audit.js";
-import { DuplicateRegistrationError } from "./errors.js";
+import { DuplicateRegistrationError, ValidationError } from "./errors.js";
 import { defaultPageSize } from "./setting.js";
 
 export { DuplicateRegistrationError };
@@ -16,6 +16,21 @@ function toDate(v: string | undefined): Date | undefined {
   if (!v) return undefined;
   const d = new Date(v);
   return Number.isNaN(d.getTime()) ? undefined : d;
+}
+
+// A registration must expire after it is registered, and an ACTIVE registration
+// cannot already be expired.
+function assertValidRegistrationDates(
+  regDate: Date,
+  expiryDate: Date,
+  status: string,
+) {
+  if (expiryDate <= regDate) {
+    throw new ValidationError("Expiry date must be after the registration date", "expiryDate");
+  }
+  if (status === REGISTRATION_STATUS.ACTIVE && expiryDate < new Date()) {
+    throw new ValidationError("An active registration cannot have an expiry date in the past", "expiryDate");
+  }
 }
 
 async function checkDuplicateRegNumber(input: RegistrationInput, excludeId?: string) {
@@ -56,14 +71,22 @@ export async function createRegistration(input: RegistrationInput, ctx: Context 
   const data = registrationSchema.parse(input);
   await checkDuplicateRegNumber(data);
 
+  // A new registration always starts ACTIVE; other statuses (EXPIRED,
+  // PENDING_RENEWAL, SUSPENDED, ARCHIVED) are derived by the system or set via
+  // their dedicated workflow actions, never at creation time.
+  const status = REGISTRATION_STATUS.ACTIVE;
+  const regDate = toDate(data.regDate)!;
+  const expiryDate = toDate(data.expiryDate)!;
+  assertValidRegistrationDates(regDate, expiryDate, status);
+
   const reg = await prisma.vehicleRegistration.create({
     data: {
       vehicleId: data.vehicleId,
       regNumber: data.regNumber,
-      regDate: toDate(data.regDate)!,
-      expiryDate: toDate(data.expiryDate)!,
+      regDate,
+      expiryDate,
       office: data.office ?? null,
-      status: data.status,
+      status,
       createdById: ctx.userId ?? null,
     },
   });
@@ -98,6 +121,19 @@ export async function updateRegistration(id: string, input: Partial<Registration
 
   const prevExpiry = existing.expiryDate;
   const prevStatus = existing.status;
+
+  const nextRegDate = merged.regDate ? toDate(merged.regDate) : existing.regDate;
+  const nextExpiry = merged.expiryDate ? toDate(merged.expiryDate) : existing.expiryDate;
+  const nextStatus = merged.status ?? existing.status;
+  if (nextRegDate && nextExpiry) {
+    assertValidRegistrationDates(nextRegDate, nextExpiry, nextStatus);
+  } else if (
+    nextStatus === REGISTRATION_STATUS.ACTIVE &&
+    nextExpiry &&
+    nextExpiry < new Date()
+  ) {
+    throw new ValidationError("An active registration cannot have an expiry date in the past", "expiryDate");
+  }
 
   const reg = await prisma.vehicleRegistration.update({
     where: { id },
