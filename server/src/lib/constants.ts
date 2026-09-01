@@ -59,6 +59,20 @@ export const REGISTRATION_STATUS = {
 } as const;
 export const REGISTRATION_STATUS_OPTIONS = Object.values(REGISTRATION_STATUS);
 
+export const INSURANCE_STATUS = {
+  ACTIVE: "ACTIVE",
+  EXPIRED: "EXPIRED",
+  CANCELLED: "CANCELLED",
+} as const;
+export const INSURANCE_STATUS_OPTIONS = Object.values(INSURANCE_STATUS);
+
+export const INSURANCE_COVERAGE = {
+  COMPREHENSIVE: "Comprehensive",
+  THIRD_PARTY: "Third Party",
+  THIRD_PARTY_FIRE_THEFT: "Third Party, Fire & Theft",
+} as const;
+export const INSURANCE_COVERAGE_OPTIONS = Object.values(INSURANCE_COVERAGE);
+
 export const DOCUMENT_CATEGORY = {
   REGISTRATION_CERT: "REGISTRATION_CERT",
   INSURANCE_CERT: "INSURANCE_CERT",
@@ -112,6 +126,8 @@ export const LABELS: Record<string, string> = {
   EXPIRED: "Expired",
   SUSPENDED: "Suspended",
   ARCHIVED: "Archived",
+  PENDING: "Pending",
+  CANCELLED: "Cancelled",
   REGISTRATION_CERT: "Registration Certificate",
   INSURANCE_CERT: "Insurance Certificate",
   PURCHASE_AGREEMENT: "Purchase Agreement",

@@ -7,9 +7,15 @@ import express, {
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import path from "node:path";
+import fs from "node:fs";
+
+const rootEnvPath = path.resolve(process.cwd(), "..", ".env.local");
+if (fs.existsSync(rootEnvPath)) {
+  process.loadEnvFile(rootEnvPath);
+}
 import { attachSession } from "./lib/guard.js";
 import { schedule, runScheduledJob } from "./lib/scheduler.js";
-import { autoTransitionRegistrations, autoTransitionVehicleStatus } from "./services/reminders.js";
+import { autoTransitionRegistrations, autoTransitionVehicleStatus, autoTransitionInsurances } from "./services/reminders.js";
 import { generateNotificationsForAllUsers, cleanupOldNotifications } from "./services/notification.js";
 import authRoutes from "./routes/auth.js";
 import vehicleRoutes from "./routes/vehicles.js";
@@ -94,6 +100,7 @@ app.listen(PORT, () => {
   // Durable fixed schedules (node-cron). Single-process, guarded against overlap.
   schedule("0 1 * * *", "registration-transition", () => autoTransitionRegistrations().then(() => undefined));
   schedule("5 1 * * *", "vehicle-status-transition", () => autoTransitionVehicleStatus().then(() => undefined));
+  schedule("10 1 * * *", "insurance-transition", () => autoTransitionInsurances().then(() => undefined));
   schedule("15 * * * *", "notification-sweep", () => generateNotificationsForAllUsers().then(() => undefined));
   schedule("30 1 * * *", "notification-cleanup", () => cleanupOldNotifications().then(() => undefined));
 });

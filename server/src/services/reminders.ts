@@ -1,5 +1,5 @@
 import { getSetting } from "./setting.js";
-import { REGISTRATION_STATUS, VEHICLE_STATUS } from "../lib/constants.js";
+import { REGISTRATION_STATUS, VEHICLE_STATUS, INSURANCE_STATUS } from "../lib/constants.js";
 import { prisma } from "../lib/prisma.js";
 
 export type ExpiryState = "EXPIRED" | "CRITICAL" | "WARNING" | "OK";
@@ -107,6 +107,45 @@ export async function autoTransitionRegistrations(): Promise<{ transitioned: num
 
   const total = expiredActive.count + expiredPending.count + pendingResult.count;
   return { transitioned: total };
+}
+
+// Derive an insurance policy's effective status.
+//   - CANCELLED always passes through — it is a manual, terminal state;
+//   - anything past its end date is EXPIRED (even if the stored status still
+//     says ACTIVE — the nightly transition may not have caught up yet);
+//   - a future-dated policy (start date not yet reached) is PENDING;
+//   - anything else is ACTIVE (in force).
+export function effectiveInsuranceStatus(
+  status: string,
+  startDate: Date | string | null | undefined,
+  endDate: Date | string | null | undefined,
+  now: Date = new Date()
+): string {
+  if (status === INSURANCE_STATUS.CANCELLED) return status;
+  const end = toSafeDate(endDate);
+  const start = toSafeDate(startDate);
+  if (end && end.getTime() < now.getTime()) return INSURANCE_STATUS.EXPIRED;
+  if (start && start.getTime() > now.getTime()) return "PENDING";
+  return INSURANCE_STATUS.ACTIVE;
+}
+
+function toSafeDate(v: Date | string | null | undefined): Date | null {
+  if (!v) return null;
+  const d = v instanceof Date ? v : new Date(v);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+// Bulk auto-transition insurance policies whose end date has passed.
+// Called on startup and via the daily cron alongside the registration sweep.
+export async function autoTransitionInsurances(): Promise<{ transitioned: number }> {
+  const res = await prisma.vehicleInsurance.updateMany({
+    where: {
+      status: INSURANCE_STATUS.ACTIVE,
+      endDate: { lt: new Date() },
+    },
+    data: { status: INSURANCE_STATUS.EXPIRED },
+  });
+  return { transitioned: res.count };
 }
 
 export async function autoTransitionVehicleStatus(): Promise<{ transitioned: number }> {

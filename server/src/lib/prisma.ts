@@ -1,4 +1,11 @@
+import fs from "node:fs";
+import path from "node:path";
 import { PrismaClient } from "@prisma/client";
+
+const rootEnvPath = path.resolve(process.cwd(), "..", ".env.local");
+if (fs.existsSync(rootEnvPath)) {
+  process.loadEnvFile(rootEnvPath);
+}
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;

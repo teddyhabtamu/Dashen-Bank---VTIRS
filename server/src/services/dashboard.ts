@@ -1,6 +1,5 @@
 import { prisma } from "../lib/prisma.js";
-import { REGISTRATION_STATUS } from "../lib/constants.js";
-import { label } from "../lib/constants.js";
+import { REGISTRATION_STATUS, INSURANCE_STATUS, label } from "../lib/constants.js";
 import { daysUntil, getReminderWindows } from "./reminders.js";
 
 export interface DashboardKpis {
@@ -11,9 +10,10 @@ export interface DashboardKpis {
   vehiclesUnderMaintenance: number;
   disposedVehicles: number;
   expiredRegistrations: number;
+  expiredInsurance: number; // effective expired: stored EXPIRED or ACTIVE past-end
   pendingRenewal: number;
   suspendedRegistrations: number;
-  expiredInsurance: number;
+  uninsuredVehicles: number; // vehicles with no in-force ACTIVE policy
   averageAge: number;
   newestVehicle: { code: string; year: number } | null;
   oldestVehicle: { code: string; year: number } | null;
@@ -48,7 +48,7 @@ export async function getUpcomingInsurances(_withinDays?: number, limit = 8) {
   const withinDays = _withinDays ?? w90;
   const horizon = new Date(Date.now() + withinDays * 24 * 60 * 60 * 1000);
   const rows = await prisma.vehicleInsurance.findMany({
-    where: { endDate: { lte: horizon } },
+    where: { status: INSURANCE_STATUS.ACTIVE, endDate: { lte: horizon } },
     include: { vehicle: { select: { id: true, plateNumber: true, vehicleCode: true, branch: { select: { name: true } } } } },
     orderBy: { endDate: "asc" },
     take: limit,
@@ -120,6 +120,13 @@ export async function getDashboardKpis(): Promise<DashboardKpis> {
       },
     ],
   };
+  const EFFECTIVE_EXPIRED_INS = {
+    OR: [
+      { status: INSURANCE_STATUS.EXPIRED },
+      { status: INSURANCE_STATUS.ACTIVE, endDate: { lt: now } },
+    ],
+  };
+  const ACTIVE_INS = { status: INSURANCE_STATUS.ACTIVE };
   const [
     totalVehicles,
     registeredVehicles,
@@ -144,13 +151,15 @@ export async function getDashboardKpis(): Promise<DashboardKpis> {
     prisma.vehicleRegistration.count({ where: EXPIRED }),
     prisma.vehicleRegistration.count({ where: { status: REGISTRATION_STATUS.PENDING_RENEWAL, expiryDate: { gte: now } } }),
     prisma.vehicleRegistration.count({ where: { status: REGISTRATION_STATUS.SUSPENDED } }),
-    prisma.vehicleInsurance.count({ where: { endDate: { lt: now } } }),
+    prisma.vehicleInsurance.count({ where: EFFECTIVE_EXPIRED_INS }),
     prisma.vehicle.findMany({ where: { year: { gt: 1900 } } as any, select: { year: true } }),
     prisma.vehicle.findFirst({ orderBy: { year: "desc" }, select: { vehicleCode: true, year: true } }),
     prisma.vehicle.findFirst({ orderBy: { year: "asc" }, select: { vehicleCode: true, year: true } }),
   ]);
 
-  const avgAge = ages.length ? Math.round(ages.reduce((s, v) => s + (nowYear - (v.year ?? nowYear)), 0) / ages.length) : 0;
+  const avgAge = ages.length
+    ? Math.round(ages.reduce((s, v) => s + (nowYear - (v.year ?? nowYear)), 0) / ages.length)
+    : 0;
 
   const windows = await getReminderWindows();
   const regWindowCounts: Record<number, number> = {};
@@ -162,9 +171,27 @@ export async function getDashboardKpis(): Promise<DashboardKpis> {
       where: { expiryDate: { gte: from, lte: to } },
     });
     insWindowCounts[w] = await prisma.vehicleInsurance.count({
-      where: { endDate: { gte: from, lte: to } },
+      where: { ...ACTIVE_INS, endDate: { gte: from, lte: to } },
     });
   }
+
+  const uninsuredVehicles = await prisma.vehicle.count({
+    where: {
+      NOT: {
+        OR: [
+          {
+            insurances: {
+              some: {
+                status: INSURANCE_STATUS.ACTIVE,
+                startDate: { lte: now },
+                endDate: { gte: now },
+              },
+            },
+          },
+        ],
+      },
+    },
+  });
 
   return {
     totalVehicles,
@@ -177,6 +204,7 @@ export async function getDashboardKpis(): Promise<DashboardKpis> {
     pendingRenewal,
     suspendedRegistrations,
     expiredInsurance,
+    uninsuredVehicles,
     averageAge: avgAge,
     newestVehicle: newest ? { code: newest.vehicleCode, year: newest.year } : null,
     oldestVehicle: oldest ? { code: oldest.vehicleCode, year: oldest.year } : null,

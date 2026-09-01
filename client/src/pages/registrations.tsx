@@ -12,10 +12,10 @@ import { Modal } from "@/components/ui/modal";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { useAuth } from "@/components/auth-context";
 import { REGISTRATION_STATUS, REGISTRATION_STATUS_OPTIONS, label } from "@/lib/constants";
-import { formatDate, daysUntil } from "@/lib/format";
+import { formatDate } from "@/lib/format";
 import { useToast } from "@/lib/toast-context";
 import { exportCsv, exportXlsx, exportPdf, rowsToHtmlTable } from "@/lib/export";
-import { expiryState, effectiveRegistrationStatus, type ReminderWindows } from "@/lib/services/reminders";
+import { effectiveRegistrationStatus, type ReminderWindows } from "@/lib/services/reminders";
 
 interface RegRow {
   id: string;
@@ -27,17 +27,7 @@ interface RegRow {
   vehicle: { id: string; plateNumber: string; vehicleCode: string; branch?: { name: string } | null };
 }
 
-function ExpiryPill({ date, windows }: { date: string; windows?: ReminderWindows }) {
-  const state = expiryState(date, windows);
-  const days = daysUntil(date);
-  const cls =
-    state === "EXPIRED" ? "bg-red-50 text-red-700"
-      : state === "CRITICAL" ? "bg-orange-50 text-orange-700"
-        : state === "WARNING" ? "bg-amber-50 text-amber-700"
-          : "bg-slate-50 text-slate-500";
-  const text = days !== null && days >= 0 ? `${days}d left` : "Expired";
-  return <span className={`rounded-md px-2 py-0.5 text-[11px] font-medium ${cls}`}>{text}</span>;
-}
+import { ExpiryPill } from "@/components/ui/expiry-pill.js";
 
 export default function RegistrationsPage() {
   const { can } = useAuth();

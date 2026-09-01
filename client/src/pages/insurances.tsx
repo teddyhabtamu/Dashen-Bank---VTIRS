@@ -14,7 +14,7 @@ import { useToast } from "@/lib/toast-context";
 import { exportCsv, exportXlsx, exportPdf, rowsToHtmlTable } from "@/lib/export";
 import { Tooltip } from "@/components/ui/tooltip";
 import { COVERAGE_OPTIONS } from "@/lib/constants";
-import { daysUntil, formatDate } from "@/lib/format";
+import { formatDate } from "@/lib/format";
 
 interface InsRow {
   id: string;
@@ -26,21 +26,7 @@ interface InsRow {
   vehicle: { id: string; plateNumber: string; vehicleCode: string; branch?: { name: string } | null };
 }
 
-function ExpiryPill({ date }: { date: string }) {
-  const days = daysUntil(date);
-  const state =
-    days !== null && days < 0 ? "EXPIRED"
-      : days !== null && days <= 7 ? "CRITICAL"
-        : days !== null && days <= 30 ? "WARNING"
-          : "OK";
-  const cls =
-    state === "EXPIRED" ? "bg-red-100 text-red-700"
-      : state === "CRITICAL" ? "bg-orange-100 text-orange-700"
-        : state === "WARNING" ? "bg-amber-100 text-amber-700"
-          : "bg-slate-100 text-slate-600";
-  const text = days !== null && days >= 0 ? `${days}d left` : "expired";
-  return <span className={`badge ${cls}`}>{text}</span>;
-}
+import { ExpiryPill } from "@/components/ui/expiry-pill.js";
 
 export default function InsurancesPage() {
   const { can } = useAuth();

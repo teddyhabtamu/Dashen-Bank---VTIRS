@@ -30,3 +30,4 @@ npm-debug.log*
 # Prisma
 *.db
 *.db-journal
+.neon

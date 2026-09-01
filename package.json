@@ -1,0 +1,24 @@
+{
+  "name": "vtirs",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/teddyhabtamu/Dashen-Bank---VTIRS.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/teddyhabtamu/Dashen-Bank---VTIRS/issues"
+  },
+  "homepage": "https://github.com/teddyhabtamu/Dashen-Bank---VTIRS#readme",
+  "dependencies": {
+    "@neon/config": "^1.1.0"
+  }
+}
