@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Check, ChevronLeft, ChevronRight, Eye, Plus } from "lucide-react";
 import { cn } from "@/lib/format";
@@ -12,7 +12,8 @@ import {
   FUEL_TYPE_OPTIONS,
   TRANSMISSION_OPTIONS,
   DRIVE_TYPE_OPTIONS,
-  VEHICLE_STATUS_OPTIONS,
+  MANUAL_VEHICLE_STATUS_OPTIONS,
+  VEHICLE_STATUS,
   label,
 } from "@/lib/constants";
 
@@ -227,6 +228,20 @@ export function VehicleForm({ vehicleId, returnTo = "/vehicles" }: { vehicleId?:
     }
   }, [vehicleId]);
 
+  // ------ Driver <-> status derivation ------
+  // ASSIGNED is a derived state: when a current driver is selected it becomes
+  // ASSIGNED automatically, and reverts to ACTIVE when the driver is removed.
+  // Manual overrides (UNDER_MAINTENANCE, RESERVED, DISPOSED) always win.
+  const lastDriverRef = useRef(data.currentDriverId);
+  useEffect(() => {
+    const prev = lastDriverRef.current;
+    lastDriverRef.current = data.currentDriverId;
+    if (prev === data.currentDriverId) return;
+    if (data.status !== "ACTIVE" && data.status !== "ASSIGNED") return;
+    const target = data.currentDriverId ? VEHICLE_STATUS.ASSIGNED : VEHICLE_STATUS.ACTIVE;
+    if (data.status !== target) setData((d) => ({ ...d, status: target }));
+  }, [data.currentDriverId, data.status]);
+
   function onChange<K extends keyof VehicleFormData>(k: K, v: string) {
     if (v === ADD_NEW) {
       if (k === "branchId") { setAddForm({ code: "", name: "", fullName: "", employeeId: "", licenseNo: "", phone: "" }); setAddModal("branch"); }
@@ -348,8 +363,17 @@ export function VehicleForm({ vehicleId, returnTo = "/vehicles" }: { vehicleId?:
       return <Select value={value} onChange={set} options={TRANSMISSION_OPTIONS.map((o) => ({ value: o, label: label(o) }))} />;
     if (f === "driveType")
       return <Select value={value} onChange={set} options={DRIVE_TYPE_OPTIONS.map((o) => ({ value: o, label: label(o) }))} />;
-    if (f === "status")
-      return <Select value={value} onChange={set} options={VEHICLE_STATUS_OPTIONS.map((o) => ({ value: o, label: label(o) }))} />;
+    if (f === "status") {
+      if (value === VEHICLE_STATUS.ASSIGNED) {
+        return (
+          <div className="flex items-center gap-2">
+            <span className="badge bg-sky-100 text-sky-700">{label(value)}</span>
+            <span className="text-xs text-slate-400">Auto-set because a driver is assigned</span>
+          </div>
+        );
+      }
+      return <Select value={value} onChange={set} options={MANUAL_VEHICLE_STATUS_OPTIONS.map((o) => ({ value: o, label: label(o) }))} />;
+    }
     if (f === "branchId")
       return <Select searchable value={value} onChange={set} options={[{ value: ADD_NEW, label: "Add new branch", icon: <Plus className="h-4 w-4" /> }, ...branches]} placeholder="Select branch" />;
     if (f === "departmentId")

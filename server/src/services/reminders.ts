@@ -1,5 +1,5 @@
 import { getSetting } from "./setting.js";
-import { REGISTRATION_STATUS } from "../lib/constants.js";
+import { REGISTRATION_STATUS, VEHICLE_STATUS } from "../lib/constants.js";
 import { prisma } from "../lib/prisma.js";
 
 export type ExpiryState = "EXPIRED" | "CRITICAL" | "WARNING" | "OK";
@@ -99,20 +99,27 @@ export async function autoTransitionRegistrations(): Promise<{ transitioned: num
 }
 
 export async function autoTransitionVehicleStatus(): Promise<{ transitioned: number }> {
+  // Only the derived ACTIVE/ASSIGNED pair is reconciled here; manual states
+  // (UNDER_MAINTENANCE, RESERVED, DISPOSED) are left alone. A vehicle counts as
+  // assigned if it has an active formal assignment OR a currentDriverId.
   const assignedResult = await prisma.vehicle.updateMany({
     where: {
-      status: "ACTIVE",
-      assignments: { some: { returnedAt: null } },
+      status: { in: [VEHICLE_STATUS.ACTIVE, VEHICLE_STATUS.ASSIGNED] },
+      OR: [
+        { assignments: { some: { returnedAt: null } } },
+        { currentDriverId: { not: null } },
+      ],
     },
-    data: { status: "ASSIGNED" },
+    data: { status: VEHICLE_STATUS.ASSIGNED },
   });
 
   const activeResult = await prisma.vehicle.updateMany({
     where: {
-      status: "ASSIGNED",
+      status: { in: [VEHICLE_STATUS.ACTIVE, VEHICLE_STATUS.ASSIGNED] },
       assignments: { none: { returnedAt: null } },
+      currentDriverId: null,
     },
-    data: { status: "ACTIVE" },
+    data: { status: VEHICLE_STATUS.ACTIVE },
   });
 
   const total = assignedResult.count + activeResult.count;

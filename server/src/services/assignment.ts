@@ -1,5 +1,7 @@
 import { prisma } from "../lib/prisma.js";
 import { writeAudit, type AuditReq } from "../lib/audit.js";
+import { VEHICLE_STATUS } from "../lib/constants.js";
+import { reconcileVehicleAssignStatus } from "./vehicleStatus.js";
 
 interface Context {
   userId?: string | null;
@@ -23,6 +25,10 @@ export async function listAssignments(vehicleId: string) {
 export async function assignDriver(vehicleId: string, input: AssignmentInput, ctx: Context = {}) {
   const vehicle = await prisma.vehicle.findUnique({ where: { id: vehicleId } });
   if (!vehicle) return null;
+
+  if (vehicle.status === VEHICLE_STATUS.DISPOSED) {
+    throw new Error("Cannot assign a driver to a disposed vehicle");
+  }
 
   const driver = await prisma.driver.findUnique({ where: { id: input.driverId } });
   if (!driver) throw new Error("Driver not found");
@@ -61,6 +67,8 @@ export async function assignDriver(vehicleId: string, input: AssignmentInput, ct
       where: { id: vehicleId },
       data: { currentDriverId: input.driverId },
     });
+
+    await reconcileVehicleAssignStatus(tx, vehicleId);
 
     return assignment;
   });
@@ -104,6 +112,8 @@ export async function returnDriver(vehicleId: string, assignmentId: string, ctx:
         data: { currentDriverId: null },
       });
     }
+
+    await reconcileVehicleAssignStatus(tx, vehicleId);
 
     return updated;
   });

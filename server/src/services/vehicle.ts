@@ -4,6 +4,7 @@ import { REGISTRATION_STATUS } from "../lib/constants.js";
 import { vehicleSchema, VehicleInput } from "../validation/vehicle.js";
 import { writeAudit, type AuditReq } from "../lib/audit.js";
 import { defaultPageSize } from "./setting.js";
+import { reconcileVehicleAssignStatus } from "./vehicleStatus.js";
 
 export class DuplicateVehicleError extends Error {
   field: string;
@@ -98,6 +99,10 @@ export async function createVehicle(input: VehicleInput, ctx: Context = {}) {
     include: { branch: true, department: true },
   });
 
+  // If a driver was selected at creation, immediately derive ASSIGNED status
+  // rather than requiring the nightly cron to catch up.
+  await reconcileVehicleAssignStatus(prisma, vehicle.id);
+
   await writeAudit({
     action: "CREATE",
     entity: "Vehicle",
@@ -152,6 +157,10 @@ export async function updateVehicle(
     },
     include: { branch: true, department: true },
   });
+
+  // Keep the derived ACTIVE/ASSIGNED status consistent with the driver set on
+  // the vehicle (e.g. Remove Driver clears currentDriverId -> ACTIVE).
+  await reconcileVehicleAssignStatus(prisma, id);
 
   await writeAudit({
     action: "UPDATE",

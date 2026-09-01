@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link, useParams, useBlocker } from "react-router-dom";
 import { Pencil, History, ArrowRight } from "lucide-react";
 import { StatusBadge } from "@/components/ui/badge";
@@ -59,7 +59,7 @@ export default function VehicleDetailPage() {
     if (blocker.state === "blocked") blocker.proceed();
   }
 
-  useEffect(() => {
+  const load = useCallback(() => {
     if (!id) return;
     setLoading(true);
     fetch(`/api/vehicles/${id}`)
@@ -70,6 +70,8 @@ export default function VehicleDetailPage() {
       .then((d) => { if (d?.vehicle) setV(d.vehicle); })
       .finally(() => setLoading(false));
   }, [id]);
+
+  useEffect(() => { load(); }, [load]);
 
   useEffect(() => {
     if (!v?.vehicleCode || !can(PERMISSIONS.AUDIT_VIEW)) {
@@ -227,6 +229,7 @@ export default function VehicleDetailPage() {
             initial={v.assignments ?? []}
             currentDriver={v.currentDriver}
             canManage={can(PERMISSIONS.VEHICLE_EDIT)}
+            onChanged={load}
           />
         </div>
       </section>

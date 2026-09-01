@@ -49,6 +49,14 @@ export const VEHICLE_STATUS = {
   DISPOSED: "DISPOSED",
 } as const;
 export const VEHICLE_STATUS_OPTIONS = Object.values(VEHICLE_STATUS);
+// Statuses the user can pick by hand. ASSIGNED is excluded: it is auto-derived
+// from whether a driver is currently assigned to the vehicle.
+export const MANUAL_VEHICLE_STATUS_OPTIONS = [
+  VEHICLE_STATUS.ACTIVE,
+  VEHICLE_STATUS.UNDER_MAINTENANCE,
+  VEHICLE_STATUS.RESERVED,
+  VEHICLE_STATUS.DISPOSED,
+] as const;
 
 export const REGISTRATION_STATUS = {
   ACTIVE: "ACTIVE",

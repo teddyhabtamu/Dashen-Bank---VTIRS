@@ -178,6 +178,7 @@ router.post("/:vehicleId/assignments", requireAuth(PERMISSIONS.VEHICLE_EDIT), as
   } catch (e: any) {
     if (e.message === "Driver not found") return res.status(404).json({ error: e.message });
     if (e.message === "Driver is already assigned to another vehicle") return res.status(409).json({ error: e.message });
+    if (e.message === "Cannot assign a driver to a disposed vehicle") return res.status(409).json({ error: e.message });
     throw e;
   }
 });

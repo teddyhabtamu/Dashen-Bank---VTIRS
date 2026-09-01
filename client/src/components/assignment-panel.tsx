@@ -24,11 +24,12 @@ interface Assignment {
   note: string | null;
 }
 
-export function AssignmentPanel({ vehicleId, initial, currentDriver, canManage }: {
+export function AssignmentPanel({ vehicleId, initial, currentDriver, canManage, onChanged }: {
   vehicleId: string;
   initial: Assignment[];
   currentDriver?: any;
   canManage: boolean;
+  onChanged?: () => void;
 }) {
   const [items, setItems] = useState<Assignment[]>(initial);
   const [assignOpen, setAssignOpen] = useState(false);
@@ -77,6 +78,7 @@ export function AssignmentPanel({ vehicleId, initial, currentDriver, canManage }
       setFormalizeOpen(false);
       setNote("");
       await refresh();
+      onChanged?.();
     } catch {
       setErr("Failed to register assignment");
     } finally {
@@ -103,6 +105,7 @@ export function AssignmentPanel({ vehicleId, initial, currentDriver, canManage }
       setSelectedDriver("");
       setNote("");
       await refresh();
+      onChanged?.();
     } catch {
       setErr("Failed to assign driver");
     } finally {
@@ -122,6 +125,7 @@ export function AssignmentPanel({ vehicleId, initial, currentDriver, canManage }
       }
       setReturnId(null);
       await refresh();
+      onChanged?.();
     } catch {
       setErr("Failed to return driver");
     } finally {
@@ -313,6 +317,7 @@ export function AssignmentPanel({ vehicleId, initial, currentDriver, canManage }
             });
             if (!res.ok) throw new Error("Failed to remove driver");
             await refresh();
+            onChanged?.();
           } catch {
             setErr("Failed to remove driver");
           } finally {
