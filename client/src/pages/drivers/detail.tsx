@@ -201,6 +201,7 @@ export default function DriverDetailPage() {
 
   const canManage = can(PERMISSIONS.BRANCH_MANAGE);
   const currentVehicle = driver.vehicles[0];
+  const hasVehicle = !!currentVehicle;
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
@@ -227,7 +228,7 @@ export default function DriverDetailPage() {
           {canManage && (
             <>
               <button className="btn-primary inline-flex items-center gap-1.5 text-xs" onClick={openShift}>
-                <RefreshCw className="h-3.5 w-3.5" /> Change Vehicle
+                <RefreshCw className="h-3.5 w-3.5" /> {hasVehicle ? "Change Vehicle" : "Assign Vehicle"}
               </button>
               <button className="btn-outline inline-flex items-center gap-1.5 text-xs" onClick={openEdit}>
                 <Pencil className="h-3.5 w-3.5" /> Edit
@@ -258,7 +259,7 @@ export default function DriverDetailPage() {
           )}
           {canManage && (
             <button className="btn-outline mt-3 w-full text-xs" onClick={openShift}>
-              <RefreshCw className="mr-1 h-3.5 w-3.5" /> Change Vehicle
+              <RefreshCw className="mr-1 h-3.5 w-3.5" /> {hasVehicle ? "Change Vehicle" : "Assign Vehicle"}
             </button>
           )}
         </div>
@@ -314,19 +315,27 @@ export default function DriverDetailPage() {
       <Modal
         open={shiftOpen}
         onClose={() => !busy && setShiftOpen(false)}
-        title="Change Vehicle"
+        title={hasVehicle ? "Change Vehicle" : "Assign Vehicle"}
         footer={
           <>
             <button className="btn-outline" onClick={() => setShiftOpen(false)} disabled={busy}>Cancel</button>
             <button className="btn-primary" onClick={doTransfer} disabled={busy || !selectedVehicle}>
-              {busy ? "Shifting…" : "Assign Vehicle"}
+              {busy ? "Shifting…" : hasVehicle ? "Change Vehicle" : "Assign Vehicle"}
             </button>
           </>
         }
       >
         <div className="space-y-4">
           <p className="text-sm text-slate-600">
-            Assign <span className="font-medium text-slate-800">{driver.fullName}</span> to a different vehicle. This returns the driver from any previous vehicle and assigns them to the new one, keeping full history.
+            {hasVehicle ? (
+              <>
+                Assign <span className="font-medium text-slate-800">{driver.fullName}</span> to a different vehicle. This returns the driver from any previous vehicle and assigns them to the new one, keeping full history.
+              </>
+            ) : (
+              <>
+                Assign <span className="font-medium text-slate-800">{driver.fullName}</span> to a vehicle. If the chosen vehicle has another driver, they will be returned first. Full history is kept.
+              </>
+            )}
           </p>
           <label className="text-sm">
             Vehicle *

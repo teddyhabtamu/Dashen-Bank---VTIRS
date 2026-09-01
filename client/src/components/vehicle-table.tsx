@@ -49,6 +49,7 @@ export function VehicleTable() {
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(true);
   const [driverDetail, setDriverDetail] = useState<VehicleRow['currentDriver'] | null>(null);
+  const [driverLoading, setDriverLoading] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [pageSize, setPageSize] = useState(15);
@@ -104,6 +105,19 @@ export function VehicleTable() {
       else next.add(id);
       return next;
     });
+  }
+
+  function openDriverDetail(driver: VehicleRow['currentDriver']) {
+    if (!driver) return;
+    setDriverDetail(driver);
+    setDriverLoading(true);
+    fetch(`/api/drivers/${driver.id}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d?.driver) setDriverDetail(d.driver);
+      })
+      .catch(() => setDriverDetail(driver))
+      .finally(() => setDriverLoading(false));
   }
 
   function toggleSelectAll() {
@@ -324,7 +338,7 @@ export function VehicleTable() {
                   <div className="truncate">{v.branch?.name ?? "-"}</div>
                   <div className="truncate">
                     {v.currentDriver ? (
-                      <button onClick={() => setDriverDetail(v.currentDriver)} className="text-primary hover:underline cursor-pointer">
+                      <button onClick={() => openDriverDetail(v.currentDriver)} className="text-primary hover:underline cursor-pointer">
                         {v.currentDriver.fullName}
                       </button>
                     ) : "No driver"}
@@ -379,7 +393,7 @@ export function VehicleTable() {
                         <td className="px-4 py-3 text-slate-600">{v.branch?.name ?? "-"}</td>
                         <td className="px-4 py-3 text-slate-600">
                           {v.currentDriver ? (
-                            <button onClick={() => setDriverDetail(v.currentDriver)} className="text-primary hover:underline cursor-pointer">
+                            <button onClick={() => openDriverDetail(v.currentDriver)} className="text-primary hover:underline cursor-pointer">
                               {v.currentDriver.fullName}
                             </button>
                           ) : "—"}
@@ -441,29 +455,51 @@ export function VehicleTable() {
         confirmLabel="Delete"
       />
 
-      <Modal open={!!driverDetail} onClose={() => setDriverDetail(null)} title={driverDetail?.fullName ?? ""} description="Driver details" size="sm">
-        <dl className="space-y-3 text-sm">
-          <div className="flex justify-between border-b border-slate-100 pb-2">
-            <dt className="text-slate-500">Employee ID</dt>
-            <dd className="font-medium text-slate-800">{driverDetail?.employeeId ?? "—"}</dd>
-          </div>
-          <div className="flex justify-between border-b border-slate-100 pb-2">
-            <dt className="text-slate-500">License No</dt>
-            <dd className="font-medium text-slate-800">{driverDetail?.licenseNo ?? "—"}</dd>
-          </div>
-          <div className="flex justify-between border-b border-slate-100 pb-2">
-            <dt className="text-slate-500">Phone</dt>
-            <dd className="font-medium text-slate-800">{driverDetail?.phone ?? "—"}</dd>
-          </div>
-          <div className="flex justify-between border-b border-slate-100 pb-2">
-            <dt className="text-slate-500">Department</dt>
-            <dd className="font-medium text-slate-800">{driverDetail?.department?.name ?? "—"}</dd>
-          </div>
-          <div className="flex justify-between border-b border-slate-100 pb-2">
-            <dt className="text-slate-500">Status</dt>
-            <dd className="font-medium">{driverDetail?.isActive ? <span className="text-emerald-600">Active</span> : <span className="text-red-500">Inactive</span>}</dd>
-          </div>
-        </dl>
+      <Modal
+        open={!!driverDetail}
+        onClose={() => setDriverDetail(null)}
+        title={driverDetail?.fullName ?? ""}
+        description="Driver details"
+        size="sm"
+        footer={
+          driverDetail ? (
+            <>
+              <button className="btn-outline" onClick={() => setDriverDetail(null)}>Close</button>
+              {can("branch:manage") && (
+                <Link to={`/drivers/${driverDetail.id}`} className="btn-primary no-underline">
+                  View Full Profile
+                </Link>
+              )}
+            </>
+          ) : undefined
+        }
+      >
+        {driverLoading ? (
+          <BrandLoader className="py-6" />
+        ) : (
+          <dl className="space-y-3 text-sm">
+            <div className="flex justify-between border-b border-slate-100 pb-2">
+              <dt className="text-slate-500">Employee ID</dt>
+              <dd className="font-medium text-slate-800">{driverDetail?.employeeId ?? "—"}</dd>
+            </div>
+            <div className="flex justify-between border-b border-slate-100 pb-2">
+              <dt className="text-slate-500">License No</dt>
+              <dd className="font-medium text-slate-800">{driverDetail?.licenseNo ?? "—"}</dd>
+            </div>
+            <div className="flex justify-between border-b border-slate-100 pb-2">
+              <dt className="text-slate-500">Phone</dt>
+              <dd className="font-medium text-slate-800">{driverDetail?.phone ?? "—"}</dd>
+            </div>
+            <div className="flex justify-between border-b border-slate-100 pb-2">
+              <dt className="text-slate-500">Department</dt>
+              <dd className="font-medium text-slate-800">{driverDetail?.department?.name ?? "—"}</dd>
+            </div>
+            <div className="flex justify-between border-b border-slate-100 pb-2">
+              <dt className="text-slate-500">Status</dt>
+              <dd className="font-medium">{driverDetail?.isActive ? <span className="text-emerald-600">Active</span> : <span className="text-red-500">Inactive</span>}</dd>
+            </div>
+          </dl>
+        )}
       </Modal>
     </div>
   );
