@@ -93,22 +93,22 @@ export default function RegistrationHistoryPage() {
         <StatusBadge status={reg.status} />
       </div>
 
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <div className="card p-4 text-center">
           <div className="text-xs text-slate-400">Current Status</div>
-          <div className="mt-1 text-lg font-semibold text-slate-800">{label(reg.status)}</div>
+          <div className="mt-1 text-base font-semibold text-slate-800 sm:text-lg">{label(reg.status)}</div>
         </div>
         <div className="card p-4 text-center">
           <div className="text-xs text-slate-400">Reg Number</div>
-          <div className="mt-1 text-lg font-semibold text-slate-800">{reg.regNumber}</div>
+          <div className="mt-1 text-base font-semibold text-slate-800 sm:text-lg">{reg.regNumber}</div>
         </div>
         <div className="card p-4 text-center">
           <div className="text-xs text-slate-400">Expiry</div>
-          <div className="mt-1 text-lg font-semibold text-slate-800">{formatDateTime(reg.expiryDate)}</div>
+          <div className="mt-1 text-sm font-semibold text-slate-800 sm:text-lg">{formatDateTime(reg.expiryDate)}</div>
         </div>
         <div className="card p-4 text-center">
           <div className="text-xs text-slate-400">Total Events</div>
-          <div className="mt-1 text-lg font-semibold text-slate-800">{reg.history.length}</div>
+          <div className="mt-1 text-base font-semibold text-slate-800 sm:text-lg">{reg.history.length}</div>
         </div>
       </div>
 
@@ -131,7 +131,7 @@ export default function RegistrationHistoryPage() {
                       <Icon className="h-4 w-4" />
                     </div>
                     <div className="min-w-0 flex-1 pt-1">
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                         <span className="text-sm font-semibold text-slate-800">{h.action}</span>
                         <span className="text-[10px] text-slate-400">{formatDateTime(h.createdAt)}</span>
                         {h.performedBy && (

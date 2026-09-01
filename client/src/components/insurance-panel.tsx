@@ -138,9 +138,9 @@ export function InsurancePanel({ vehicleId, initial, canManage }: {
             const state = days !== null ? (days < 0 ? "EXPIRED" : days <= 7 ? "CRITICAL" : days <= 30 ? "WARNING" : "OK") : "OK";
             return (
               <div key={ins.id} className="rounded-lg border border-slate-100 p-3">
-                <div className="flex items-center justify-between">
-                  <div className="font-medium text-slate-800">{ins.company}</div>
-                  <div className="flex items-center gap-2">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0 flex-1 truncate font-medium text-slate-800">{ins.company}</div>
+                  <div className="flex flex-shrink-0 items-center gap-2">
                     <span className={`badge ${EXPIRY_BADGE[state]}`}>
                       {days !== null && days >= 0 ? `${days}d left` : "expired"}
                     </span>

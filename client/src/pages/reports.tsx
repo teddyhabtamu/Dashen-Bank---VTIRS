@@ -96,7 +96,7 @@ export default function ReportsPage() {
             options={[{ value: "", label: "All departments" }, ...(data?.departments ?? []).map((d) => ({ value: d.id, label: d.name }))]} />
           <Select className="w-full sm:w-36" value={status} onChange={setStatus} placeholder="All statuses"
             options={[{ value: "", label: "All statuses" }, ...VEHICLE_STATUS_OPTIONS.map((s) => ({ value: s, label: label(s) }))]} />
-          <div className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1">
+          <div className="inline-flex w-full items-center gap-1 rounded-md border border-slate-200 px-2 py-1 sm:w-auto">
             <CalendarRange className="h-3.5 w-3.5 shrink-0 text-slate-400" />
             <DatePicker value={from} onChange={setFrom} placeholder="From" className="w-24" />
             <span className="text-slate-300">–</span>

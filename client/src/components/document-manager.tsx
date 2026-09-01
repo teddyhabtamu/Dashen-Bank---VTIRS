@@ -244,7 +244,7 @@ export function DocumentManager({
                               onChange={(v) => updateStaged(i, { category: v })}
                               options={catOptions.map((c) => ({ value: c, label: label(c) }))}
                               placeholder="Category"
-                              className="w-40"
+                              className="w-full sm:w-40"
                               searchable={false}
                             />
                             <input
@@ -305,13 +305,13 @@ export function DocumentManager({
                         <FileText className="h-4 w-4" />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="truncate text-sm font-medium text-slate-800">{latest.title}</span>
-                          <span className="badge bg-slate-100 text-slate-500">v{latest.version}</span>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="min-w-0 truncate text-sm font-medium text-slate-800">{latest.title}</span>
+                          <span className="badge shrink-0 bg-slate-100 text-slate-500">v{latest.version}</span>
                           {hasHistory && (
-                            <span className="badge bg-blue-50 text-blue-600">{versions.length} versions</span>
+                            <span className="badge shrink-0 bg-blue-50 text-blue-600">{versions.length} versions</span>
                           )}
-                          <span className="badge bg-primary/10 text-primary">{label(latest.category)}</span>
+                          <span className="badge shrink-0 bg-primary/10 text-primary">{label(latest.category)}</span>
                         </div>
                         <div className="truncate text-xs text-slate-400">
                           {latest.originalName} · {formatFileSize(latest.sizeBytes)} · {formatDate(latest.createdAt)}
@@ -406,11 +406,11 @@ export function DocumentManager({
                   <div className="border-t border-slate-100 bg-white px-3 py-2">
                     <div className="flex items-center justify-between gap-2">
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5">
-                          <span className="badge max-w-full truncate bg-primary/10 text-primary">{label(latest.category)}</span>
-                          <span className="badge bg-slate-100 text-slate-500">v{latest.version}</span>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="badge max-w-full truncate shrink-0 bg-primary/10 text-primary">{label(latest.category)}</span>
+                          <span className="badge shrink-0 bg-slate-100 text-slate-500">v{latest.version}</span>
                           {hasHistory && (
-                            <span className="badge bg-blue-50 text-blue-600">{versions.length} versions</span>
+                            <span className="badge shrink-0 bg-blue-50 text-blue-600">{versions.length} versions</span>
                           )}
                         </div>
                         <div className="truncate text-xs text-slate-400">{formatFileSize(latest.sizeBytes)} · {formatDate(latest.createdAt)}</div>

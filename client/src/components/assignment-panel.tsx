@@ -166,9 +166,9 @@ export function AssignmentPanel({ vehicleId, initial, currentDriver, canManage, 
 
       {hasUnformalizedDriver && !activeAssignment && (
         <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <UserCheck className="h-4 w-4 text-amber-600" />
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <UserCheck className="h-4 w-4 shrink-0 text-amber-600" />
               <span className="text-sm font-medium text-amber-800">Current Driver</span>
               <span className="text-xs text-amber-600">(not yet registered)</span>
             </div>

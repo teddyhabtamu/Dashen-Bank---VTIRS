@@ -167,23 +167,23 @@ export default function RolesPage() {
             return (
               <div key={role.id} className="overflow-hidden rounded-lg border bg-white">
                 {/* Header */}
-                <button
-                  onClick={() => expand(role)}
-                  className="flex w-full items-center gap-3 px-5 py-4 text-left transition-colors hover:bg-slate-50"
-                >
-                  {open ? <ChevronDown className="h-4 w-4 shrink-0 text-slate-400" /> : <ChevronRight className="h-4 w-4 shrink-0 text-slate-400" />}
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold text-slate-800">{role.name}</span>
-                      <span className="badge bg-slate-100 text-slate-500 font-mono text-[10px]">{role.slug}</span>
+                  <button
+                    onClick={() => expand(role)}
+                    className="flex w-full flex-wrap items-center gap-3 px-5 py-4 text-left transition-colors hover:bg-slate-50"
+                  >
+                    {open ? <ChevronDown className="h-4 w-4 shrink-0 text-slate-400" /> : <ChevronRight className="h-4 w-4 shrink-0 text-slate-400" />}
+                    <div className="min-w-0 flex-1 basis-40">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-slate-800">{role.name}</span>
+                        <span className="badge bg-slate-100 text-slate-500 font-mono text-[10px]">{role.slug}</span>
+                      </div>
+                      <p className="mt-0.5 text-xs text-slate-500">{role.description ?? "—"}</p>
                     </div>
-                    <p className="mt-0.5 text-xs text-slate-500">{role.description ?? "—"}</p>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-3 text-xs text-slate-400">
-                    <span>{role.userCount} user(s)</span>
-                    <span>{role.permissions.length} permission(s)</span>
-                  </div>
-                </button>
+                    <div className="flex shrink-0 items-center gap-3 text-xs text-slate-400">
+                      <span>{role.userCount} user(s)</span>
+                      <span>{role.permissions.length} permission(s)</span>
+                    </div>
+                  </button>
 
                 {/* Expanded: permission toggles */}
                 {open && (

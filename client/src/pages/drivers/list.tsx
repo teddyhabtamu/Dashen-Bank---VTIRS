@@ -261,18 +261,19 @@ export default function DriversPage() {
               <span className="text-xs text-slate-400">Page {page} / {totalPages}</span>
             </div>
             <div className="hidden min-w-0 sm:block">
-              <table className="w-full">
-                <thead>
-                  <tr className="bg-slate-50 text-left text-xs font-semibold uppercase text-slate-500">
-                    <th className="px-4 py-3">Name</th>
-                    <th className="px-4 py-3">Employee ID</th>
-                    <th className="px-4 py-3">License</th>
-                    <th className="px-4 py-3">Department</th>
-                    <th className="px-4 py-3">Current Vehicle</th>
-                    <th className="px-4 py-3">Status</th>
-                    <th className="px-4 py-3 text-right">Actions</th>
-                  </tr>
-                </thead>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="bg-slate-50 text-left text-xs font-semibold uppercase text-slate-500">
+                      <th className="px-4 py-3">Name</th>
+                      <th className="px-4 py-3">Employee ID</th>
+                      <th className="px-4 py-3">License</th>
+                      <th className="px-4 py-3">Department</th>
+                      <th className="px-4 py-3">Current Vehicle</th>
+                      <th className="px-4 py-3">Status</th>
+                      <th className="px-4 py-3 text-right">Actions</th>
+                    </tr>
+                  </thead>
                 <tbody className="divide-y divide-slate-100">
                   {rows.map((row) => (
                     <tr key={row.id} className="text-sm hover:bg-slate-50">
@@ -318,8 +319,9 @@ export default function DriversPage() {
                       </td>
                     </tr>
                   ))}
-                </tbody>
-              </table>
+                  </tbody>
+                </table>
+              </div>
             </div>
 
             {/* Mobile cards */}
@@ -327,9 +329,11 @@ export default function DriversPage() {
               {rows.map((row) => (
                 <div key={row.id} className="space-y-2 px-4 py-3 text-sm">
                   <div className="flex items-start justify-between gap-2">
-                    <Link to={`/drivers/${row.id}`} className="font-medium text-slate-800">
-                      {row.fullName}
-                      {row.employeeId && <span className="ml-2 font-mono text-xs text-slate-500">#{row.employeeId}</span>}
+                    <Link to={`/drivers/${row.id}`} className="min-w-0 flex-1 font-medium text-slate-800">
+                      <span className="block truncate">
+                        {row.fullName}
+                        {row.employeeId && <span className="ml-2 font-mono text-xs text-slate-500">#{row.employeeId}</span>}
+                      </span>
                     </Link>
                     <span className={`badge whitespace-nowrap ${row.isActive ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
                       {row.isActive ? "Active" : "Inactive"}

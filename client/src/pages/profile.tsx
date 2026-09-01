@@ -157,7 +157,7 @@ export default function ProfilePage() {
             </label>
           </div>
 
-          <div className="flex items-center gap-2 border-t border-slate-100 pt-4">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-slate-100 pt-4">
             <KeyRound className="h-4 w-4 text-slate-400" />
             <h4 className="text-sm font-semibold text-slate-700">Change Password</h4>
             <span className="text-xs text-slate-400">(leave blank to keep current password)</span>

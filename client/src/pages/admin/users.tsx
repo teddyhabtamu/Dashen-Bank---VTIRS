@@ -358,7 +358,7 @@ export default function UsersPage() {
           ))}
         </div>
 
-        <div className="flex items-center justify-between border-t border-slate-100 px-5 py-3 text-sm text-slate-500">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 px-4 py-3 text-sm text-slate-500 sm:px-5">
           <span className="text-sm font-medium text-slate-600">{total} user(s)</span>
           <span className="text-xs text-slate-400">Page {page} / {totalPages}</span>
           <div className="flex gap-2">

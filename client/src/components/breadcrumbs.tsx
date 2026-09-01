@@ -51,9 +51,9 @@ export function Breadcrumbs() {
   }
 
   return (
-    <nav className="flex items-center gap-1 border-b border-slate-100 bg-white px-4 py-2.5 text-xs sm:px-6">
+    <nav className="flex items-center gap-1 overflow-x-auto border-b border-slate-100 bg-white px-4 py-2.5 text-xs sm:px-6">
       {crumbs.map((c, i) => (
-        <span key={i} className="flex items-center gap-1">
+        <span key={i} className="flex shrink-0 items-center gap-1">
           {i > 0 && <ChevronRight className="h-3 w-3 text-slate-300" />}
           {c.href ? (
             <Link
