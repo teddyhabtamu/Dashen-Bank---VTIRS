@@ -66,7 +66,7 @@ export function Modal({
         aria-modal="true"
         className={cn(
           "relative z-10 flex w-full flex-col rounded-t-2xl bg-white shadow-2xl sm:my-auto sm:rounded-2xl",
-          "max-h-[92vh] sm:max-h-[84vh]",
+          "max-h-[92dvh] sm:max-h-[84dvh]",
           SIZE[size]
         )}
       >

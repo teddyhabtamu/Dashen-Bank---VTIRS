@@ -132,7 +132,7 @@ export function Sidebar({
 
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-50 flex h-screen flex-col bg-primary text-white transition-all duration-300 ease-in-out",
+          "fixed inset-y-0 left-0 z-50 flex h-dvh flex-col bg-primary text-white transition-all duration-300 ease-in-out",
           "lg:static lg:z-auto lg:translate-x-0",
           collapsed ? "lg:w-20" : "lg:w-64",
           "w-64",
@@ -160,7 +160,7 @@ export function Sidebar({
             </div>
           </div>
 
-        <nav className="flex-1 overflow-y-auto px-2 py-1">
+        <nav className="min-h-0 flex-1 overflow-y-auto px-2 py-1">
           {SECTIONS.map((section) => {
             const visible = section.items.filter(
               (item) => !item.perm || can(item.perm)

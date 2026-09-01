@@ -16,7 +16,7 @@ export function BrandLoader({
     <div
       className={cn(
         "flex flex-col items-center justify-center gap-4",
-        fullscreen ? "min-h-screen w-full bg-slate-50" : "py-16",
+        fullscreen ? "min-h-dvh w-full bg-slate-50" : "py-16",
         className
       )}
     >
