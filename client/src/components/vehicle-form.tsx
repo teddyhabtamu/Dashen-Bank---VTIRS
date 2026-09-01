@@ -375,11 +375,11 @@ export function VehicleForm({ vehicleId, returnTo = "/vehicles" }: { vehicleId?:
       return <Select value={value} onChange={set} options={MANUAL_VEHICLE_STATUS_OPTIONS.map((o) => ({ value: o, label: label(o) }))} />;
     }
     if (f === "branchId")
-      return <Select searchable value={value} onChange={set} options={[{ value: ADD_NEW, label: "Add new branch", icon: <Plus className="h-4 w-4" /> }, ...branches]} placeholder="Select branch" />;
+      return <Select searchable clearable value={value} onChange={set} options={[{ value: ADD_NEW, label: "Add new branch", icon: <Plus className="h-4 w-4" /> }, ...branches]} placeholder="Select branch" />;
     if (f === "departmentId")
-      return <Select searchable value={value} onChange={set} options={[{ value: ADD_NEW, label: "Add new department", icon: <Plus className="h-4 w-4" /> }, ...departments]} placeholder="Select department" />;
+      return <Select searchable clearable value={value} onChange={set} options={[{ value: ADD_NEW, label: "Add new department", icon: <Plus className="h-4 w-4" /> }, ...departments]} placeholder="Select department" />;
     if (f === "currentDriverId")
-      return <Select searchable value={value} onChange={set} options={[{ value: ADD_NEW, label: "Add new driver", icon: <Plus className="h-4 w-4" /> }, ...drivers]} placeholder="Select driver" />;
+      return <Select searchable clearable value={value} onChange={set} options={[{ value: ADD_NEW, label: "Add new driver", icon: <Plus className="h-4 w-4" /> }, ...drivers]} placeholder="Select driver" />;
     if (f === "acquisitionDate")
       return <DatePicker value={value} onChange={set} />;
 
