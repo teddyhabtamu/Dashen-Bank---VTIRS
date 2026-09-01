@@ -5,6 +5,7 @@ import { vehicleSchema, VehicleInput } from "../validation/vehicle.js";
 import { writeAudit, type AuditReq } from "../lib/audit.js";
 import { defaultPageSize } from "./setting.js";
 import { reconcileVehicleAssignStatus } from "./vehicleStatus.js";
+import { autoFormalizeCurrentDriver } from "./assignment.js";
 
 export class DuplicateVehicleError extends Error {
   field: string;
@@ -67,41 +68,51 @@ export async function createVehicle(input: VehicleInput, ctx: Context = {}) {
   const year = data.year;
   const code = generateVehicleCode(year, await nextSequence(year));
 
-  const vehicle = await prisma.vehicle.create({
-    data: {
-      vehicleCode: code,
-      plateNumber: data.plateNumber,
-      prevPlateNo: data.prevPlateNo,
-      category: data.category,
-      type: data.type,
-      make: data.make,
-      model: data.model,
-      trim: data.trim,
-      year: data.year,
-      color: data.color,
-      engineNo: data.engineNo,
-      chassisNo: data.chassisNo,
-      engineCC: data.engineCC,
-      fuelType: data.fuelType,
-      transmission: data.transmission,
-      driveType: data.driveType,
-      odometer: data.odometer,
-      ownerName: data.ownerName,
-      departmentId: data.departmentId,
-      branchId: data.branchId,
-      currentDriverId: data.currentDriverId,
-      acquisitionDate: toDate(data.acquisitionDate),
-      purchaseCost: data.purchaseCost,
-      supplier: data.supplier,
-      status: data.status,
-      createdById: ctx.userId ?? null,
-    },
-    include: { branch: true, department: true },
-  });
+  const vehicle = await prisma.$transaction(async (tx) => {
+    const created = await tx.vehicle.create({
+      data: {
+        vehicleCode: code,
+        plateNumber: data.plateNumber,
+        prevPlateNo: data.prevPlateNo,
+        category: data.category,
+        type: data.type,
+        make: data.make,
+        model: data.model,
+        trim: data.trim,
+        year: data.year,
+        color: data.color,
+        engineNo: data.engineNo,
+        chassisNo: data.chassisNo,
+        engineCC: data.engineCC,
+        fuelType: data.fuelType,
+        transmission: data.transmission,
+        driveType: data.driveType,
+        odometer: data.odometer,
+        ownerName: data.ownerName,
+        departmentId: data.departmentId,
+        branchId: data.branchId,
+        currentDriverId: data.currentDriverId ?? null,
+        acquisitionDate: toDate(data.acquisitionDate),
+        purchaseCost: data.purchaseCost,
+        supplier: data.supplier,
+        status: data.status,
+        createdById: ctx.userId ?? null,
+      },
+      include: { branch: true, department: true },
+    });
 
-  // If a driver was selected at creation, immediately derive ASSIGNED status
-  // rather than requiring the nightly cron to catch up.
-  await reconcileVehicleAssignStatus(prisma, vehicle.id);
+    // A driver picked at creation becomes a formal, audited assignment right
+    // away instead of just a "currentDriverId" pointer (no more "not yet
+    // registered" state for new vehicles).
+    await autoFormalizeCurrentDriver(tx, created.id, {
+      driverId: data.currentDriverId,
+      branchId: data.branchId,
+    });
+
+    await reconcileVehicleAssignStatus(tx, created.id);
+
+    return created;
+  });
 
   await writeAudit({
     action: "CREATE",
@@ -127,40 +138,56 @@ export async function updateVehicle(
   const merged = vehicleSchema.partial().parse(input);
   await checkDuplicates(merged as VehicleInput, id);
 
-  const vehicle = await prisma.vehicle.update({
-    where: { id },
-    data: {
-      plateNumber: merged.plateNumber,
-      prevPlateNo: merged.prevPlateNo,
-      category: merged.category,
-      type: merged.type,
-      make: merged.make,
-      model: merged.model,
-      trim: merged.trim,
-      year: merged.year,
-      color: merged.color,
-      engineNo: merged.engineNo,
-      chassisNo: merged.chassisNo,
-      engineCC: merged.engineCC,
-      fuelType: merged.fuelType,
-      transmission: merged.transmission,
-      driveType: merged.driveType,
-      odometer: merged.odometer,
-      ownerName: merged.ownerName,
-      departmentId: merged.departmentId,
-      branchId: merged.branchId,
-      currentDriverId: merged.currentDriverId,
-      acquisitionDate: toDate(merged.acquisitionDate),
-      purchaseCost: merged.purchaseCost,
-      supplier: merged.supplier,
-      status: merged.status,
-    },
-    include: { branch: true, department: true },
-  });
+  // currentDriverId is nullish (explicitly cleared) or a driver id, or absent
+  // (undefined = caller didn't touch the driver, so keep it). This also makes
+  // the "Remove Driver" flow actually clear the pointer.
+  const newDriverId =
+    merged.currentDriverId === undefined
+      ? existing.currentDriverId
+      : merged.currentDriverId;
 
-  // Keep the derived ACTIVE/ASSIGNED status consistent with the driver set on
-  // the vehicle (e.g. Remove Driver clears currentDriverId -> ACTIVE).
-  await reconcileVehicleAssignStatus(prisma, id);
+  const vehicle = await prisma.$transaction(async (tx) => {
+    const updated = await tx.vehicle.update({
+      where: { id },
+      data: {
+        plateNumber: merged.plateNumber,
+        prevPlateNo: merged.prevPlateNo,
+        category: merged.category,
+        type: merged.type,
+        make: merged.make,
+        model: merged.model,
+        trim: merged.trim,
+        year: merged.year,
+        color: merged.color,
+        engineNo: merged.engineNo,
+        chassisNo: merged.chassisNo,
+        engineCC: merged.engineCC,
+        fuelType: merged.fuelType,
+        transmission: merged.transmission,
+        driveType: merged.driveType,
+        odometer: merged.odometer,
+        ownerName: merged.ownerName,
+        departmentId: merged.departmentId,
+        branchId: merged.branchId,
+        currentDriverId: newDriverId,
+        acquisitionDate: toDate(merged.acquisitionDate),
+        purchaseCost: merged.purchaseCost,
+        supplier: merged.supplier,
+        status: merged.status,
+      },
+      include: { branch: true, department: true },
+    });
+
+    // Keep the formal assignment trail in sync with the (possibly changed)
+    // current driver, then reconcile the derived ACTIVE/ASSIGNED status.
+    await autoFormalizeCurrentDriver(tx, id, {
+      driverId: newDriverId,
+      branchId: updated.branchId,
+    });
+    await reconcileVehicleAssignStatus(tx, id);
+
+    return updated;
+  });
 
   await writeAudit({
     action: "UPDATE",

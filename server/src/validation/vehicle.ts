@@ -42,7 +42,9 @@ export const vehicleSchema = z.object({
   ownerName: z.string().min(1, "Owner name is required").max(100),
   departmentId: z.preprocess(emptyToUndef, z.string().max(30).optional()),
   branchId: z.preprocess(emptyToUndef, z.string().max(30).optional()),
-  currentDriverId: z.preprocess(emptyToUndef, z.string().max(30).optional()),
+  currentDriverId: z
+    .preprocess((v) => (v === "" ? null : v), z.string().max(30).nullable().optional()),
+
   acquisitionDate: z.preprocess(emptyToUndef, z.string().optional()),
   purchaseCost: z.preprocess(
     emptyToUndef,

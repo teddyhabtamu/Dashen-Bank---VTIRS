@@ -46,6 +46,12 @@ router.post("/", requireAuth(PERMISSIONS.VEHICLE_CREATE), async (req, res) => {
     if (e instanceof DuplicateVehicleError) {
       return res.status(409).json({ error: e.message, field: e.field });
     }
+    if ((e as Error).message === "Driver not found") {
+      return res.status(404).json({ error: "Driver not found" });
+    }
+    if ((e as Error).message === "Driver is already assigned to another vehicle") {
+      return res.status(409).json({ error: "Driver is already assigned to another vehicle" });
+    }
     throw e;
   }
 });
@@ -89,6 +95,12 @@ router.patch("/:id", requireAuth(PERMISSIONS.VEHICLE_EDIT), async (req, res) => 
   } catch (e) {
     if (e instanceof DuplicateVehicleError) {
       return res.status(409).json({ error: e.message, field: e.field });
+    }
+    if ((e as Error).message === "Driver not found") {
+      return res.status(404).json({ error: "Driver not found" });
+    }
+    if ((e as Error).message === "Driver is already assigned to another vehicle") {
+      return res.status(409).json({ error: "Driver is already assigned to another vehicle" });
     }
     throw e;
   }

@@ -1,7 +1,10 @@
 import { prisma } from "../lib/prisma.js";
+import { Prisma } from "@prisma/client";
 import { writeAudit, type AuditReq } from "../lib/audit.js";
 import { VEHICLE_STATUS } from "../lib/constants.js";
 import { reconcileVehicleAssignStatus } from "./vehicleStatus.js";
+
+type Db = Prisma.TransactionClient | typeof prisma;
 
 interface Context {
   userId?: string | null;
@@ -221,4 +224,62 @@ export async function transferDriver(
   });
 
   return result;
+}
+
+// Keep the formal assignment trail consistent with the vehicle's current-driver
+// pointer. Called whenever a driver is set/cleared directly on the vehicle
+// (create/edit form), so picking a driver in the form yields the same green
+// "Currently Assigned" state as the panel's Assign action instead of leaving a
+// "not yet registered" driver behind. Runs inside a caller transaction.
+export async function autoFormalizeCurrentDriver(
+  db: Db,
+  vehicleId: string,
+  input: { driverId?: string | null; branchId?: string | null }
+): Promise<void> {
+  const driverId = input.driverId ?? null;
+
+  if (!driverId) {
+    const active = await db.vehicleAssignment.findFirst({
+      where: { vehicleId, returnedAt: null },
+    });
+    if (active) {
+      await db.vehicleAssignment.update({
+        where: { id: active.id },
+        data: { returnedAt: new Date() },
+      });
+    }
+    return;
+  }
+
+  const driver = await db.driver.findUnique({ where: { id: driverId } });
+  if (!driver) throw new Error("Driver not found");
+
+  const vehicleActive = await db.vehicleAssignment.findFirst({
+    where: { vehicleId, returnedAt: null },
+  });
+  if (vehicleActive && vehicleActive.driverId === driverId) {
+    return;
+  }
+  if (vehicleActive) {
+    await db.vehicleAssignment.update({
+      where: { id: vehicleActive.id },
+      data: { returnedAt: new Date() },
+    });
+  }
+
+  // A driver cannot be actively assigned to two different vehicles at once.
+  const driverActiveElsewhere = await db.vehicleAssignment.findFirst({
+    where: { driverId, returnedAt: null, NOT: { vehicleId } },
+  });
+  if (driverActiveElsewhere) {
+    throw new Error("Driver is already assigned to another vehicle");
+  }
+
+  await db.vehicleAssignment.create({
+    data: {
+      vehicleId,
+      driverId,
+      branchId: input.branchId ?? null,
+    },
+  });
 }
