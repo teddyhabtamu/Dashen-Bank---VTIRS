@@ -3,6 +3,7 @@ import { requireAuth } from "../lib/guard.js";
 import { PERMISSIONS } from "../lib/rbac.js";
 import { prisma } from "../lib/prisma.js";
 import { writeAudit } from "../lib/audit.js";
+import { ETHIOPIAN_PHONE_PATTERN } from "../validation/driver.js";
 
 const router = Router();
 
@@ -183,6 +184,9 @@ router.post(
     if (!fullName?.trim()) {
       return res.status(400).json({ error: "fullName is required" });
     }
+    if (phone && !ETHIOPIAN_PHONE_PATTERN.test(phone)) {
+      return res.status(400).json({ error: "Invalid phone number. Use the standard Ethiopian format, e.g. +251912345678" });
+    }
     const driver = await prisma.driver.create({
       data: { employeeId: employeeId || undefined, fullName: fullName.trim(), licenseNo, phone, departmentId: departmentId || undefined },
     });
@@ -200,6 +204,9 @@ router.put(
     };
     const old = await prisma.driver.findUnique({ where: { id: req.params.id } });
     if (!old) return res.status(404).json({ error: "Not found" });
+    if (phone && !ETHIOPIAN_PHONE_PATTERN.test(phone)) {
+      return res.status(400).json({ error: "Invalid phone number. Use the standard Ethiopian format, e.g. +251912345678" });
+    }
     const updated = await prisma.driver.update({
       where: { id: req.params.id },
       data: {

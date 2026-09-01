@@ -8,6 +8,7 @@ import { Field, Select } from "@/components/ui/field";
 import type { SelectOption } from "@/components/ui/field";
 import { Modal } from "@/components/ui/modal";
 import { DatePicker } from "@/components/ui/datepicker";
+import { PhoneInput } from "@/components/ui/phone-input";
 import {
   FUEL_TYPE_OPTIONS,
   TRANSMISSION_OPTIONS,
@@ -588,7 +589,7 @@ export function VehicleForm({ vehicleId, returnTo = "/vehicles" }: { vehicleId?:
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-600">Phone</label>
-            <input className="input" value={addForm.phone} onChange={(e) => setAddForm({ ...addForm, phone: e.target.value })} />
+            <PhoneInput value={addForm.phone} onChange={(v) => setAddForm({ ...addForm, phone: v })} />
           </div>
         </div>
       </Modal>

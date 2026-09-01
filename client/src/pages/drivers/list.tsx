@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { Users, Search, Plus, MoreVertical, Pencil, Trash2, Download, UserRound } from "lucide-react";
 import { BrandLoader } from "@/components/ui/brand-loader";
 import { Select } from "@/components/ui/select";
+import { PhoneInput } from "@/components/ui/phone-input";
 import { Modal } from "@/components/ui/modal";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { Dropdown } from "@/components/ui/dropdown";
@@ -409,8 +410,9 @@ export default function DriversPage() {
           </label>
           <label className="text-sm">
             Phone
-            <input className="input mt-1"
-              value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} disabled={busy} />
+            <span className="mt-1 block">
+              <PhoneInput value={form.phone} onChange={(v) => setForm({ ...form, phone: v })} disabled={busy} />
+            </span>
           </label>
           <label className="text-sm">
             Department

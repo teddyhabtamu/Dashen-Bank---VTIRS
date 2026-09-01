@@ -53,3 +53,24 @@ export function formatFileSize(bytes: number): string {
 export function cn(...classes: Array<string | false | null | undefined>): string {
   return classes.filter(Boolean).join(" ");
 }
+
+// ---------------------------------------------------------------------------
+// Ethiopian phone numbers
+// ---------------------------------------------------------------------------
+// Standard format: +251 followed by 9 national digits, the first being 9 or 7
+// (i.e. +251 9XXXXXXXX or +251 7XXXXXXXX).
+export const ETHIOPIAN_PHONE_PATTERN = /^\+251[97]\d{8}$/;
+
+export function isValidEthiopianPhone(value: string): boolean {
+  return ETHIOPIAN_PHONE_PATTERN.test(value);
+}
+
+// Normalize any free-form input (09…, 251…, 0/00/+, spaces, dashes) into the
+// canonical +2519/7XXXXXXXX form, keeping it at most 13 characters while typing.
+export function formatEthiopianPhone(input: string): string {
+  const digits = input.replace(/\D/g, "");
+  let national = digits;
+  if (national.startsWith("251")) national = national.slice(3);
+  if (national.startsWith("0")) national = national.slice(1);
+  return "+251" + national.slice(0, 9);
+}

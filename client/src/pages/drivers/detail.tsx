@@ -3,7 +3,9 @@ import { useParams, Link } from "react-router-dom";
 import { ArrowLeft, Pencil, RefreshCw, Car, Phone, BadgeCheck, Building2, Calendar } from "lucide-react";
 import { BrandLoader } from "@/components/ui/brand-loader";
 import { Modal } from "@/components/ui/modal";
-import { Select } from "@/components/ui/select";import { useAuth } from "@/components/auth-context";
+import { Select } from "@/components/ui/select";
+import { PhoneInput } from "@/components/ui/phone-input";
+import { useAuth } from "@/components/auth-context";
 import { useToast } from "@/lib/toast-context";
 import { formatDate } from "@/lib/format";
 import { PERMISSIONS } from "@/lib/rbac";
@@ -380,8 +382,9 @@ export default function DriverDetailPage() {
           </label>
           <label className="text-sm">
             Phone
-            <input className="input mt-1"
-              value={editForm.phone} onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })} disabled={editBusy} />
+            <span className="mt-1 block">
+              <PhoneInput value={editForm.phone} onChange={(v) => setEditForm({ ...editForm, phone: v })} disabled={editBusy} />
+            </span>
           </label>
           <label className="text-sm">
             Department
