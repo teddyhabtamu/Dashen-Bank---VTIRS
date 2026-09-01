@@ -131,3 +131,94 @@ export async function returnDriver(vehicleId: string, assignmentId: string, ctx:
 
   return updated;
 }
+
+// Transfer a driver to a different vehicle in a single action. Any active
+// assignment the driver has on another vehicle, and any active assignment
+// already on the target vehicle, are returned (marked) as history; the driver
+// is then assigned to the target vehicle and statuses are reconciled.
+export async function transferDriver(
+  vehicleId: string,
+  driverId: string,
+  ctx: Context = {}
+) {
+  const vehicle = await prisma.vehicle.findUnique({ where: { id: vehicleId } });
+  if (!vehicle) return null;
+
+  if (vehicle.status === VEHICLE_STATUS.DISPOSED) {
+    throw new Error("Cannot assign a driver to a disposed vehicle");
+  }
+
+  const driver = await prisma.driver.findUnique({ where: { id: driverId } });
+  if (!driver) throw new Error("Driver not found");
+
+  if (vehicle.currentDriverId === driverId) {
+    throw new Error("Driver is already assigned to this vehicle");
+  }
+
+  const result = await prisma.$transaction(async (tx) => {
+    const returned: any[] = [];
+
+    // Return the vehicle's current active assignment, if any.
+    const vehicleActive = await tx.vehicleAssignment.findFirst({
+      where: { vehicleId, returnedAt: null },
+    });
+    if (vehicleActive && vehicleActive.driverId !== driverId) {
+      await tx.vehicleAssignment.update({
+        where: { id: vehicleActive.id },
+        data: { returnedAt: new Date() },
+      });
+      returned.push(vehicleActive);
+    }
+
+    // Return the driver's active assignment on any other vehicle, if any.
+    const driverActiveElsewhere = await tx.vehicleAssignment.findFirst({
+      where: { driverId, returnedAt: null, NOT: { vehicleId } },
+    });
+    if (driverActiveElsewhere) {
+      await tx.vehicleAssignment.update({
+        where: { id: driverActiveElsewhere.id },
+        data: { returnedAt: new Date() },
+      });
+      const otherVehicle = await tx.vehicle.findUnique({
+        where: { id: driverActiveElsewhere.vehicleId },
+        select: { currentDriverId: true },
+      });
+      if (otherVehicle?.currentDriverId === driverId) {
+        await tx.vehicle.update({
+          where: { id: driverActiveElsewhere.vehicleId },
+          data: { currentDriverId: null },
+        });
+      }
+      returned.push(driverActiveElsewhere);
+    }
+
+    const assignment = await tx.vehicleAssignment.create({
+      data: { vehicleId, driverId, branchId: vehicle.branchId ?? null },
+      include: { driver: true, vehicle: true },
+    });
+
+    await tx.vehicle.update({
+      where: { id: vehicleId },
+      data: { currentDriverId: driverId },
+    });
+
+    await reconcileVehicleAssignStatus(tx, vehicleId);
+    for (const r of returned) {
+      if (r.vehicleId !== vehicleId) await reconcileVehicleAssignStatus(tx, r.vehicleId);
+    }
+
+    return { assignment, returned };
+  });
+
+  await writeAudit({
+    action: "TRANSFER",
+    entity: "VehicleAssignment",
+    entityId: result.assignment.id,
+    vehicleId,
+    userId: ctx.userId,
+    newValue: result.assignment,
+    req: ctx.req,
+  });
+
+  return result;
+}

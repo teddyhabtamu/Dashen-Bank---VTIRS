@@ -13,6 +13,7 @@ import {
   History,
   LogOut,
   User,
+  UserRound,
   ChevronUp,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -48,6 +49,7 @@ const SECTIONS: NavSection[] = [
     items: [
       { href: "/insurances", label: "Insurance", icon: Shield, perm: PERMISSIONS.INSURANCE_MANAGE },
       { href: "/documents", label: "Documents", icon: FileText, perm: PERMISSIONS.DOCUMENT_VIEW },
+      { href: "/drivers", label: "Drivers", icon: UserRound, perm: PERMISSIONS.BRANCH_MANAGE },
       { href: "/search", label: "Search", icon: Search, perm: PERMISSIONS.VEHICLE_VIEW },
       { href: "/reports", label: "Reports", icon: BarChart3, perm: PERMISSIONS.REPORT_VIEW },
     ],

@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   Search, Car, ClipboardList, ShieldCheck, FileText,
   BarChart3, Bell, History, Users, Shield, Settings,
-  LayoutDashboard, ChevronRight, Loader2,
+  LayoutDashboard, ChevronRight, Loader2, UserRound,
 } from "lucide-react";
 import { useAuth } from "./auth-context";
 import { PERMISSIONS } from "@/lib/rbac";
@@ -22,6 +22,7 @@ const NAV_ITEMS: NavItem[] = [
   { id: "registrations", label: "Registrations", href: "/registrations", icon: ClipboardList, perm: PERMISSIONS.REGISTRATION_MANAGE },
   { id: "insurance", label: "Insurance", href: "/insurances", icon: ShieldCheck, perm: PERMISSIONS.INSURANCE_MANAGE },
   { id: "documents", label: "Documents", href: "/documents", icon: FileText, perm: PERMISSIONS.DOCUMENT_VIEW },
+  { id: "drivers", label: "Drivers", href: "/drivers", icon: UserRound, perm: PERMISSIONS.BRANCH_MANAGE },
   { id: "reports", label: "Reports", href: "/reports", icon: BarChart3, perm: PERMISSIONS.REPORT_VIEW },
   { id: "notifications", label: "Notifications", href: "/notifications", icon: Bell, perm: null },
   { id: "audit", label: "Audit Logs", href: "/audit", icon: History, perm: PERMISSIONS.AUDIT_VIEW },
