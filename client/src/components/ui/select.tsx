@@ -118,7 +118,7 @@ export function Select({
           className
         )}
       >
-        <span className={cn("truncate", !selected && "text-slate-400")}>
+        <span className={cn("block min-w-0 flex-1 truncate", !selected && "text-slate-400")}>
           {selected ? selected.label : placeholder}
         </span>
         <ChevronDown className={cn("ml-2 h-4 w-4 flex-shrink-0 text-slate-400 transition-transform", open && "rotate-180")} />
@@ -170,28 +170,30 @@ export function Select({
                       aria-selected={active}
                       onClick={() => choose(o.value)}
                       className={cn(
-                        "flex w-full items-center gap-2 whitespace-nowrap px-3 py-2 text-left text-sm transition-colors",
+                        "flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors",
                         o.icon ? "font-semibold text-primary" : active && "bg-primary/10 font-medium text-primary"
                       )}
                     >
                       {o.icon}
-                      <div className="flex-1 min-w-0">
-                        <span className="truncate">{o.label}</span>
+                      <div className="min-w-0 flex-1">
+                        <span className="block truncate">{o.label}</span>
                         {o.description && (
-                          <span className="block text-xs text-slate-400 truncate">{o.description}</span>
+                          <span className="block truncate text-xs text-slate-400">{o.description}</span>
                         )}
                       </div>
-                      {o.indicator && (
-                        <span className={cn(
-                          "ml-auto shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium leading-tight",
-                          o.indicator.variant === "warning" && "bg-amber-50 text-amber-700",
-                          o.indicator.variant === "success" && "bg-emerald-50 text-emerald-700",
-                          o.indicator.variant === "danger" && "bg-red-50 text-red-700"
-                        )}>
-                          {o.indicator.label}
-                        </span>
-                      )}
-                      {active && <Check className={cn("h-4 w-4 shrink-0", o.icon ? "text-primary" : "text-primary")} />}
+                      <span className="ml-auto flex flex-shrink-0 items-center gap-2">
+                        {o.indicator && (
+                          <span className={cn(
+                            "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium leading-tight",
+                            o.indicator.variant === "warning" && "bg-amber-50 text-amber-700",
+                            o.indicator.variant === "success" && "bg-emerald-50 text-emerald-700",
+                            o.indicator.variant === "danger" && "bg-red-50 text-red-700"
+                          )}>
+                            {o.indicator.label}
+                          </span>
+                        )}
+                        {active && <Check className="h-4 w-4 shrink-0 text-primary" />}
+                      </span>
                     </button>
                 );
               })
