@@ -1,4 +1,4 @@
-import { Prisma } from "@prisma/client";
+import { Prisma, type VehicleRegistration } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { registrationSchema, RegistrationInput } from "../validation/registration.js";
 import { REGISTRATION_STATUS } from "../lib/constants.js";
@@ -21,6 +21,47 @@ const RENEWABLE_STATUSES: string[] = [
   REGISTRATION_STATUS.PENDING_RENEWAL,
   REGISTRATION_STATUS.EXPIRED,
 ];
+
+// "Live" = currently counted as the vehicle's current registration.
+const LIVE_STATUSES: string[] = [
+  REGISTRATION_STATUS.ACTIVE,
+  REGISTRATION_STATUS.PENDING_RENEWAL,
+];
+
+// Re-derive what status a record should hold from its expiry date — used when
+// a record re-enters the live set (restore / resume).
+async function deriveLiveStatus(expiryDate: Date): Promise<string> {
+  const days = daysUntil(expiryDate);
+  const [, , w30] = await getReminderWindows();
+  if (days !== null && days < 0) return REGISTRATION_STATUS.EXPIRED;
+  if (days !== null && days <= w30) return REGISTRATION_STATUS.PENDING_RENEWAL;
+  return REGISTRATION_STATUS.ACTIVE;
+}
+
+// A vehicle may have at most one live registration (DB-enforced via partial
+// unique index); make that a clean 4xx before Prisma throws a P2002.
+async function assertNoOtherLive(vehicleId: string, excludeId: string) {
+  const other = await prisma.vehicleRegistration.findFirst({
+    where: {
+      vehicleId,
+      NOT: { id: excludeId },
+      status: { in: LIVE_STATUSES },
+    },
+    select: { regNumber: true },
+  });
+  if (other) {
+    throw new ValidationError(
+      `Vehicle already has a live registration (${other.regNumber}). Archive it before restoring or resuming this one.`,
+      "status"
+    );
+  }
+}
+
+// Map a Prisma unique violation (P2002) onto a domain error so the API returns
+// a clean 409/422 instead of a 500. Target identifies which unique constraint.
+function isUniqueViolation(e: unknown): e is { meta?: { target?: unknown } } {
+  return typeof e === "object" && e !== null && (e as { code?: string }).code === "P2002";
+}
 
 function toDate(v: string | undefined): Date | undefined {
   if (!v) return undefined;
@@ -114,45 +155,61 @@ export async function createRegistration(input: RegistrationInput, ctx: Context 
     );
   }
 
-  const { reg, archived } = await prisma.$transaction(async (tx) => {
-    const archivedList = [];
-    for (const p of prior) {
-      const updated = { ...p, status: REGISTRATION_STATUS.ARCHIVED };
-      await tx.vehicleRegistration.update({
-        where: { id: p.id },
-        data: { status: REGISTRATION_STATUS.ARCHIVED },
+  let result: { reg: VehicleRegistration; archived: { old: VehicleRegistration; updated: VehicleRegistration }[] };
+  try {
+    result = await prisma.$transaction(async (tx) => {
+      const archivedList = [];
+      for (const p of prior) {
+        const updated = { ...p, status: REGISTRATION_STATUS.ARCHIVED };
+        await tx.vehicleRegistration.update({
+          where: { id: p.id },
+          data: { status: REGISTRATION_STATUS.ARCHIVED },
+        });
+        await logHistory(tx, p.id, p.vehicleId, "ARCHIVE", {
+          prevStatus: p.status,
+          newStatus: REGISTRATION_STATUS.ARCHIVED,
+          prevExpiry: p.expiryDate,
+          newExpiry: p.expiryDate,
+          note: `Superseded by new registration ${data.regNumber}`,
+          performedById: ctx.userId ?? null,
+        });
+        archivedList.push({ old: p, updated });
+      }
+
+      const reg = await tx.vehicleRegistration.create({
+        data: {
+          vehicleId: data.vehicleId,
+          regNumber: data.regNumber,
+          regDate,
+          expiryDate,
+          office: data.office ?? null,
+          status,
+          createdById: ctx.userId ?? null,
+        },
       });
-      await logHistory(tx, p.id, p.vehicleId, "ARCHIVE", {
-        prevStatus: p.status,
-        newStatus: REGISTRATION_STATUS.ARCHIVED,
-        prevExpiry: p.expiryDate,
-        newExpiry: p.expiryDate,
-        note: `Superseded by new registration ${data.regNumber}`,
+
+      await logHistory(tx, reg.id, reg.vehicleId, "CREATE", {
+        newStatus: reg.status,
+        newExpiry: reg.expiryDate,
         performedById: ctx.userId ?? null,
       });
-      archivedList.push({ old: p, updated });
+
+      return { reg, archived: archivedList };
+    });
+  } catch (e) {
+    if (isUniqueViolation(e)) {
+      const target = String(e.meta?.target ?? "");
+      if (target.includes("live_per_vehicle")) {
+        throw new ValidationError(
+          "This vehicle already has a live registration; it must be archived before creating another.",
+          "confirmSupersede"
+        );
+      }
+      throw new DuplicateRegistrationError("regNumber", data.regNumber);
     }
-
-    const reg = await tx.vehicleRegistration.create({
-      data: {
-        vehicleId: data.vehicleId,
-        regNumber: data.regNumber,
-        regDate,
-        expiryDate,
-        office: data.office ?? null,
-        status,
-        createdById: ctx.userId ?? null,
-      },
-    });
-
-    await logHistory(tx, reg.id, reg.vehicleId, "CREATE", {
-      newStatus: reg.status,
-      newExpiry: reg.expiryDate,
-      performedById: ctx.userId ?? null,
-    });
-
-    return { reg, archived: archivedList };
-  });
+    throw e;
+  }
+  const { reg, archived } = result;
 
   await writeAudit({
     action: "CREATE",
@@ -299,22 +356,29 @@ export async function restoreRegistration(id: string, ctx: Context = {}) {
   if (existing.status !== REGISTRATION_STATUS.ARCHIVED) {
     throw new ValidationError("Only archived registrations can be restored", "status");
   }
+  // The vehicle must not already have a live registration, or restoring this
+  // one would create two currents (also enforced by the DB partial unique index).
+  await assertNoOtherLive(existing.vehicleId, existing.id);
 
   // Restoring re-derives the status from the expiry date: a restored record
   // must not be ACTIVE past its expiry (it becomes EXPIRED or PENDING_RENEWAL).
-  const days = daysUntil(existing.expiryDate);
-  const [, , w30] = await getReminderWindows();
-  let newStatus: string = REGISTRATION_STATUS.ACTIVE;
-  if (days !== null && days < 0) {
-    newStatus = REGISTRATION_STATUS.EXPIRED;
-  } else if (days !== null && days <= w30) {
-    newStatus = REGISTRATION_STATUS.PENDING_RENEWAL;
-  }
+  const newStatus = await deriveLiveStatus(existing.expiryDate);
 
-  const reg = await prisma.vehicleRegistration.update({
-    where: { id },
-    data: { status: newStatus },
-  });
+  let reg: VehicleRegistration;
+  try {
+    reg = await prisma.vehicleRegistration.update({
+      where: { id },
+      data: { status: newStatus },
+    });
+  } catch (e) {
+    if (isUniqueViolation(e)) {
+      throw new ValidationError(
+        "Vehicle already has a live registration; archive it before restoring this one.",
+        "status"
+      );
+    }
+    throw e;
+  }
 
   await logHistory(prisma, reg.id, reg.vehicleId, "RESTORE", {
     prevStatus: existing.status,
@@ -360,6 +424,12 @@ export async function renewRegistration(
   }
   if (newExpiry < new Date()) {
     throw new ValidationError("New expiry must be in the future", "expiryDate");
+  }
+
+  // Renewing an EXPIRED record brings a new live registration into existence;
+  // the vehicle must not already have one.
+  if (existing.status === REGISTRATION_STATUS.EXPIRED) {
+    await assertNoOtherLive(existing.vehicleId, existing.id);
   }
 
   const reg = await prisma.vehicleRegistration.update({
@@ -430,6 +500,59 @@ export async function suspendRegistration(id: string, note: string | undefined, 
   return reg;
 }
 
+// Resume: bring a suspended registration back into service. The status is
+// re-derived from the expiry date — a record may have lapsed while suspended
+// (in which case it resumes as EXPIRED and can then be renewed).
+export async function resumeRegistration(id: string, note: string | undefined, ctx: Context = {}) {
+  const existing = await prisma.vehicleRegistration.findUnique({ where: { id } });
+  if (!existing) return null;
+  if (existing.status !== REGISTRATION_STATUS.SUSPENDED) {
+    throw new ValidationError("Only suspended registrations can be resumed", "status");
+  }
+  // The vehicle must not have gained another live registration while this one
+  // was suspended.
+  await assertNoOtherLive(existing.vehicleId, existing.id);
+
+  const newStatus = await deriveLiveStatus(existing.expiryDate);
+  let reg: VehicleRegistration;
+  try {
+    reg = await prisma.vehicleRegistration.update({
+      where: { id },
+      data: { status: newStatus },
+    });
+  } catch (e) {
+    if (isUniqueViolation(e)) {
+      throw new ValidationError(
+        "Vehicle already has a live registration; archive it before resuming this one.",
+        "status"
+      );
+    }
+    throw e;
+  }
+
+  await logHistory(prisma, reg.id, reg.vehicleId, "RESUME", {
+    prevStatus: existing.status,
+    newStatus: reg.status,
+    prevExpiry: existing.expiryDate,
+    newExpiry: existing.expiryDate,
+    note: note ?? null,
+    performedById: ctx.userId ?? null,
+  });
+
+  await writeAudit({
+    action: "RESUME",
+    entity: "VehicleRegistration",
+    entityId: reg.id,
+    vehicleId: reg.vehicleId,
+    userId: ctx.userId,
+    oldValue: existing,
+    newValue: reg,
+    req: ctx.req,
+  });
+
+  return reg;
+}
+
 // Build a Prisma `where` that matches the *effective* (derived) status rather
 // than the stored one, so list filtering agrees with what the badges show.
 function regStatusCondition(status: string, now: Date) {
@@ -478,12 +601,12 @@ export async function listRegistrations(opts: {
   if (search) {
     conditions.push({
       OR: [
-        { regNumber: { contains: search } },
-        { office: { contains: search } },
-        { vehicle: { plateNumber: { contains: search } } },
-        { vehicle: { vehicleCode: { contains: search } } },
-        { vehicle: { make: { contains: search } } },
-        { vehicle: { model: { contains: search } } },
+        { regNumber: { contains: search, mode: "insensitive" } },
+        { office: { contains: search, mode: "insensitive" } },
+        { vehicle: { plateNumber: { contains: search, mode: "insensitive" } } },
+        { vehicle: { vehicleCode: { contains: search, mode: "insensitive" } } },
+        { vehicle: { make: { contains: search, mode: "insensitive" } } },
+        { vehicle: { model: { contains: search, mode: "insensitive" } } },
       ],
     });
   }

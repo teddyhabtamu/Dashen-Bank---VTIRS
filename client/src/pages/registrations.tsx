@@ -1,6 +1,6 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useCallback, useEffect, useState } from "react";
-import { Plus, Search, MoreVertical, History, RotateCcw, AlertCircle, Archive, RefreshCw, Download, ClipboardList, Pencil } from "lucide-react";
+import { Plus, Search, MoreVertical, History, RotateCcw, AlertCircle, Archive, RefreshCw, Download, ClipboardList, Pencil, Play } from "lucide-react";
 import { StatusBadge } from "@/components/ui/badge";
 import { BrandLoader } from "@/components/ui/brand-loader";
 import { useBrand } from "@/lib/brand-context";
@@ -56,6 +56,7 @@ export default function RegistrationsPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [renewId, setRenewId] = useState<string | null>(null);
   const [suspendId, setSuspendId] = useState<string | null>(null);
+  const [resumeId, setResumeId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [archiveId, setArchiveId] = useState<string | null>(null);
   const [restoreId, setRestoreId] = useState<string | null>(null);
@@ -94,7 +95,7 @@ export default function RegistrationsPage() {
   useEffect(() => { load(); }, [load]);
 
   async function afterAction() {
-    setCreateOpen(false); setRenewId(null); setSuspendId(null); setDeleteId(null); setArchiveId(null); setRestoreId(null); setEditRow(null);
+    setCreateOpen(false); setRenewId(null); setSuspendId(null); setResumeId(null); setDeleteId(null); setArchiveId(null); setRestoreId(null); setEditRow(null);
     await load();
   }
 
@@ -160,6 +161,16 @@ export default function RegistrationsPage() {
       const res = await fetch(`/api/registrations/${suspendId}/suspend`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ note }) });
       if (!res.ok) { const d = await res.json().catch(() => ({})); toast("error", d?.error ?? "Suspension failed"); return; }
       toast("warning", "Registration suspended");
+      await afterAction();
+    } finally { setBusy(false); }
+  }
+
+  async function doResume() {
+    if (!resumeId) return; setBusy(true);
+    try {
+      const res = await fetch(`/api/registrations/${resumeId}/resume`, { method: "POST", headers: { "Content-Type": "application/json" } });
+      if (!res.ok) { const d = await res.json().catch(() => ({})); toast("error", d?.error ?? "Resume failed"); return; }
+      toast("success", "Registration resumed");
       await afterAction();
     } finally { setBusy(false); }
   }
@@ -355,6 +366,11 @@ export default function RegistrationsPage() {
                       items={eff === "ARCHIVED" ? [
                         ...(can("registration:manage") ? [{ label: "Restore", icon: <RotateCcw className="h-4 w-4" />, onClick: () => setRestoreId(r.id) }] : []),
                         { label: "History", icon: <History className="h-4 w-4" />, onClick: () => navigate(`/registrations/${r.id}/history`) },
+                      ] : eff === "SUSPENDED" ? [
+                        ...(can("registration:manage") ? [{ label: "Edit", icon: <Pencil className="h-4 w-4" />, onClick: () => openEdit(r) }] : []),
+                        ...(can("registration:suspend") ? [{ label: "Resume", icon: <Play className="h-4 w-4" />, onClick: () => setResumeId(r.id) }] : []),
+                        { label: "History", icon: <History className="h-4 w-4" />, onClick: () => navigate(`/registrations/${r.id}/history`) },
+                        ...(can("registration:manage") ? [{ label: "Archive", icon: <Archive className="h-4 w-4" />, onClick: () => setArchiveId(r.id) }] : []),
                       ] : [
                         ...(can("registration:manage") ? [{ label: "Edit", icon: <Pencil className="h-4 w-4" />, onClick: () => openEdit(r) }] : []),
                         ...(can("registration:renew") ? [{ label: "Renew", icon: <RefreshCw className="h-4 w-4" />, onClick: () => setRenewId(r.id) }] : []),
@@ -422,6 +438,8 @@ export default function RegistrationsPage() {
       <ArchiveModal open={archiveId !== null} onClose={() => setArchiveId(null)} onConfirm={doArchive} loading={busy} />
       <ConfirmModal open={restoreId !== null} onClose={() => setRestoreId(null)} onConfirm={doRestore} loading={busy}
         title="Restore Registration" message="This will restore the registration from the archive. Its status is re-derived from the expiry date." confirmLabel="Restore" />
+      <ConfirmModal open={resumeId !== null} onClose={() => setResumeId(null)} onConfirm={doResume} loading={busy}
+        title="Resume Registration" message="This brings the suspended registration back into service. Its status is re-derived from the expiry date." confirmLabel="Resume" />
       <ConfirmModal open={deleteId !== null} onClose={() => setDeleteId(null)} onConfirm={doDelete} loading={busy}
         title="Delete Registration" message="This permanently removes the registration and its history." confirmLabel="Delete" />
     </div>

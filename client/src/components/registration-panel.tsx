@@ -1,6 +1,6 @@
 
 import { useCallback, useEffect, useState } from "react";
-import { RefreshCw, Ban } from "lucide-react";
+import { RefreshCw, Ban, Play } from "lucide-react";
 import { StatusBadge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
 import { Dropdown } from "@/components/ui/dropdown";
@@ -37,6 +37,7 @@ export function RegistrationPanel({ vehicleId, initial, canRenew, canSuspend }: 
   const [regs, setRegs] = useState<Reg[]>(initial);
   const [renewId, setRenewId] = useState<string | null>(null);
   const [suspendId, setSuspendId] = useState<string | null>(null);
+  const [resumeId, setResumeId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [reminderWindows, setReminderWindows] = useState<ReminderWindows | undefined>(undefined);
 
@@ -72,6 +73,14 @@ export function RegistrationPanel({ vehicleId, initial, canRenew, canSuspend }: 
       await refresh();
     } finally { setBusy(false); setSuspendId(null); }
   }
+  async function doResume() {
+    if (!resumeId) return; setBusy(true);
+    try {
+      const res = await fetch(`/api/registrations/${resumeId}/resume`, { method: "POST", headers: { "Content-Type": "application/json" } });
+      if (!res.ok) { const d = await res.json().catch(() => ({})); toast("error", d?.error ?? "Resume failed"); return; }
+      await refresh();
+    } finally { setBusy(false); setResumeId(null); }
+  }
 
   if (regs.length === 0) {
     return <p className="text-sm text-slate-400">No registration recorded yet.</p>;
@@ -93,7 +102,9 @@ export function RegistrationPanel({ vehicleId, initial, canRenew, canSuspend }: 
                 {(canRenew || canSuspend) && (
                   <Dropdown align="right"
                     trigger={({ toggle }) => (<Tooltip content="Actions"><button onClick={toggle} className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100"><MoreVertical className="h-4 w-4" /></button></Tooltip>)}
-                    items={[
+                    items={eff === "SUSPENDED" ? [
+                      ...(canSuspend ? [{ label: "Resume", icon: <Play className="h-4 w-4" />, onClick: () => setResumeId(r.id) }] : []),
+                    ] : [
                       ...(canRenew ? [{ label: "Renew", icon: <RefreshCw className="h-4 w-4" />, onClick: () => setRenewId(r.id) }] : []),
                       ...(canSuspend ? [{ label: "Suspend", icon: <Ban className="h-4 w-4" />, danger: true, onClick: () => setSuspendId(r.id) }] : []),
                     ]}
@@ -114,6 +125,7 @@ export function RegistrationPanel({ vehicleId, initial, canRenew, canSuspend }: 
 
       <RenewModal open={renewId !== null} onClose={() => setRenewId(null)} onConfirm={doRenew} loading={busy} />
       <SuspendModal open={suspendId !== null} onClose={() => setSuspendId(null)} onConfirm={doSuspend} loading={busy} />
+      <ResumeModal open={resumeId !== null} onClose={() => setResumeId(null)} onConfirm={doResume} loading={busy} />
     </div>
   );
 }
@@ -144,6 +156,19 @@ function SuspendModal({ open, onClose, onConfirm, loading }: { open: boolean; on
       <label className="text-sm">Reason (optional)
         <textarea className="input mt-1" rows={3} value={note} onChange={(e) => setNote(e.target.value)} />
       </label>
+    </Modal>
+  );
+}
+
+function ResumeModal({ open, onClose, onConfirm, loading }: { open: boolean; onClose: () => void; onConfirm: () => void; loading: boolean }) {
+  return (
+    <Modal open={open} onClose={loading ? () => {} : onClose} title="Resume Registration" footer={
+      <><button className="btn-outline" onClick={onClose} disabled={loading}>Cancel</button>
+      <button className="btn-primary" onClick={onConfirm} disabled={loading}>Resume</button></>
+    }>
+      <p className="text-sm text-slate-600">
+        This brings the suspended registration back into service. Its status is re-derived from the expiry date.
+      </p>
     </Modal>
   );
 }

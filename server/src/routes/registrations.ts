@@ -11,6 +11,7 @@ import {
   suspendRegistration,
   archiveRegistration,
   restoreRegistration,
+  resumeRegistration,
   DuplicateRegistrationError,
 } from "../services/registration.js";
 import { ValidationError } from "../services/errors.js";
@@ -183,6 +184,24 @@ router.post(
     const note = (req.body ?? {}).note as string | undefined;
     try {
       const reg = await archiveRegistration(req.params.id, note, {
+        userId: req.session!.userId,
+        req,
+      });
+      if (!reg) return res.status(404).json({ error: "Not found" });
+      res.json({ registration: reg });
+    } catch (e) {
+      return actionError(e, res);
+    }
+  }
+);
+
+router.post(
+  "/:id/resume",
+  requireAuth(PERMISSIONS.REGISTRATION_SUSPEND),
+  async (req, res) => {
+    const note = (req.body ?? {}).note as string | undefined;
+    try {
+      const reg = await resumeRegistration(req.params.id, note, {
         userId: req.session!.userId,
         req,
       });

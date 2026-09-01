@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import {
   ClipboardList, History, ChevronRight, RotateCcw, AlertCircle,
-  XCircle, Archive, RefreshCw, ArrowLeft,
+  XCircle, Archive, RefreshCw, ArrowLeft, Play,
 } from "lucide-react";
 import { BrandLoader } from "@/components/ui/brand-loader";
 import { StatusBadge } from "@/components/ui/badge";
@@ -39,6 +39,7 @@ const ACTION_ICONS: Record<string, any> = {
   SUSPEND: AlertCircle,
   ARCHIVE: Archive,
   RESTORE: RotateCcw,
+  RESUME: Play,
   UPDATE: History,
 };
 
@@ -48,6 +49,7 @@ const ACTION_COLORS: Record<string, string> = {
   SUSPEND: "text-red-600 bg-red-100",
   ARCHIVE: "text-amber-600 bg-amber-100",
   RESTORE: "text-emerald-600 bg-emerald-100",
+  RESUME: "text-sky-600 bg-sky-100",
   UPDATE: "text-slate-600 bg-slate-100",
 };
 

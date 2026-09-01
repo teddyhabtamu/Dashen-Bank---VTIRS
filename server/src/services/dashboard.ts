@@ -105,7 +105,21 @@ export async function getRecentActivity(limit = 8) {
 }
 
 export async function getDashboardKpis(): Promise<DashboardKpis> {
-  const now = new Date().getFullYear();
+  const now = new Date();
+  const nowYear = now.getFullYear();
+  const CURRENT = {
+    status: { in: [REGISTRATION_STATUS.ACTIVE, REGISTRATION_STATUS.PENDING_RENEWAL] },
+    expiryDate: { gte: now },
+  };
+  const EXPIRED = {
+    OR: [
+      { status: REGISTRATION_STATUS.EXPIRED },
+      {
+        status: { in: [REGISTRATION_STATUS.ACTIVE, REGISTRATION_STATUS.PENDING_RENEWAL] },
+        expiryDate: { lt: now },
+      },
+    ],
+  };
   const [
     totalVehicles,
     registeredVehicles,
@@ -122,21 +136,21 @@ export async function getDashboardKpis(): Promise<DashboardKpis> {
     oldest,
   ] = await Promise.all([
     prisma.vehicle.count(),
-    prisma.vehicleRegistration.count({ where: { status: REGISTRATION_STATUS.ACTIVE } }),
+    prisma.vehicleRegistration.count({ where: CURRENT }),
     prisma.vehicle.count({ where: { status: "ACTIVE" } }),
     prisma.vehicle.count({ where: { status: "ASSIGNED" } }),
     prisma.vehicle.count({ where: { status: "UNDER_MAINTENANCE" } }),
     prisma.vehicle.count({ where: { status: "DISPOSED" } }),
-    prisma.vehicleRegistration.count({ where: { expiryDate: { lt: new Date() } } }),
-    prisma.vehicleRegistration.count({ where: { status: REGISTRATION_STATUS.PENDING_RENEWAL } }),
+    prisma.vehicleRegistration.count({ where: EXPIRED }),
+    prisma.vehicleRegistration.count({ where: { status: REGISTRATION_STATUS.PENDING_RENEWAL, expiryDate: { gte: now } } }),
     prisma.vehicleRegistration.count({ where: { status: REGISTRATION_STATUS.SUSPENDED } }),
-    prisma.vehicleInsurance.count({ where: { endDate: { lt: new Date() } } }),
+    prisma.vehicleInsurance.count({ where: { endDate: { lt: now } } }),
     prisma.vehicle.findMany({ where: { year: { gt: 1900 } } as any, select: { year: true } }),
     prisma.vehicle.findFirst({ orderBy: { year: "desc" }, select: { vehicleCode: true, year: true } }),
     prisma.vehicle.findFirst({ orderBy: { year: "asc" }, select: { vehicleCode: true, year: true } }),
   ]);
 
-  const avgAge = ages.length ? Math.round(ages.reduce((s, v) => s + (now - (v.year ?? now)), 0) / ages.length) : 0;
+  const avgAge = ages.length ? Math.round(ages.reduce((s, v) => s + (nowYear - (v.year ?? nowYear)), 0) / ages.length) : 0;
 
   const windows = await getReminderWindows();
   const regWindowCounts: Record<number, number> = {};
