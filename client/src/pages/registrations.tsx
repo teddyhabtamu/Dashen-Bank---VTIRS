@@ -44,11 +44,12 @@ export default function RegistrationsPage() {
   const { companyName } = useBrand();
   const { toast } = useToast();
   const navigate = useNavigate();
+  const CURRENT = "CURRENT";
   const [rows, setRows] = useState<RegRow[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
-  const [status, setStatus] = useState("ACTIVE");
+  const [status, setStatus] = useState(CURRENT);
   const [loading, setLoading] = useState(true);
   const [pageSize, setPageSize] = useState(15);
 
@@ -242,7 +243,7 @@ export default function RegistrationsPage() {
 
   const chips: { key: string; label: string; clear: () => void }[] = [];
   if (search) chips.push({ key: "q", label: `“${search}”`, clear: () => setSearch("") });
-  if (status) chips.push({ key: "status", label: `Status: ${label(status)}`, clear: () => setStatus("") });
+  if (status) chips.push({ key: "status", label: `Status: ${status === CURRENT ? "Current" : label(status)}`, clear: () => setStatus("") });
 
   return (
     <div className="space-y-4">
@@ -282,6 +283,7 @@ export default function RegistrationsPage() {
             placeholder="All statuses"
             options={[
               { value: "", label: "All statuses" },
+              { value: CURRENT, label: "Current (Active / Pending renewal)" },
               ...REGISTRATION_STATUS_OPTIONS.map((s) => ({ value: s, label: label(s) })),
             ]}
           />

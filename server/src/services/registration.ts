@@ -433,6 +433,15 @@ export async function suspendRegistration(id: string, note: string | undefined, 
 // Build a Prisma `where` that matches the *effective* (derived) status rather
 // than the stored one, so list filtering agrees with what the badges show.
 function regStatusCondition(status: string, now: Date) {
+  // "Current" = a still-valid registration: ACTIVE or PENDING_RENEWAL with a
+  // future expiry. Both are live/operational — PENDING_RENEWAL merely signals
+  // the renewal window has opened. This is the default view.
+  if (status === "CURRENT") {
+    return {
+      status: { in: [REGISTRATION_STATUS.ACTIVE, REGISTRATION_STATUS.PENDING_RENEWAL] },
+      expiryDate: { gte: now },
+    };
+  }
   switch (status) {
     case REGISTRATION_STATUS.ACTIVE:
       return { status: REGISTRATION_STATUS.ACTIVE, expiryDate: { gte: now } };
