@@ -323,12 +323,12 @@ export default function RegistrationsPage() {
             {rows.map((r) => {
               const eff = effectiveRegistrationStatus(r.status, r.expiryDate);
               return (
-                <div key={r.id} className="flex items-center gap-4 px-5 py-3.5 transition-colors hover:bg-slate-50">
+                <div key={r.id} className="flex items-center gap-3 px-4 py-3.5 transition-colors hover:bg-slate-50 sm:gap-4 sm:px-5">
                   <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
                     <ClipboardList className="h-5 w-5" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                       <span className="truncate text-sm font-semibold text-slate-800">{r.regNumber}</span>
                       <StatusBadge status={eff} />
                     </div>
@@ -343,7 +343,7 @@ export default function RegistrationsPage() {
                       <span>Reg {formatDate(r.regDate)}</span>
                     </div>
                   </div>
-                  <div className="flex flex-shrink-0 items-center gap-3">
+                  <div className="flex flex-shrink-0 items-center gap-2 sm:gap-3">
                     {(["ACTIVE", "PENDING_RENEWAL", "EXPIRED"] as string[]).includes(eff) && (
                       <ExpiryPill date={r.expiryDate} windows={reminderWindows} />
                     )}

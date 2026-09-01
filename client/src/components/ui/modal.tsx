@@ -54,7 +54,7 @@ export function Modal({
   if (!open || typeof document === "undefined") return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[70] flex items-start justify-center overflow-y-auto p-4 py-[8vh]">
+    <div className="fixed inset-0 z-[70] flex items-end justify-center overflow-y-auto sm:items-start sm:justify-center sm:p-4 sm:py-[8vh]">
       <div
         className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm"
         onClick={onClose}
@@ -65,19 +65,19 @@ export function Modal({
         role="dialog"
         aria-modal="true"
         className={cn(
-          "relative z-10 my-auto w-full rounded-2xl bg-white shadow-2xl",
-          "max-h-[84vh] flex flex-col",
+          "relative z-10 flex w-full flex-col rounded-t-2xl bg-white shadow-2xl sm:my-auto sm:rounded-2xl",
+          "max-h-[92vh] sm:max-h-[84vh]",
           SIZE[size]
         )}
       >
         {(title || description) && (
-          <div className="flex items-start justify-between border-b border-slate-100 px-6 py-4">
+          <div className="flex items-start justify-between border-b border-slate-100 px-4 py-3 sm:px-6 sm:py-4">
             <div>
               {title && (
-                <h3 className="text-base font-semibold text-slate-800">{title}</h3>
+                <h3 className="text-sm font-semibold text-slate-800 sm:text-base">{title}</h3>
               )}
               {description && (
-                <p className="mt-0.5 text-sm text-slate-500">{description}</p>
+                <p className="mt-0.5 text-xs text-slate-500 sm:text-sm">{description}</p>
               )}
             </div>
             <button
@@ -85,13 +85,13 @@ export function Modal({
               className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-200"
               aria-label="Close"
             >
-              <X className="h-5 w-5" />
+              <X className="h-4 w-4 sm:h-5 sm:w-5" />
             </button>
           </div>
         )}
-        <div className="flex-1 overflow-y-auto px-6 py-5">{children}</div>
+        <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-5">{children}</div>
         {footer && (
-          <div className="flex justify-end gap-3 border-t border-slate-100 px-6 py-4">
+          <div className="flex flex-col-reverse gap-2 border-t border-slate-100 px-4 py-3 sm:flex-row sm:justify-end sm:gap-3 sm:px-6 sm:py-4">
             {footer}
           </div>
         )}

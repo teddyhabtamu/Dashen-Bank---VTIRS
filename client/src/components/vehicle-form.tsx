@@ -121,23 +121,23 @@ const ADD_NEW = "__add_new__";
 
 function StepIndicator({ current }: { current: number }) {
   return (
-    <div className="flex items-center justify-center gap-0">
+    <div className="flex items-center justify-center gap-0 overflow-x-auto">
       {STEPS.map((s, idx) => (
         <div key={s} className="flex items-center">
           <div className="flex flex-col items-center">
             <div
               className={cn(
-                "flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold transition-colors",
+                "flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-semibold transition-colors sm:h-7 sm:w-7 sm:text-xs",
                 idx < current && "bg-primary/10 text-primary",
                 idx === current && "bg-primary text-white",
                 idx > current && "bg-slate-100 text-slate-400",
               )}
             >
-              {idx < current ? <Check className="h-3.5 w-3.5" /> : idx + 1}
+              {idx < current ? <Check className="h-3 w-3 sm:h-3.5 sm:w-3.5" /> : idx + 1}
             </div>
             <span
               className={cn(
-                "mt-1 whitespace-nowrap text-[10px]",
+                "mt-1 hidden whitespace-nowrap text-[10px] sm:block",
                 idx <= current ? "text-slate-600" : "text-slate-400",
               )}
             >
@@ -147,7 +147,7 @@ function StepIndicator({ current }: { current: number }) {
           {idx < STEPS.length - 1 && (
             <div
               className={cn(
-                "mx-2 h-px w-8 md:w-12",
+                "mx-1 h-px w-3 sm:mx-2 sm:w-8 md:w-12",
                 idx < current ? "bg-primary" : "bg-slate-200",
               )}
             />
@@ -406,7 +406,7 @@ export function VehicleForm({ vehicleId, returnTo = "/vehicles" }: { vehicleId?:
 
   return (
     <div className="rounded-lg border border-slate-200 bg-white">
-      <div className="px-4 pt-3 pb-1.5">
+      <div className="px-3 pt-3 pb-1.5 sm:px-4">
         <StepIndicator current={step} />
       </div>
 
@@ -417,7 +417,7 @@ export function VehicleForm({ vehicleId, returnTo = "/vehicles" }: { vehicleId?:
       )}
 
       {isReview ? (
-        <div className="border-t border-slate-100 px-4 py-4">
+        <div className="border-t border-slate-100 px-3 py-4 sm:px-4">
           <div className="mb-4 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Eye className="h-4 w-4 text-slate-400" />
@@ -445,7 +445,7 @@ export function VehicleForm({ vehicleId, returnTo = "/vehicles" }: { vehicleId?:
                   </button>
                 </div>
                 <div className="border-t border-slate-200 px-3 py-2.5">
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-2 md:grid-cols-3">
+                  <div className="grid grid-cols-1 gap-x-4 gap-y-2 sm:grid-cols-2 md:grid-cols-3">
                     {fields.map((f) => (
                       <div key={f}>
                         <span className="text-[10px] font-medium uppercase tracking-wide text-slate-400">{LABELS[f]}</span>
@@ -469,11 +469,11 @@ export function VehicleForm({ vehicleId, returnTo = "/vehicles" }: { vehicleId?:
           </div>
         </div>
       ) : (
-        <div className="border-t border-slate-100 px-4 pt-3 pb-4">
+        <div className="border-t border-slate-100 px-3 pt-3 pb-4 sm:px-4">
           <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
             Step {step + 1} · {STEPS[step]}
           </h3>
-          <div className="grid grid-cols-1 gap-x-4 gap-y-2.5 md:grid-cols-3">
+          <div className="grid grid-cols-1 gap-x-4 gap-y-2.5 sm:grid-cols-2 md:grid-cols-3">
             {STEP_FIELDS[step].map((f) => (
               <Field key={f} label={LABELS[f]} error={errors[f]} required={REQUIRED.has(f)}
                 className={STEP_FIELDS[step].length === 1 ? "md:col-span-3" : ""}>
@@ -484,7 +484,7 @@ export function VehicleForm({ vehicleId, returnTo = "/vehicles" }: { vehicleId?:
         </div>
       )}
 
-      <div className="flex items-center justify-between border-t border-slate-100 px-4 py-2.5">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 px-3 py-2.5 sm:px-4">
         <button type="button" onClick={() => navigate(-1)} className="btn-outline text-xs">
           Cancel
         </button>

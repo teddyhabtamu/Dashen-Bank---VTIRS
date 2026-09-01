@@ -10,8 +10,8 @@ export default function NewVehiclePage() {
         Vehicles
       </Link>
       <div className="mb-6">
-        <h2 className="text-xl font-semibold text-slate-800">Register New Vehicle</h2>
-        <p className="mt-1 text-sm text-slate-500">
+        <h2 className="text-base font-semibold text-slate-800 sm:text-xl">Register New Vehicle</h2>
+        <p className="mt-1 text-xs text-slate-500 sm:text-sm">
           Complete all sections to create a vehicle master record.
         </p>
       </div>
