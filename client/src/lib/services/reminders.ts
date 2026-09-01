@@ -37,12 +37,16 @@ export function expiryState(
   return classifyExpiryState(daysUntil(date), windows);
 }
 
-// Derive a registration's effective status from its expiry date if still active.
+// Derive a registration's effective status from its expiry date. Only the
+// manual states (SUSPENDED, ARCHIVED) pass through untouched; anything else
+// falls back to EXPIRED once its expiry date has passed — this prevents a
+// PENDING_RENEWAL registration from displaying as "pending" after it has
+// actually expired. Mirrors server/src/services/reminders.ts.
 export function effectiveRegistrationStatus(
   status: string,
   expiryDate: Date | string | null | undefined
 ): string {
-  if (status === REGISTRATION_STATUS.SUSPENDED || status === REGISTRATION_STATUS.PENDING_RENEWAL || status === REGISTRATION_STATUS.ARCHIVED) {
+  if (status === REGISTRATION_STATUS.SUSPENDED || status === REGISTRATION_STATUS.ARCHIVED) {
     return status;
   }
   const days = daysUntil(expiryDate);

@@ -1,6 +1,6 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useCallback, useEffect, useState } from "react";
-import { Plus, Search, MoreVertical, History, RotateCcw, AlertCircle, Archive, RefreshCw, Download, ClipboardList } from "lucide-react";
+import { Plus, Search, MoreVertical, History, RotateCcw, AlertCircle, Archive, RefreshCw, Download, ClipboardList, Pencil } from "lucide-react";
 import { StatusBadge } from "@/components/ui/badge";
 import { BrandLoader } from "@/components/ui/brand-loader";
 import { useBrand } from "@/lib/brand-context";
@@ -15,7 +15,7 @@ import { REGISTRATION_STATUS_OPTIONS, label } from "@/lib/constants";
 import { formatDate, daysUntil } from "@/lib/format";
 import { useToast } from "@/lib/toast-context";
 import { exportCsv, exportXlsx, exportPdf, rowsToHtmlTable } from "@/lib/export";
-import { expiryState, effectiveRegistrationStatus } from "@/lib/services/reminders";
+import { expiryState, effectiveRegistrationStatus, type ReminderWindows } from "@/lib/services/reminders";
 
 interface RegRow {
   id: string;
@@ -27,8 +27,8 @@ interface RegRow {
   vehicle: { id: string; plateNumber: string; vehicleCode: string; branch?: { name: string } | null };
 }
 
-function ExpiryPill({ date }: { date: string }) {
-  const state = expiryState(date);
+function ExpiryPill({ date, windows }: { date: string; windows?: ReminderWindows }) {
+  const state = expiryState(date, windows);
   const days = daysUntil(date);
   const cls =
     state === "EXPIRED" ? "bg-red-50 text-red-700"
@@ -58,7 +58,23 @@ export default function RegistrationsPage() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [archiveId, setArchiveId] = useState<string | null>(null);
   const [restoreId, setRestoreId] = useState<string | null>(null);
+  const [editRow, setEditRow] = useState<RegRow | null>(null);
+  const [editForm, setEditForm] = useState({ regNumber: "", office: "", regDate: "", expiryDate: "" });
+  const [editErr, setEditErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [reminderWindows, setReminderWindows] = useState<ReminderWindows | undefined>(undefined);
+
+  // Expiry pills use the admin-configured reminder windows instead of hardcoded
+  // thresholds, so badge severity matches the notification settings.
+  useEffect(() => {
+    fetch("/api/settings/public")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        const w = d?.reminderWindows?.registration;
+        if (Array.isArray(w) && w.length === 4) setReminderWindows(w as ReminderWindows);
+      })
+      .catch(() => {});
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -77,7 +93,7 @@ export default function RegistrationsPage() {
   useEffect(() => { load(); }, [load]);
 
   async function afterAction() {
-    setCreateOpen(false); setRenewId(null); setSuspendId(null); setDeleteId(null); setArchiveId(null); setRestoreId(null);
+    setCreateOpen(false); setRenewId(null); setSuspendId(null); setDeleteId(null); setArchiveId(null); setRestoreId(null); setEditRow(null);
     await load();
   }
 
@@ -109,7 +125,8 @@ export default function RegistrationsPage() {
   async function doRenew(expiryDate: string) {
     if (!renewId) return; setBusy(true);
     try {
-      await fetch(`/api/registrations/${renewId}/renew`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ expiryDate }) });
+      const res = await fetch(`/api/registrations/${renewId}/renew`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ expiryDate }) });
+      if (!res.ok) { const d = await res.json().catch(() => ({})); toast("error", d?.error ?? "Renewal failed"); return; }
       toast("success", "Registration renewed");
       await afterAction();
     } finally { setBusy(false); }
@@ -118,7 +135,8 @@ export default function RegistrationsPage() {
   async function doSuspend(note: string) {
     if (!suspendId) return; setBusy(true);
     try {
-      await fetch(`/api/registrations/${suspendId}/suspend`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ note }) });
+      const res = await fetch(`/api/registrations/${suspendId}/suspend`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ note }) });
+      if (!res.ok) { const d = await res.json().catch(() => ({})); toast("error", d?.error ?? "Suspension failed"); return; }
       toast("warning", "Registration suspended");
       await afterAction();
     } finally { setBusy(false); }
@@ -127,7 +145,8 @@ export default function RegistrationsPage() {
   async function doDelete() {
     if (!deleteId) return; setBusy(true);
     try {
-      await fetch(`/api/registrations/${deleteId}`, { method: "DELETE" });
+      const res = await fetch(`/api/registrations/${deleteId}`, { method: "DELETE" });
+      if (!res.ok) { toast("error", "Delete failed"); return; }
       toast("success", "Registration deleted");
       await afterAction();
     } finally { setBusy(false); }
@@ -136,9 +155,10 @@ export default function RegistrationsPage() {
   async function doArchive(note: string) {
     if (!archiveId) return; setBusy(true);
     try {
-      await fetch(`/api/registrations/${archiveId}/archive`, {
+      const res = await fetch(`/api/registrations/${archiveId}/archive`, {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ note }),
       });
+      if (!res.ok) { const d = await res.json().catch(() => ({})); toast("error", d?.error ?? "Archive failed"); return; }
       toast("info", "Registration archived");
       await afterAction();
     } finally { setBusy(false); }
@@ -147,8 +167,37 @@ export default function RegistrationsPage() {
   async function doRestore() {
     if (!restoreId) return; setBusy(true);
     try {
-      await fetch(`/api/registrations/${restoreId}/restore`, { method: "POST", headers: { "Content-Type": "application/json" } });
+      const res = await fetch(`/api/registrations/${restoreId}/restore`, { method: "POST", headers: { "Content-Type": "application/json" } });
+      if (!res.ok) { const d = await res.json().catch(() => ({})); toast("error", d?.error ?? "Restore failed"); return; }
       toast("success", "Registration restored");
+      await afterAction();
+    } finally { setBusy(false); }
+  }
+
+  function openEdit(row: RegRow) {
+    setEditErr(null);
+    setEditForm({
+      regNumber: row.regNumber,
+      office: row.office ?? "",
+      regDate: row.regDate.slice(0, 10),
+      expiryDate: row.expiryDate.slice(0, 10),
+    });
+    setEditRow(row);
+  }
+
+  async function doEdit() {
+    if (!editRow) return; setBusy(true); setEditErr(null);
+    try {
+      const res = await fetch(`/api/registrations/${editRow.id}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(editForm),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const fieldMsg = d?.issues ? Object.values(d.issues).flat()[0] : null;
+        setEditErr(fieldMsg ?? d?.error ?? "Failed to update");
+        return;
+      }
+      toast("success", "Registration updated");
       await afterAction();
     } finally { setBusy(false); }
   }
@@ -271,7 +320,7 @@ export default function RegistrationsPage() {
                     </div>
                   </div>
                   <div className="flex flex-shrink-0 items-center gap-3">
-                    <ExpiryPill date={r.expiryDate} />
+                    <ExpiryPill date={r.expiryDate} windows={reminderWindows} />
                     <Dropdown align="right"
                       trigger={({ toggle }) => (
                         <button onClick={toggle} className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600" title="Actions">
@@ -279,11 +328,12 @@ export default function RegistrationsPage() {
                         </button>
                       )}
                       items={eff === "ARCHIVED" ? [
-                        { label: "Restore", icon: <RotateCcw className="h-4 w-4" />, onClick: () => setRestoreId(r.id) },
+                        ...(can("registration:manage") ? [{ label: "Restore", icon: <RotateCcw className="h-4 w-4" />, onClick: () => setRestoreId(r.id) }] : []),
                         { label: "History", icon: <History className="h-4 w-4" />, onClick: () => navigate(`/registrations/${r.id}/history`) },
                       ] : [
-                        { label: "Renew", icon: <RefreshCw className="h-4 w-4" />, onClick: () => setRenewId(r.id) },
-                        { label: "Suspend", icon: <AlertCircle className="h-4 w-4" />, onClick: () => setSuspendId(r.id) },
+                        ...(can("registration:manage") ? [{ label: "Edit", icon: <Pencil className="h-4 w-4" />, onClick: () => openEdit(r) }] : []),
+                        ...(can("registration:renew") ? [{ label: "Renew", icon: <RefreshCw className="h-4 w-4" />, onClick: () => setRenewId(r.id) }] : []),
+                        ...(can("registration:suspend") ? [{ label: "Suspend", icon: <AlertCircle className="h-4 w-4" />, onClick: () => setSuspendId(r.id) }] : []),
                         { label: "History", icon: <History className="h-4 w-4" />, onClick: () => navigate(`/registrations/${r.id}/history`) },
                         ...(can("registration:manage") ? [{ label: "Archive", icon: <Archive className="h-4 w-4" />, onClick: () => setArchiveId(r.id) }] : []),
                       ]}
@@ -328,14 +378,56 @@ export default function RegistrationsPage() {
         </div>
       </Modal>
 
+      <EditRegModal open={editRow !== null} row={editRow} form={editForm} onChange={setEditForm}
+        error={editErr} onClose={() => !busy && setEditRow(null)} onSave={doEdit} loading={busy} />
+
       <RenewModal open={renewId !== null} onClose={() => setRenewId(null)} onConfirm={doRenew} loading={busy} />
       <SuspendModal open={suspendId !== null} onClose={() => setSuspendId(null)} onConfirm={doSuspend} loading={busy} />
       <ArchiveModal open={archiveId !== null} onClose={() => setArchiveId(null)} onConfirm={doArchive} loading={busy} />
       <ConfirmModal open={restoreId !== null} onClose={() => setRestoreId(null)} onConfirm={doRestore} loading={busy}
-        title="Restore Registration" message="This will restore the registration to active status." confirmLabel="Restore" />
+        title="Restore Registration" message="This will restore the registration from the archive. Its status is re-derived from the expiry date." confirmLabel="Restore" />
       <ConfirmModal open={deleteId !== null} onClose={() => setDeleteId(null)} onConfirm={doDelete} loading={busy}
         title="Delete Registration" message="This permanently removes the registration and its history." confirmLabel="Delete" />
     </div>
+  );
+}
+
+function EditRegModal({ open, row, form, onChange, error, onClose, onSave, loading }: {
+  open: boolean;
+  row: RegRow | null;
+  form: { regNumber: string; office: string; regDate: string; expiryDate: string };
+  onChange: (v: { regNumber: string; office: string; regDate: string; expiryDate: string }) => void;
+  error: string | null;
+  onClose: () => void;
+  onSave: () => void;
+  loading: boolean;
+}) {
+  return (
+    <Modal open={open} onClose={onClose} title="Edit Registration" footer={
+      <><button className="btn-outline" onClick={onClose} disabled={loading}>Cancel</button>
+      <button className="btn-primary" onClick={onSave} disabled={loading}>Save Changes</button></>
+    }>
+      {error && <div className="mb-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-600">{error}</div>}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <label className="text-sm sm:col-span-2">Vehicle
+          <div className="mt-1 rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-600">
+            {row?.vehicle.plateNumber} ({row?.vehicle.vehicleCode}){row?.vehicle.branch?.name ? ` · ${row?.vehicle.branch.name}` : ""}
+          </div>
+        </label>
+        <label className="text-sm">Reg Number <span className="text-red-400">*</span>
+          <input className="input mt-1" value={form.regNumber} onChange={(e) => onChange({ ...form, regNumber: e.target.value })} />
+        </label>
+        <label className="text-sm">Office
+          <input className="input mt-1" value={form.office} onChange={(e) => onChange({ ...form, office: e.target.value })} />
+        </label>
+        <label className="text-sm">Reg Date <span className="text-red-400">*</span>
+          <div className="mt-1"><DatePicker value={form.regDate} onChange={(v) => onChange({ ...form, regDate: v })} /></div>
+        </label>
+        <label className="text-sm">Expiry Date <span className="text-red-400">*</span>
+          <div className="mt-1"><DatePicker value={form.expiryDate} onChange={(v) => onChange({ ...form, expiryDate: v })} /></div>
+        </label>
+      </div>
+    </Modal>
   );
 }
 

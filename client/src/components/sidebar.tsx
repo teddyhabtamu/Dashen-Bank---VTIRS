@@ -27,7 +27,7 @@ interface NavItem {
   href: string;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
-  perm?: string | null;
+  perm?: string | string[] | null;
 }
 
 interface NavSection {
@@ -41,7 +41,7 @@ const SECTIONS: NavSection[] = [
     items: [
       { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
       { href: "/vehicles", label: "Vehicle Registry", icon: Car, perm: PERMISSIONS.VEHICLE_VIEW },
-      { href: "/registrations", label: "Registrations", icon: ClipboardList, perm: PERMISSIONS.REGISTRATION_MANAGE },
+      { href: "/registrations", label: "Registrations", icon: ClipboardList, perm: [PERMISSIONS.REGISTRATION_MANAGE, PERMISSIONS.REGISTRATION_RENEW, PERMISSIONS.REGISTRATION_SUSPEND] },
     ],
   },
   {

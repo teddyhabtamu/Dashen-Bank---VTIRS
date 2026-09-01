@@ -18,6 +18,7 @@ interface HistoryEntry {
   newExpiry: string | null;
   note: string | null;
   performedById: string | null;
+  performedBy: { id: string; fullName: string } | null;
   createdAt: string;
 }
 
@@ -131,6 +132,9 @@ export default function RegistrationHistoryPage() {
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-semibold text-slate-800">{h.action}</span>
                         <span className="text-[10px] text-slate-400">{formatDateTime(h.createdAt)}</span>
+                        {h.performedBy && (
+                          <span className="text-[10px] font-medium text-slate-400">by {h.performedBy.fullName}</span>
+                        )}
                       </div>
                       <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
                         {h.prevStatus && h.newStatus && h.prevStatus !== h.newStatus && (

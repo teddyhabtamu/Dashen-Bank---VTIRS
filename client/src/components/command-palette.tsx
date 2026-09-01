@@ -13,13 +13,13 @@ interface NavItem {
   label: string;
   href: string;
   icon: any;
-  perm: string | null;
+  perm: string | string[] | null;
 }
 
 const NAV_ITEMS: NavItem[] = [
   { id: "dash", label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, perm: null },
   { id: "vehicles", label: "Vehicle Registry", href: "/vehicles", icon: Car, perm: PERMISSIONS.VEHICLE_VIEW },
-  { id: "registrations", label: "Registrations", href: "/registrations", icon: ClipboardList, perm: PERMISSIONS.REGISTRATION_MANAGE },
+  { id: "registrations", label: "Registrations", href: "/registrations", icon: ClipboardList, perm: [PERMISSIONS.REGISTRATION_MANAGE, PERMISSIONS.REGISTRATION_RENEW, PERMISSIONS.REGISTRATION_SUSPEND] },
   { id: "insurance", label: "Insurance", href: "/insurances", icon: ShieldCheck, perm: PERMISSIONS.INSURANCE_MANAGE },
   { id: "documents", label: "Documents", href: "/documents", icon: FileText, perm: PERMISSIONS.DOCUMENT_VIEW },
   { id: "drivers", label: "Drivers", href: "/drivers", icon: UserRound, perm: PERMISSIONS.BRANCH_MANAGE },

@@ -56,9 +56,10 @@ export const attachSession: RequestHandler = async (req, _res, next) => {
   next();
 };
 
-// Require an authenticated session and (optionally) a permission.
+// Require an authenticated session and (optionally) a permission. If an array
+// is provided, any of the listed permissions is sufficient (OR semantics).
 // Authorization is resolved from the database on every request.
-export function requireAuth(permission?: PermissionCode): RequestHandler {
+export function requireAuth(permission?: PermissionCode | PermissionCode[]): RequestHandler {
   return async (req: Request, res: Response, next: NextFunction) => {
     const tokenSession = req.session ?? (await readSession(req)) ?? undefined;
     if (!tokenSession) {
@@ -70,8 +71,12 @@ export function requireAuth(permission?: PermissionCode): RequestHandler {
       return res.status(401).json({ error: "Authentication required" });
     }
 
-    if (permission && !session.permissions.includes(permission)) {
-      return res.status(403).json({ error: "Insufficient permissions" });
+    if (permission) {
+      const required = Array.isArray(permission) ? permission : [permission];
+      const allowed = required.some((p) => session.permissions.includes(p));
+      if (!allowed) {
+        return res.status(403).json({ error: "Insufficient permissions" });
+      }
     }
 
     req.session = session;

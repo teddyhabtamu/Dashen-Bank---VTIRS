@@ -1,5 +1,5 @@
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { RefreshCw, Ban } from "lucide-react";
 import { StatusBadge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
@@ -8,7 +8,8 @@ import { Tooltip } from "@/components/ui/tooltip";
 import { DatePicker } from "@/components/ui/datepicker";
 import { MoreVertical } from "lucide-react";
 import { formatDate, daysUntil } from "@/lib/format";
-import { expiryState, effectiveRegistrationStatus } from "@/lib/services/reminders";
+import { useToast } from "@/lib/toast-context";
+import { expiryState, effectiveRegistrationStatus, type ReminderWindows } from "@/lib/services/reminders";
 
 interface Reg {
   id: string;
@@ -32,10 +33,22 @@ export function RegistrationPanel({ vehicleId, initial, canRenew, canSuspend }: 
   canRenew: boolean;
   canSuspend: boolean;
 }) {
+  const { toast } = useToast();
   const [regs, setRegs] = useState<Reg[]>(initial);
   const [renewId, setRenewId] = useState<string | null>(null);
   const [suspendId, setSuspendId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [reminderWindows, setReminderWindows] = useState<ReminderWindows | undefined>(undefined);
+
+  useEffect(() => {
+    fetch("/api/settings/public")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        const w = d?.reminderWindows?.registration;
+        if (Array.isArray(w) && w.length === 4) setReminderWindows(w as ReminderWindows);
+      })
+      .catch(() => {});
+  }, []);
 
   const refresh = useCallback(async () => {
     const res = await fetch(`/api/vehicles/${vehicleId}`, { cache: "no-store" });
@@ -45,13 +58,19 @@ export function RegistrationPanel({ vehicleId, initial, canRenew, canSuspend }: 
 
   async function doRenew(date: string) {
     if (!renewId) return; setBusy(true);
-    try { await fetch(`/api/registrations/${renewId}/renew`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ expiryDate: date }) }); await refresh(); }
-    finally { setBusy(false); setRenewId(null); }
+    try {
+      const res = await fetch(`/api/registrations/${renewId}/renew`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ expiryDate: date }) });
+      if (!res.ok) { const d = await res.json().catch(() => ({})); toast("error", d?.error ?? "Renewal failed"); return; }
+      await refresh();
+    } finally { setBusy(false); setRenewId(null); }
   }
   async function doSuspend(note: string) {
     if (!suspendId) return; setBusy(true);
-    try { await fetch(`/api/registrations/${suspendId}/suspend`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ note }) }); await refresh(); }
-    finally { setBusy(false); setSuspendId(null); }
+    try {
+      const res = await fetch(`/api/registrations/${suspendId}/suspend`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ note }) });
+      if (!res.ok) { const d = await res.json().catch(() => ({})); toast("error", d?.error ?? "Suspension failed"); return; }
+      await refresh();
+    } finally { setBusy(false); setSuspendId(null); }
   }
 
   if (regs.length === 0) {
@@ -62,7 +81,7 @@ export function RegistrationPanel({ vehicleId, initial, canRenew, canSuspend }: 
     <div className="space-y-3">
       {regs.map((r) => {
         const eff = effectiveRegistrationStatus(r.status, r.expiryDate);
-        const state = expiryState(r.expiryDate);
+        const state = expiryState(r.expiryDate, reminderWindows);
         const days = daysUntil(r.expiryDate);
         return (
           <div key={r.id} className="rounded-lg border border-slate-100 p-3">

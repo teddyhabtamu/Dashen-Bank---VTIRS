@@ -12,7 +12,7 @@ export interface SessionUser {
 interface AuthContextValue {
   user: SessionUser | null;
   loading: boolean;
-  can: (permission: string) => boolean;
+  can: (permission: string | string[]) => boolean;
   refresh: () => Promise<void>;
   logout: () => Promise<void>;
 }
@@ -64,8 +64,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     window.location.href = "/login";
   }
 
-  function can(permission: string): boolean {
-    return user?.permissions.includes(permission) ?? false;
+  function can(permission: string | string[]): boolean {
+    const perms = user?.permissions ?? [];
+    const required = Array.isArray(permission) ? permission : [permission];
+    return required.some((p) => perms.includes(p));
   }
 
   return (

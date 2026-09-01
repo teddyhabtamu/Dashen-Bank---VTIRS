@@ -56,12 +56,16 @@ export function expiryState(
   return classifyExpiryState(daysUntil(date), windows);
 }
 
-// Derive a registration's effective status from its expiry date if still active.
+// Derive a registration's effective status from its expiry date. Only the
+// manual states (SUSPENDED, ARCHIVED) pass through untouched; anything else
+// falls back to EXPIRED once its expiry date has passed — this prevents a
+// PENDING_RENEWAL registration from displaying as "pending" after it has
+// actually expired.
 export function effectiveRegistrationStatus(
   status: string,
   expiryDate: Date | string | null | undefined
 ): string {
-  if (status === REGISTRATION_STATUS.SUSPENDED || status === REGISTRATION_STATUS.PENDING_RENEWAL || status === REGISTRATION_STATUS.ARCHIVED) {
+  if (status === REGISTRATION_STATUS.SUSPENDED || status === REGISTRATION_STATUS.ARCHIVED) {
     return status;
   }
   const days = daysUntil(expiryDate);
@@ -77,10 +81,17 @@ export async function autoTransitionRegistrations(): Promise<{ transitioned: num
   const thirtyDaysFromNow = new Date(now.getTime() + w30 * 24 * 60 * 60 * 1000);
   const sevenDaysFromNow = new Date(now.getTime() + w7 * 24 * 60 * 60 * 1000);
 
-  const [expiredResult, pendingResult] = await Promise.all([
+  const [expiredActive, expiredPending, pendingResult] = await Promise.all([
     prisma.vehicleRegistration.updateMany({
       where: {
         status: REGISTRATION_STATUS.ACTIVE,
+        expiryDate: { lt: now },
+      },
+      data: { status: REGISTRATION_STATUS.EXPIRED },
+    }),
+    prisma.vehicleRegistration.updateMany({
+      where: {
+        status: REGISTRATION_STATUS.PENDING_RENEWAL,
         expiryDate: { lt: now },
       },
       data: { status: REGISTRATION_STATUS.EXPIRED },
@@ -94,7 +105,7 @@ export async function autoTransitionRegistrations(): Promise<{ transitioned: num
     }),
   ]);
 
-  const total = expiredResult.count + pendingResult.count;
+  const total = expiredActive.count + expiredPending.count + pendingResult.count;
   return { transitioned: total };
 }
 

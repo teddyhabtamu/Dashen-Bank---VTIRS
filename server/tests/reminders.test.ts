@@ -75,6 +75,24 @@ describe("reminders", () => {
       future.setDate(future.getDate() + 30);
       expect(effectiveRegistrationStatus("ACTIVE", future)).toBe("ACTIVE");
     });
+    it("returns ARCHIVED as-is", () => {
+      expect(effectiveRegistrationStatus("ARCHIVED", null)).toBe("ARCHIVED");
+    });
+    it("flips PENDING_RENEWAL to EXPIRED once its expiry has passed", () => {
+      const past = new Date();
+      past.setDate(past.getDate() - 2);
+      expect(effectiveRegistrationStatus("PENDING_RENEWAL", past)).toBe("EXPIRED");
+    });
+    it("keeps PENDING_RENEWAL before expiry", () => {
+      const future = new Date();
+      future.setDate(future.getDate() + 10);
+      expect(effectiveRegistrationStatus("PENDING_RENEWAL", future)).toBe("PENDING_RENEWAL");
+    });
+    it("keeps ARCHIVED even when expiry is in the past", () => {
+      const past = new Date();
+      past.setDate(past.getDate() - 30);
+      expect(effectiveRegistrationStatus("ARCHIVED", past)).toBe("ARCHIVED");
+    });
     it("returns original status when expiryDate is null", () => {
       expect(effectiveRegistrationStatus("ACTIVE", null)).toBe("ACTIVE");
     });
