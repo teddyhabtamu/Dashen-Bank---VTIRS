@@ -278,6 +278,97 @@ export async function documentCompleteness(f: ReportFilters) {
   };
 }
 
+// 11. Fleet Acquisition — vehicles grouped by acquisition year (trend + fleet tenure stats)
+export async function fleetAcquisition(f: ReportFilters) {
+  const rows = await prisma.vehicle.findMany({
+    where: baseWhere(f),
+    select: { year: true, acquisitionDate: true },
+  });
+
+  const nowYear = new Date().getFullYear();
+  const byYear = new Map<number, number>();
+  let acquiredCount = 0;
+  let tenureSum = 0;
+
+  for (const v of rows) {
+    // Acquisition year falls back to manufacture year when unspecified.
+    const year = v.acquisitionDate ? v.acquisitionDate.getFullYear() : v.year;
+    byYear.set(year, (byYear.get(year) ?? 0) + 1);
+    if (v.acquisitionDate) {
+      acquiredCount++;
+      tenureSum += nowYear - year;
+    }
+  }
+
+  const years = Array.from(byYear.entries())
+    .filter(([y]) => y > 0)
+    .sort((a, b) => a[0] - b[0]);
+
+  return {
+    summary: {
+      total: rows.length,
+      withAcquisitionDate: acquiredCount,
+      avgFleetAge: acquiredCount ? Math.round((tenureSum / acquiredCount) * 10) / 10 : 0,
+    },
+    trend: years.map(([year, count]) => ({ year: String(year), count })),
+  };
+}
+
+// 12. Renewal Forecast — registrations & insurances expiring within the next `months`
+export async function renewalForecast(f: ReportFilters, months = 12) {
+  const start = new Date();
+  const end = new Date();
+  end.setMonth(end.getMonth() + months);
+
+  const [regs, ins] = await Promise.all([
+    prisma.vehicleRegistration.findMany({
+      where: {
+        vehicle: baseWhere(f),
+        expiryDate: { gte: start, lte: end },
+        status: { notIn: ["SUSPENDED", "ARCHIVED"] },
+      },
+      include: { vehicle: { select: { plateNumber: true, vehicleCode: true, branch: { select: { name: true } } } } },
+      orderBy: { expiryDate: "asc" },
+    }),
+    prisma.vehicleInsurance.findMany({
+      where: { vehicle: baseWhere(f), endDate: { gte: start, lte: end } },
+      include: { vehicle: { select: { plateNumber: true, vehicleCode: true, branch: { select: { name: true } } } } },
+      orderBy: { endDate: "asc" },
+    }),
+  ]);
+
+  const registrations = regs.map((r) => ({
+    kind: "Registration",
+    plateNumber: r.vehicle.plateNumber,
+    vehicleCode: r.vehicle.vehicleCode,
+    ref: r.regNumber,
+    branch: r.vehicle.branch?.name ?? "-",
+    dueDate: r.expiryDate,
+    daysLeft: daysUntil(r.expiryDate),
+  }));
+  const insurance = ins.map((i) => ({
+    kind: "Insurance",
+    plateNumber: i.vehicle.plateNumber,
+    vehicleCode: i.vehicle.vehicleCode,
+    ref: i.policyNo,
+    branch: i.vehicle.branch?.name ?? "-",
+    dueDate: i.endDate,
+    daysLeft: daysUntil(i.endDate),
+  }));
+
+  const all = [...registrations, ...insurance].sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+
+  return {
+    months,
+    summary: {
+      registrations: registrations.length,
+      insurance: insurance.length,
+      total: all.length,
+    },
+    rows: all,
+  };
+}
+
 export const REPORT_BUILDERS: Record<string, (f: ReportFilters) => Promise<any>> = {
   inventory: vehicleInventory,
   registrationStatus: registrationStatus,
@@ -290,6 +381,8 @@ export const REPORT_BUILDERS: Record<string, (f: ReportFilters) => Promise<any>>
   costByBranch: costByBranch,
   expiryTimeline: expiryTimeline,
   documentCompleteness: documentCompleteness,
+  fleetAcquisition: fleetAcquisition,
+  renewalForecast: renewalForecast,
 };
 
 export const REPORT_META = [
@@ -302,4 +395,6 @@ export const REPORT_META = [
   { key: "age", title: "Vehicle Age", type: "chart", icon: "Clock" },
   { key: "cost", title: "Vehicle Cost", type: "mixed", icon: "DollarSign" },
   { key: "documentCompleteness", title: "Document Completeness", type: "mixed", icon: "FileCheck" },
+  { key: "fleetAcquisition", title: "Fleet Acquisition", type: "mixed", icon: "TrendingUp" },
+  { key: "renewalForecast", title: "Renewal Forecast", type: "mixed", icon: "CalendarRange" },
 ];

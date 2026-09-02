@@ -32,6 +32,8 @@ const TABS: { key: string; label: string }[] = [
   { key: "age", label: "Age" },
   { key: "cost", label: "Cost" },
   { key: "documentCompleteness", label: "Doc Compliance" },
+  { key: "fleetAcquisition", label: "Acquisition" },
+  { key: "renewalForecast", label: "Renewal Forecast" },
 ];
 
 export default function ReportsPage() {
@@ -163,6 +165,8 @@ function ReportView({ active, payload }: { active: string; payload: any }) {
   if (active === "age") return <BarChart rows={payload ?? []} nameKey="range" valueKey="count" horizontal />;
   if (active === "cost") return <CostReport data={payload} />;
   if (active === "documentCompleteness") return <CompletenessReport data={payload} />;
+  if (active === "fleetAcquisition") return <AcquisitionReport data={payload} />;
+  if (active === "renewalForecast") return <RenewalForecast data={payload} />;
   return null;
 }
 
@@ -170,6 +174,8 @@ function flattenRows(key: string, payload: any): Record<string, unknown>[] {
   if (!payload) return [];
   if (key === "cost") return payload.top ?? [];
   if (key === "documentCompleteness") return payload.rows ?? [];
+  if (key === "fleetAcquisition") return payload.trend ?? [];
+  if (key === "renewalForecast") return payload.rows ?? [];
   if (Array.isArray(payload)) return payload;
   return [];
 }
@@ -392,6 +398,110 @@ function Stat({ label, value }: { label: string; value: string }) {
 
 function Empty() {
   return <div className="py-12 text-center text-sm text-slate-400">No data for the current filters.</div>;
+}
+
+function AcquisitionReport({ data }: { data: { summary: { total: number; withAcquisitionDate: number; avgFleetAge: number }; trend: { year: string; count: number }[] } | null }) {
+  if (!data) return <Empty />;
+  const cats = data.trend.map((t) => t.year);
+  const vals = data.trend.map((t) => t.count);
+  const option = {
+    tooltip: { trigger: "axis" },
+    grid: { left: 8, right: 24, top: 16, bottom: 8, containLabel: true },
+    xAxis: { type: "category", data: cats, axisLabel: { rotate: 0, fontSize: 10, interval: 0 } },
+    yAxis: { type: "value", minInterval: 1 },
+    series: [{
+      type: "bar", data: vals,
+      itemStyle: { color: "#012169", borderRadius: [4, 4, 0, 0] },
+      barWidth: "55%",
+      label: { show: true, position: "top", fontSize: 10 },
+    }],
+  };
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <Stat label="Vehicles" value={String(data.summary.total)} />
+        <Stat label="Avg. Fleet Age" value={`${data.summary.avgFleetAge} yrs`} />
+        <Stat label="With Acqu. Date" value={String(data.summary.withAcquisitionDate)} />
+      </div>
+      {data.trend.length === 0 ? <Empty /> : (
+        <div>
+          <h3 className="mb-2 text-sm font-semibold text-slate-700">Vehicles by Acquisition Year</h3>
+          <ReactECharts option={option} style={{ height: 360 }} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function RenewalForecast({ data }: { data: { months: number; summary: { registrations: number; insurance: number; total: number }; rows: any[] } | null }) {
+  if (!data) return <Empty />;
+  const cols = ["kind", "plateNumber", "vehicleCode", "ref", "branch", "dueDate", "daysLeft"];
+  const disp: Record<string, string> = { kind: "Type", plateNumber: "Plate", vehicleCode: "Vehicle", ref: "Ref", branch: "Branch", dueDate: "Due", daysLeft: "Days" };
+  const rows = data.rows;
+
+  function KindBadge({ kind }: { kind: string }) {
+    return <span className={`badge ${kind === "Registration" ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700"}`}>{kind}</span>;
+  }
+  function DaysBadge({ days }: { days: number | null }) {
+    const cls = days === null || days < 0 ? "bg-red-100 text-red-700" : days <= 30 ? "bg-orange-100 text-orange-700" : "bg-amber-100 text-amber-700";
+    return <span className={`badge ${cls}`}>{days !== null && days >= 0 ? `${days}d` : "expired"}</span>;
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <Stat label="Registrations" value={String(data.summary.registrations)} />
+        <Stat label="Insurance" value={String(data.summary.insurance)} />
+        <Stat label="Total Due" value={String(data.summary.total)} />
+      </div>
+      {rows.length === 0 ? <Empty /> : (
+        <div className="space-y-3 sm:hidden">
+          {rows.map((r, i) => (
+            <div key={i} className="rounded-lg border border-slate-100 p-4">
+              <div className="mb-2 flex items-start justify-between gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <KindBadge kind={r.kind} />
+                  <span className="truncate text-sm font-semibold text-slate-800">{r.plateNumber}</span>
+                </div>
+                <DaysBadge days={r.daysLeft} />
+              </div>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-slate-500">
+                <div><span className="font-medium text-slate-600">Vehicle:</span> {r.vehicleCode}</div>
+                <div className="truncate"><span className="font-medium text-slate-600">Ref:</span> {r.ref}</div>
+                <div className="truncate col-span-2"><span className="font-medium text-slate-600">Branch:</span> {r.branch}</div>
+                <div className="col-span-2"><span className="font-medium text-slate-600">Due:</span> {formatDate(r.dueDate)}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {rows.length > 0 && (
+        <div className="hidden sm:block">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+                <tr>{cols.map((c) => <th key={c} className="px-3 py-2">{disp[c]}</th>)}</tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {rows.map((r, i) => (
+                  <tr key={i} className="hover:bg-slate-50">
+                    {cols.map((c) => (
+                      <td key={c} className="px-3 py-2">
+                        {c === "kind" ? <KindBadge kind={r[c]} />
+                          : c === "daysLeft" ? <DaysBadge days={r[c]} />
+                          : c === "dueDate" ? formatDate(r[c])
+                          : r[c]}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function CompletenessReport({ data }: { data: { required: string[]; summary: { total: number; complete: number; incomplete: number }; rows: any[] } | null }) {
