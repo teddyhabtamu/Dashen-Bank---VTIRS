@@ -142,12 +142,15 @@ export function DocumentManager({
     requiredInputRef.current?.click();
   }
 
-  function onRequiredFiles(files: FileList | null) {
+  function onRequiredFiles(e: React.ChangeEvent<HTMLInputElement>) {
+    // Snapshot the FileList into a plain array FIRST — clearing input.value
+    // empties the live FileList, so reading it afterwards yields 0 files.
+    const picked = e.target.files ? Array.from(e.target.files) : [];
     const category = requiredPickCat.current;
     requiredPickCat.current = null;
     if (requiredInputRef.current) requiredInputRef.current.value = "";
-    if (!files || files.length === 0 || !category) return;
-    const next: StagedFile[] = Array.from(files).map((f) => ({
+    if (picked.length === 0 || !category) return;
+    const next: StagedFile[] = picked.map((f) => ({
       file: f,
       category,
       title: titleFromName(f.name),
@@ -270,7 +273,7 @@ export function DocumentManager({
             accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
             multiple
             hidden
-            onChange={(e) => onRequiredFiles(e.target.files)}
+            onChange={(e) => onRequiredFiles(e)}
           />
           <div className="divide-y divide-slate-100">
             {requiredCategories.map((cat) => {
