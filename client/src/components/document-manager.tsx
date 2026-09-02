@@ -169,7 +169,7 @@ export function DocumentManager({
     setBusy(true);
     try {
       await fetch(`/api/documents/${deleteId}`, { method: "DELETE" });
-      toast("success", "Document deleted");
+      toast("success", "Moved to trash");
       await refresh();
     } finally { setBusy(false); setDeleteId(null); setDeleteInfo(null); }
   }
@@ -480,9 +480,9 @@ export function DocumentManager({
         onClose={() => setDeleteId(null)}
         onConfirm={doDelete}
         loading={busy}
-        title="Delete Document"
-        message={`Delete "${deleteInfo?.name ?? ""}"? The file will be permanently removed.`}
-        confirmLabel="Delete"
+        title="Move to Trash"
+        message={`Move "${deleteInfo?.name ?? ""}" to the trash? It can be restored from the Documents → Trash view or deleted permanently later.`}
+        confirmLabel="Move to trash"
       />
 
       <ConfirmModal

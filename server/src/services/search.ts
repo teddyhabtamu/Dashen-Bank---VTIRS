@@ -145,7 +145,7 @@ export async function globalSearch(filters: SearchFilters): Promise<SearchResult
       take: 25,
     }),
     prisma.vehicleDocument.findMany({
-      where: docQ,
+      where: { deletedAt: null, ...docQ },
       include: { vehicle: { select: { id: true, plateNumber: true } } },
       take: 25,
     }),

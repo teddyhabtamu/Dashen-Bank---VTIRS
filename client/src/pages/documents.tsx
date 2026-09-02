@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { FileText, Search, MoreVertical, Eye, Download, Pencil, Trash2 } from "lucide-react";
+import { FileText, Search, MoreVertical, Eye, Download, Pencil, Trash2, RotateCcw, Trash, Inbox } from "lucide-react";
 import { Select } from "@/components/ui/select";
 import { BrandLoader } from "@/components/ui/brand-loader";
 import { Modal } from "@/components/ui/modal";
@@ -23,12 +23,14 @@ interface Doc {
   version: number;
   isLatest: boolean;
   createdAt: string;
+  deletedAt?: string | null;
   vehicle: { id: string; plateNumber: string; vehicleCode: string };
 }
 
 export default function DocumentsPage() {
   const { toast } = useToast();
   const { companyName } = useBrand();
+  const [view, setView] = useState<"all" | "trash">("all");
   const [docs, setDocs] = useState<Doc[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -37,6 +39,7 @@ export default function DocumentsPage() {
   const [editTitle, setEditTitle] = useState("");
   const [editCat, setEditCat] = useState("");
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [purgeId, setPurgeId] = useState<string | null>(null);
   const [docsPage, setDocsPage] = useState(1);
   const [docsPageSize, setDocsPageSize] = useState(25);
   const [docsTotal, setDocsTotal] = useState(0);
@@ -44,11 +47,13 @@ export default function DocumentsPage() {
 
   useEffect(() => {
     setLoading(true);
+    setDocsPage(1);
     const qs = new URLSearchParams();
     if (search) qs.set("search", search);
     qs.set("page", String(docsPage));
     qs.set("pageSize", String(docsPageSize));
-    fetch(`/api/documents?${qs.toString()}`)
+    const url = view === "trash" ? "/api/documents/trash" : "/api/documents";
+    fetch(`${url}?${qs.toString()}`)
       .then((r) => r.json())
       .then((d) => {
         setDocs(d.documents ?? []);
@@ -58,9 +63,9 @@ export default function DocumentsPage() {
         setDocsTotalPages(d.totalPages ?? 1);
       })
       .finally(() => setLoading(false));
-  }, [search, docsPage, docsPageSize]);
+  }, [view, search, docsPage, docsPageSize]);
 
-  const filtered = cat ? docs.filter((d) => d.category === cat) : docs;
+  const filtered = (cat && view === "all") ? docs.filter((d) => d.category === cat) : docs;
 
   async function handleEditSave() {
     if (!editingDoc) return;
@@ -88,8 +93,23 @@ export default function DocumentsPage() {
     const res = await fetch(`/api/documents/${id}`, { method: "DELETE" });
     if (!res.ok) { toast("error", "Failed to delete"); return; }
     setDocs((prev) => prev.filter((d) => d.id !== id));
-    toast("success", "Document deleted");
+    toast("success", "Moved to trash");
     setDeleteId(null);
+  }
+
+  async function handleRestore(id: string) {
+    const res = await fetch(`/api/documents/trash/${id}/restore`, { method: "POST" });
+    if (!res.ok) { toast("error", "Failed to restore"); return; }
+    setDocs((prev) => prev.filter((d) => d.id !== id));
+    toast("success", "Document restored");
+  }
+
+  async function handlePurge(id: string) {
+    const res = await fetch(`/api/documents/trash/${id}`, { method: "DELETE" });
+    if (!res.ok) { toast("error", "Failed to purge"); return; }
+    setDocs((prev) => prev.filter((d) => d.id !== id));
+    toast("success", "Document permanently deleted");
+    setPurgeId(null);
   }
 
   function exportDocuments(format: "csv" | "excel" | "pdf") {
@@ -111,7 +131,7 @@ export default function DocumentsPage() {
 
   const chips: { key: string; label: string; clear: () => void }[] = [];
   if (search) chips.push({ key: "q", label: `"${search}"`, clear: () => setSearch("") });
-  if (cat) chips.push({ key: "cat", label: `Category: ${label(cat)}`, clear: () => setCat("") });
+  if (cat && view === "all") chips.push({ key: "cat", label: `Category: ${label(cat)}`, clear: () => setCat("") });
 
   return (
     <div className="space-y-4">
@@ -120,31 +140,49 @@ export default function DocumentsPage() {
           <h2 className="text-xl font-semibold text-slate-800">Documents</h2>
           <p className="text-sm text-slate-500">Fleet-wide document repository</p>
         </div>
-        {filtered.length > 0 && (
-          <Dropdown align="right"
-            trigger={({ toggle }) => (<Tooltip content="Export"><button onClick={toggle} className="btn-outline text-xs"><Download className="h-3.5 w-3.5" /> Export</button></Tooltip>)}
-            items={[
-              { label: "CSV", onClick: () => exportDocuments("csv") },
-              { label: "Excel", onClick: () => exportDocuments("excel") },
-              { label: "PDF", onClick: () => exportDocuments("pdf") },
-            ]}
-          />
-        )}
+        <div className="flex items-center gap-2">
+          <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5">
+            <button
+              onClick={() => setView("all")}
+              className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${view === "all" ? "bg-primary text-white" : "text-slate-500 hover:bg-slate-100"}`}
+            >
+              <FileText className="h-3.5 w-3.5" /> Repository
+            </button>
+            <button
+              onClick={() => setView("trash")}
+              className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${view === "trash" ? "bg-primary text-white" : "text-slate-500 hover:bg-slate-100"}`}
+            >
+              <Inbox className="h-3.5 w-3.5" /> Trash
+            </button>
+          </div>
+          {view === "all" && filtered.length > 0 && (
+            <Dropdown align="right"
+              trigger={({ toggle }) => (<Tooltip content="Export"><button onClick={toggle} className="btn-outline text-xs"><Download className="h-3.5 w-3.5" /> Export</button></Tooltip>)}
+              items={[
+                { label: "CSV", onClick: () => exportDocuments("csv") },
+                { label: "Excel", onClick: () => exportDocuments("excel") },
+                { label: "PDF", onClick: () => exportDocuments("pdf") },
+              ]}
+            />
+          )}
+        </div>
       </div>
 
       <div className="card p-4">
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative min-w-[200px] flex-1">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <input className="input pl-9" placeholder="Search title, filename or plate number…" value={search} onChange={(e) => setSearch(e.target.value)} />
+            <input className="input pl-9" placeholder={`Search title, filename or plate number…`} value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
-          <Select
-            className="w-auto"
-            value={cat}
-            onChange={setCat}
-            placeholder="All categories"
-            options={[{ value: "", label: "All categories" }, ...DOCUMENT_CATEGORY_OPTIONS.map((c) => ({ value: c, label: label(c) }))]}
-          />
+          {view === "all" && (
+            <Select
+              className="w-auto"
+              value={cat}
+              onChange={setCat}
+              placeholder="All categories"
+              options={[{ value: "", label: "All categories" }, ...DOCUMENT_CATEGORY_OPTIONS.map((c) => ({ value: c, label: label(c) }))]}
+            />
+          )}
         </div>
 
         {chips.length > 0 && (
@@ -165,10 +203,12 @@ export default function DocumentsPage() {
         <BrandLoader />
       ) : filtered.length === 0 ? (
         <div className="card flex flex-col items-center justify-center py-16 text-center">
-          <FileText className="mb-3 h-10 w-10 text-slate-300" />
-          <h3 className="text-base font-semibold text-slate-700">No documents found</h3>
+          {view === "trash" ? <Inbox className="mb-3 h-10 w-10 text-slate-300" /> : <FileText className="mb-3 h-10 w-10 text-slate-300" />}
+          <h3 className="text-base font-semibold text-slate-700">{view === "trash" ? "Trash is empty" : "No documents found"}</h3>
           <p className="mt-1 max-w-sm text-sm text-slate-400">
-            {search || cat ? "No documents match the current filters." : "Upload documents from a vehicle's detail page to populate the repository."}
+            {view === "trash"
+              ? "Documents you delete are moved here and can be restored or permanently removed."
+              : search || cat ? "No documents match the current filters." : "Upload documents from a vehicle's detail page to populate the repository."}
           </p>
         </div>
       ) : (
@@ -198,9 +238,10 @@ export default function DocumentsPage() {
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="truncate text-sm font-semibold text-slate-800">{d.title}</span>
-                    <span className="badge bg-primary/10 text-primary">{label(d.category)}</span>
+                    {view === "all" && <span className="badge bg-primary/10 text-primary">{label(d.category)}</span>}
                     <span className="badge bg-slate-100 text-slate-500">v{d.version}</span>
-                    {d.isLatest && <span className="badge bg-green-100 text-green-700">Latest</span>}
+                    {view === "all" && d.isLatest && <span className="badge bg-green-100 text-green-700">Latest</span>}
+                    {view === "trash" && d.deletedAt && <span className="badge bg-amber-100 text-amber-700">Deleted {formatDate(d.deletedAt)}</span>}
                   </div>
                   <div className="truncate text-xs text-slate-400">
                     <Link to={`/vehicles/${d.vehicle.id}`} className="text-blue-600 hover:underline">{d.vehicle.plateNumber}</Link>
@@ -214,12 +255,19 @@ export default function DocumentsPage() {
                       <MoreVertical className="h-4 w-4" />
                     </button>
                   )}
-                  items={[
-                    { label: "Preview", icon: <Eye className="h-4 w-4" />, onClick: () => window.open(`/api/documents/${d.id}`, "_blank") },
-                    { label: "Download", icon: <Download className="h-4 w-4" />, onClick: () => window.open(`/api/documents/${d.id}?download=1`, "_blank") },
-                    { label: "Edit metadata", icon: <Pencil className="h-4 w-4" />, onClick: () => { setEditingDoc(d); setEditTitle(d.title); setEditCat(d.category); } },
-                    { label: "Delete", icon: <Trash2 className="h-4 w-4" />, danger: true, onClick: () => setDeleteId(d.id) },
-                  ]}
+                  items={view === "all"
+                    ? [
+                        { label: "Preview", icon: <Eye className="h-4 w-4" />, onClick: () => window.open(`/api/documents/${d.id}`, "_blank") },
+                        { label: "Download", icon: <Download className="h-4 w-4" />, onClick: () => window.open(`/api/documents/${d.id}?download=1`, "_blank") },
+                        { label: "Edit metadata", icon: <Pencil className="h-4 w-4" />, onClick: () => { setEditingDoc(d); setEditTitle(d.title); setEditCat(d.category); } },
+                        { label: "Move to trash", icon: <Trash2 className="h-4 w-4" />, danger: true, onClick: () => setDeleteId(d.id) },
+                      ]
+                    : [
+                        { label: "Preview", icon: <Eye className="h-4 w-4" />, onClick: () => window.open(`/api/documents/${d.id}`, "_blank") },
+                        { label: "Download", icon: <Download className="h-4 w-4" />, onClick: () => window.open(`/api/documents/${d.id}?download=1`, "_blank") },
+                        { label: "Restore", icon: <RotateCcw className="h-4 w-4" />, onClick: () => handleRestore(d.id) },
+                        { label: "Delete permanently", icon: <Trash className="h-4 w-4" />, danger: true, onClick: () => setPurgeId(d.id) },
+                      ]}
                 />
               </li>
             ))}
@@ -268,9 +316,18 @@ export default function DocumentsPage() {
         open={!!deleteId}
         onClose={() => setDeleteId(null)}
         onConfirm={() => handleDelete(deleteId!)}
-        title="Delete document?"
-        message="This will permanently remove the file from the server."
-        confirmLabel="Delete"
+        title="Move to trash?"
+        message="The document will be hidden from the repository and stored in the trash. You can restore or permanently delete it later."
+        confirmLabel="Move to trash"
+      />
+
+      <ConfirmModal
+        open={!!purgeId}
+        onClose={() => setPurgeId(null)}
+        onConfirm={() => handlePurge(purgeId!)}
+        title="Delete permanently?"
+        message="This permanently removes the file from storage. This action cannot be undone."
+        confirmLabel="Delete permanently"
       />
     </div>
   );

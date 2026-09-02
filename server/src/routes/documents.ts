@@ -5,7 +5,7 @@ import { randomUUID } from "node:crypto";
 import { requireAuth } from "../lib/guard.js";
 import { PERMISSIONS } from "../lib/rbac.js";
 import { prisma } from "../lib/prisma.js";
-import { deleteDocument, updateDocument } from "../services/document.js";
+import { deleteDocument, purgeDocument, restoreDocument, updateDocument } from "../services/document.js";
 import { writeAudit } from "../lib/audit.js";
 import { copyFile, openFileStream, putFile } from "../lib/storage.js";
 
@@ -26,6 +26,7 @@ router.get("/", requireAuth(PERMISSIONS.DOCUMENT_VIEW), async (req, res) => {
   const skip = (page - 1) * pageSize;
   const docWhere: any = q
     ? {
+        deletedAt: null,
         OR: [
           { title: { contains: q, mode: "insensitive" } },
           { originalName: { contains: q, mode: "insensitive" } },
@@ -33,16 +34,17 @@ router.get("/", requireAuth(PERMISSIONS.DOCUMENT_VIEW), async (req, res) => {
           { vehicle: { vehicleCode: { contains: q, mode: "insensitive" } } },
         ],
       }
-    : {};
+    : { deletedAt: null };
   const imgWhere: any = q
     ? {
+        deletedAt: null,
         OR: [
           { originalName: { contains: q, mode: "insensitive" } },
           { vehicle: { plateNumber: { contains: q, mode: "insensitive" } } },
           { vehicle: { vehicleCode: { contains: q, mode: "insensitive" } } },
         ],
       }
-    : {};
+    : { deletedAt: null };
 
   const vehicleSelect = {
     select: { id: true, plateNumber: true, vehicleCode: true },
@@ -231,6 +233,105 @@ router.post(
     });
 
     res.status(201).json({ ok: true, record });
+  }
+);
+
+router.get("/trash", requireAuth(PERMISSIONS.DOCUMENT_VIEW), async (req, res) => {
+  const q = (req.query.search as string) ?? "";
+  const page = Number(req.query.page ?? "1");
+  const pageSize = Number(req.query.pageSize ?? "25");
+  const skip = (page - 1) * pageSize;
+  const docWhere: any = q
+    ? {
+        deletedAt: { not: null },
+        OR: [
+          { title: { contains: q, mode: "insensitive" } },
+          { originalName: { contains: q, mode: "insensitive" } },
+          { vehicle: { plateNumber: { contains: q, mode: "insensitive" } } },
+          { vehicle: { vehicleCode: { contains: q, mode: "insensitive" } } },
+        ],
+      }
+    : { deletedAt: { not: null } };
+  const imgWhere: any = q
+    ? {
+        deletedAt: { not: null },
+        OR: [
+          { originalName: { contains: q, mode: "insensitive" } },
+          { vehicle: { plateNumber: { contains: q, mode: "insensitive" } } },
+          { vehicle: { vehicleCode: { contains: q, mode: "insensitive" } } },
+        ],
+      }
+    : { deletedAt: { not: null } };
+
+  const vehicleSelect = {
+    select: { id: true, plateNumber: true, vehicleCode: true },
+  };
+
+  const [docs, images, docTotal, imgTotal] = await Promise.all([
+    prisma.vehicleDocument.findMany({
+      where: docWhere,
+      include: { vehicle: vehicleSelect },
+      orderBy: { deletedAt: "desc" },
+      skip,
+      take: pageSize,
+    }),
+    prisma.vehicleImage.findMany({
+      where: imgWhere,
+      include: { vehicle: vehicleSelect },
+      orderBy: { deletedAt: "desc" },
+      skip,
+      take: pageSize,
+    }),
+    prisma.vehicleDocument.count({ where: docWhere }),
+    prisma.vehicleImage.count({ where: imgWhere }),
+  ]);
+
+  const normalizedImages = images.map((img) => ({
+    id: img.id,
+    title: img.originalName,
+    category: img.category,
+    fileName: img.fileName,
+    originalName: img.originalName,
+    mimeType: img.mimeType,
+    sizeBytes: img.sizeBytes,
+    version: img.version,
+    createdAt: img.createdAt,
+    deletedAt: img.deletedAt,
+    vehicle: img.vehicle,
+  }));
+
+  const allDocs = [...docs, ...normalizedImages].sort(
+    (a, b) =>
+      new Date(b.deletedAt ?? 0).getTime() - new Date(a.deletedAt ?? 0).getTime()
+  );
+
+  const total = docTotal + imgTotal;
+  res.json({ documents: allDocs, total, page, pageSize, totalPages: Math.max(1, Math.ceil(total / pageSize)) });
+});
+
+router.post(
+  "/trash/:id/restore",
+  requireAuth(PERMISSIONS.DOCUMENT_DELETE),
+  async (req, res) => {
+    const restored = await restoreDocument(req.params.id, {
+      userId: req.session!.userId,
+      req,
+    });
+    if (!restored) return res.status(404).json({ error: "Not found" });
+    res.json({ ok: true, record: restored });
+  }
+);
+
+router.delete(
+  "/trash/:id",
+  requireAuth(PERMISSIONS.DOCUMENT_DELETE),
+  async (req, res) => {
+    const purged = await purgeDocument(req.params.id, {
+      userId: req.session!.userId,
+      req,
+    });
+    if (!purged) return res.status(404).json({ error: "Not found" });
+    res.json({ ok: true });
   }
 );
 

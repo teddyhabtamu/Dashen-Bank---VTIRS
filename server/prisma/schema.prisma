@@ -276,6 +276,8 @@ model VehicleDocument {
   uploadedById String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+  deletedAt    DateTime?
+  deletedById  String?
 
   @@index([vehicleId])
   @@index([category])
@@ -294,6 +296,8 @@ model VehicleImage {
   version      Int      @default(1)
   uploadedById String?
   createdAt    DateTime @default(now())
+  deletedAt    DateTime?
+  deletedById  String?
 
   @@index([vehicleId])
 }
