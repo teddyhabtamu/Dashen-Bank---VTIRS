@@ -40,6 +40,7 @@ export default function VehicleDetailPage() {
   const [blockConfirm, setBlockConfirm] = useState(false);
   const [activity, setActivity] = useState<AuditRow[]>([]);
   const [activityLoading, setActivityLoading] = useState(false);
+  const [requiredCategories, setRequiredCategories] = useState<string[]>([]);
   const blocker = useBlocker(pendingUploads);
 
   useEffect(() => {
@@ -67,7 +68,10 @@ export default function VehicleDetailPage() {
         if (r.status === 404) { setNotFound(true); return null; }
         return r.json();
       })
-      .then((d) => { if (d?.vehicle) setV(d.vehicle); })
+      .then((d) => {
+        if (d?.vehicle) setV(d.vehicle);
+        if (Array.isArray(d?.requiredCategories)) setRequiredCategories(d.requiredCategories);
+      })
       .finally(() => setLoading(false));
   }, [id]);
 
@@ -262,7 +266,7 @@ export default function VehicleDetailPage() {
           Documents {documents.length > 0 && <span className="font-normal text-slate-400">({documents.length})</span>}
         </h2>
         <div className="rounded-xl border border-slate-200 bg-white">
-<DocumentManager
+          <DocumentManager
               vehicleId={v.id}
               initialDocs={documents.map((d: any) => ({
                 id: d.id, title: d.title, category: d.category, fileName: d.fileName,
@@ -276,8 +280,8 @@ export default function VehicleDetailPage() {
               canUpload={can(PERMISSIONS.DOCUMENT_UPLOAD)}
               canDelete={can(PERMISSIONS.DOCUMENT_DELETE)}
               onPendingChange={setPendingUploads}
-            />
-        </div>
+              requiredCategories={requiredCategories}
+            />        </div>
       </section>
 
       {/* Activity & History */}

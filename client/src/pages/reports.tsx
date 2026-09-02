@@ -584,7 +584,7 @@ function RenewalForecast({ data }: { data: { months: number; summary: { registra
   );
 }
 
-function CompletenessReport({ data }: { data: { required: string[]; summary: { total: number; complete: number; incomplete: number }; rows: any[] } | null }) {
+function CompletenessReport({ data }: { data: { required: string[]; summary: { total: number; complete: number; incomplete: number }; categorySummary: { category: string; totalVehicles: number; present: number; missing: number; expired: number }[]; rows: any[] } | null }) {
   if (!data) return <Empty />;
   return (
     <div className="space-y-4">
@@ -592,6 +592,26 @@ function CompletenessReport({ data }: { data: { required: string[]; summary: { t
         <Stat label="Vehicles" value={String(data.summary.total)} />
         <Stat label="Complete" value={String(data.summary.complete)} />
         <Stat label="Incomplete" value={String(data.summary.incomplete)} />
+      </div>
+      <div>
+        <h3 className="mb-2 text-sm font-semibold text-slate-700">Compliance by Document Type</h3>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {data.categorySummary.map((item) => (
+            <div key={item.category} className="rounded-xl border border-slate-100 bg-slate-50 p-4">
+              <div className="flex items-start justify-between gap-2">
+                <span className="text-sm font-semibold text-slate-700">{item.category}</span>
+                <span className={`badge ${item.missing === 0 && item.expired === 0 ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"}`}>
+                  {item.missing === 0 && item.expired === 0 ? "Compliant" : "Needs attention"}
+                </span>
+              </div>
+              <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+                <div><div className="text-lg font-semibold text-slate-800">{item.present}</div><div className="text-[11px] uppercase tracking-wide text-slate-400">Present</div></div>
+                <div><div className="text-lg font-semibold text-slate-800">{item.missing}</div><div className="text-[11px] uppercase tracking-wide text-slate-400">Missing</div></div>
+                <div><div className="text-lg font-semibold text-slate-800">{item.expired}</div><div className="text-[11px] uppercase tracking-wide text-slate-400">Expired</div></div>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
       <div className="flex flex-wrap gap-1.5">
         <span className="text-xs uppercase tracking-wide text-slate-400">Required:</span>

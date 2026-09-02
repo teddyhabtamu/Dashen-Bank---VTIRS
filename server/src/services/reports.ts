@@ -1,5 +1,5 @@
 import { prisma } from "../lib/prisma.js";
-import { label } from "../lib/constants.js";
+import { DOCUMENT_CATEGORY_OPTIONS, label } from "../lib/constants.js";
 import { daysUntil, effectiveRegistrationStatus, expiryState } from "./reminders.js";
 import { requiredDocumentCategories } from "./setting.js";
 
@@ -277,9 +277,23 @@ export async function documentCompleteness(f: ReportFilters) {
   });
 
   const completeCount = rows.filter((r) => r.complete).length;
+  const categorySummary = DOCUMENT_CATEGORY_OPTIONS.map((category) => {
+    const present = vehicles.filter((v) => v.documents.some((d) => d.category === category)).length;
+    const expired = vehicles.filter((v) => v.documents.some((d) => (
+      d.category === category && d.expiresAt && new Date(d.expiresAt).getTime() < Date.now()
+    ))).length;
+    return {
+      category: label(category),
+      totalVehicles: vehicles.length,
+      present,
+      missing: vehicles.length - present,
+      expired,
+    };
+  });
   return {
     required: required.map(label),
     summary: { total: rows.length, complete: completeCount, incomplete: rows.length - completeCount },
+    categorySummary,
     rows,
   };
 }

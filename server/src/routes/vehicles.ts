@@ -11,6 +11,7 @@ import {
   DuplicateVehicleError,
 } from "../services/vehicle.js";
 import { listAssignments, assignDriver, returnDriver } from "../services/assignment.js";
+import { requiredDocumentCategories } from "../services/setting.js";
 import { vehicleSchema } from "../validation/vehicle.js";
 import { prisma } from "../lib/prisma.js";
 
@@ -74,7 +75,8 @@ router.get("/:id", requireAuth(PERMISSIONS.VEHICLE_VIEW), async (req, res) => {
     },
   });
   if (!vehicle) return res.status(404).json({ error: "Not found" });
-  res.json({ vehicle });
+  const requiredCategories = await requiredDocumentCategories();
+  res.json({ vehicle, requiredCategories });
 });
 
 router.patch("/:id", requireAuth(PERMISSIONS.VEHICLE_EDIT), async (req, res) => {

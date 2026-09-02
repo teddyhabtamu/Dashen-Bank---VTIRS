@@ -35,6 +35,7 @@ interface StagedFile {
   file: File;
   category: string;
   title: string;
+  locked?: boolean;
 }
 
 function titleFromName(name: string): string {
@@ -77,6 +78,7 @@ export function DocumentManager({
   canUpload,
   canDelete,
   onPendingChange,
+  requiredCategories,
 }: {
   vehicleId: string;
   initialDocs: DocItem[];
@@ -84,6 +86,7 @@ export function DocumentManager({
   canUpload: boolean;
   canDelete: boolean;
   onPendingChange?: (pending: boolean) => void;
+  requiredCategories?: string[];
 }) {
   const [docs, setDocs] = useState<DocItem[]>(initialDocs);
   const [images, setImages] = useState<ImgItem[]>(initialImages);
@@ -114,6 +117,44 @@ export function DocumentManager({
   const imgGroups = useMemo(() => groupImagesByKey(images), [images]);
 
   const nonImageDocs = useMemo(() => docs.filter((d) => !d.mimeType.startsWith("image/")), [docs]);
+
+  // Required-category compliance: true when at least one non-deleted doc exists for the category.
+  const requiredCatStatus = useMemo<Record<string, boolean>>(() => {
+    const map: Record<string, boolean> = {};
+    if (!requiredCategories?.length) return map;
+    const present = new Set(docs.map((d) => d.category));
+    for (const cat of requiredCategories) map[cat] = present.has(cat);
+    return map;
+  }, [requiredCategories, docs]);
+
+  const requiredComplete = useMemo(
+    () => (requiredCategories ?? []).every((c) => requiredCatStatus[c]),
+    [requiredCategories, requiredCatStatus]
+  );
+
+  // Hidden file input reused for per-category uploads; category is captured when the picker opens.
+  const requiredInputRef = useRef<HTMLInputElement>(null);
+  const requiredPickCat = useRef<string | null>(null);
+
+  function pickRequiredFile(category: string) {
+    if (busy) return;
+    requiredPickCat.current = category;
+    requiredInputRef.current?.click();
+  }
+
+  function onRequiredFiles(files: FileList | null) {
+    const category = requiredPickCat.current;
+    requiredPickCat.current = null;
+    if (requiredInputRef.current) requiredInputRef.current.value = "";
+    if (!files || files.length === 0 || !category) return;
+    const next: StagedFile[] = Array.from(files).map((f) => ({
+      file: f,
+      category,
+      title: titleFromName(f.name),
+      locked: true,
+    }));
+    setStaged((prev) => [...prev, ...next]);
+  }
 
   function pickFiles(files: FileList | null) {
     if (!files || files.length === 0) return;
@@ -211,6 +252,60 @@ export function DocumentManager({
 
   return (
     <div className="space-y-4">
+      {/* Required documents — one upload row per admin-configured category */}
+      {requiredCategories && requiredCategories.length > 0 && (
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h3 className="text-sm font-semibold text-slate-700">Required documents</h3>
+              <p className="text-xs text-slate-400">Every vehicle must have these on file to be compliant.</p>
+            </div>
+            <span className={`badge ${requiredComplete ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"}`}>
+              {requiredComplete ? "All complete" : "Incomplete"}
+            </span>
+          </div>
+          <input
+            ref={requiredInputRef}
+            type="file"
+            accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
+            multiple
+            hidden
+            onChange={(e) => onRequiredFiles(e.target.files)}
+          />
+          <div className="divide-y divide-slate-100">
+            {requiredCategories.map((cat) => {
+              const has = requiredCatStatus[cat] ?? false;
+              const stagedForCat = staged.some((s) => s.category === cat && s.locked);
+              return (
+                <div key={cat} className="flex flex-wrap items-center justify-between gap-2 py-2.5">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className="truncate text-sm font-medium text-slate-700">{label(cat)}</span>
+                    {stagedForCat ? (
+                      <span className="badge bg-blue-50 text-blue-600">Ready to upload</span>
+                    ) : has ? (
+                      <span className="badge bg-green-100 text-green-700">Complete</span>
+                    ) : (
+                      <span className="badge bg-red-100 text-red-700">Missing</span>
+                    )}
+                  </div>
+                  {canUpload && (
+                    <button
+                      type="button"
+                      onClick={() => pickRequiredFile(cat)}
+                      disabled={busy}
+                      className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors disabled:opacity-50 ${has ? "border-slate-200 bg-white text-slate-500 hover:border-primary hover:text-primary" : "border-primary bg-primary/5 text-primary hover:bg-primary/10"}`}
+                    >
+                      <Upload className="h-3.5 w-3.5" />
+                      {has ? "Replace / add version" : "Upload"}
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {canUpload && (
         <div
           onDragOver={(e) => { e.preventDefault(); if (!busy) setDragOver(true); }}
@@ -229,7 +324,7 @@ export function DocumentManager({
             disabled={busy}
             className={`flex w-full items-center justify-center gap-2 rounded-lg border px-4 py-3 text-sm font-medium transition-colors disabled:opacity-50 ${dragOver ? "border-primary text-primary" : "border-slate-300 bg-white text-slate-600 hover:border-primary hover:text-primary"}`}
           >
-            <Upload className="h-4 w-4" /> {busy ? "Uploading…" : dragOver ? "Drop file(s) to upload" : "Choose or drag file(s) (PDF, JPG, PNG)"}
+            <Upload className="h-4 w-4" /> {busy ? "Uploading…" : dragOver ? "Drop file(s) to upload" : "Other documents — choose or drag file(s)"}
           </button>
           <input ref={fileRef} type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" multiple hidden onChange={(e) => pickFiles(e.target.files)} />
 
@@ -254,14 +349,20 @@ export function DocumentManager({
                             <span className="shrink-0 text-xs text-slate-400">{formatFileSize(s.file.size)}</span>
                           </div>
                           <div className="flex flex-wrap items-center gap-2">
-                            <Select
-                              value={s.category}
-                              onChange={(v) => updateStaged(i, { category: v })}
-                              options={catOptions.map((c) => ({ value: c, label: label(c) }))}
-                              placeholder="Category"
-                              className="w-full sm:w-40"
-                              searchable={false}
-                            />
+                            {s.locked ? (
+                              <span className="badge bg-primary/10 text-primary" title="Category set by the required-documents section">
+                                {label(s.category)}
+                              </span>
+                            ) : (
+                              <Select
+                                value={s.category}
+                                onChange={(v) => updateStaged(i, { category: v })}
+                                options={catOptions.map((c) => ({ value: c, label: label(c) }))}
+                                placeholder="Category"
+                                className="w-full sm:w-40"
+                                searchable={false}
+                              />
+                            )}
                             <input
                               value={s.title}
                               onChange={(e) => updateStaged(i, { title: e.target.value })}
