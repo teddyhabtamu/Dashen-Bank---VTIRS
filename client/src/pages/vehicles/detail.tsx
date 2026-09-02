@@ -262,21 +262,21 @@ export default function VehicleDetailPage() {
           Documents {documents.length > 0 && <span className="font-normal text-slate-400">({documents.length})</span>}
         </h2>
         <div className="rounded-xl border border-slate-200 bg-white">
-          <DocumentManager
-            vehicleId={v.id}
-            initialDocs={documents.map((d: any) => ({
-              id: d.id, title: d.title, category: d.category, fileName: d.fileName,
-              originalName: d.originalName, mimeType: d.mimeType, sizeBytes: d.sizeBytes,
-              version: d.version, createdAt: d.createdAt,
-            }))}
-            initialImages={(v.images ?? []).map((i: any) => ({
-              id: i.id, category: i.category, originalName: i.originalName,
-              mimeType: i.mimeType, sizeBytes: i.sizeBytes, version: i.version, createdAt: i.createdAt,
-            }))}
-            canUpload={can(PERMISSIONS.DOCUMENT_UPLOAD)}
-            canDelete={can(PERMISSIONS.DOCUMENT_DELETE)}
-            onPendingChange={setPendingUploads}
-          />
+<DocumentManager
+              vehicleId={v.id}
+              initialDocs={documents.map((d: any) => ({
+                id: d.id, title: d.title, category: d.category, fileName: d.fileName,
+                originalName: d.originalName, mimeType: d.mimeType, sizeBytes: d.sizeBytes,
+                version: d.version, createdAt: d.createdAt,
+              }))}
+              initialImages={(v.images ?? []).map((i: any) => ({
+                id: i.id, category: i.category, originalName: i.originalName,
+                mimeType: i.mimeType, sizeBytes: i.sizeBytes, version: i.version, createdAt: i.createdAt,
+              }))}
+              canUpload={can(PERMISSIONS.DOCUMENT_UPLOAD)}
+              canDelete={can(PERMISSIONS.DOCUMENT_DELETE)}
+              onPendingChange={setPendingUploads}
+            />
         </div>
       </section>
 
