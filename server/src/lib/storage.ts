@@ -1,12 +1,14 @@
 import {
   CopyObjectCommand,
   DeleteObjectCommand,
+  DeleteObjectsCommand,
   GetObjectCommand,
+  ListObjectsV2Command,
   PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
 import { createReadStream, existsSync } from "node:fs";
-import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { Readable } from "node:stream";
 
@@ -81,6 +83,52 @@ export async function deleteFile(key: string): Promise<void> {
   } catch {
     // file may be missing; ignore
   }
+}
+
+// Deletes many stored objects in one request (ignores keys that don't exist).
+export async function deleteFiles(keys: string[]): Promise<void> {
+  const uniqueKeys = [...new Set(keys.filter(Boolean))];
+  if (uniqueKeys.length === 0) return;
+  const s3c = s3();
+  if (s3c) {
+    // DeleteObjectsCommand accepts up to 1000 keys per request.
+    for (let i = 0; i < uniqueKeys.length; i += 1000) {
+      const batch = uniqueKeys.slice(i, i + 1000).map((Key) => ({ Key }));
+      await s3c.send(new DeleteObjectsCommand({ Bucket: BUCKET, Delete: { Objects: batch } }));
+    }
+    return;
+  }
+  await Promise.all(uniqueKeys.map((key) => deleteFile(key)));
+}
+
+// Lists every object key currently stored in the bucket (or the local upload
+// directory when storage is not configured). Used by the orphan sweep.
+export async function listObjects(): Promise<{ objects: string[] }> {
+  const s3c = s3();
+  if (!s3c) {
+    const keys: string[] = [];
+    async function walk(dir: string, prefix: string) {
+      const entries = await readdir(dir, { withFileTypes: true });
+      for (const entry of entries) {
+        const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) await walk(full, rel);
+        else keys.push(rel);
+      }
+    }
+    await walk(localRoot(), "");
+    return { objects: keys };
+  }
+  const objects: string[] = [];
+  let token: string | undefined;
+  do {
+    const res = await s3c.send(
+      new ListObjectsV2Command({ Bucket: BUCKET, ContinuationToken: token })
+    );
+    for (const o of res.Contents ?? []) if (o.Key) objects.push(o.Key);
+    token = res.IsTruncated ? res.NextContinuationToken : undefined;
+  } while (token);
+  return { objects };
 }
 
 export async function copyFile(srcKey: string, destKey: string): Promise<void> {

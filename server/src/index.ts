@@ -15,7 +15,7 @@ if (fs.existsSync(rootEnvPath)) {
 }
 import { attachSession } from "./lib/guard.js";
 import { schedule, runScheduledJob } from "./lib/scheduler.js";
-import { autoTransitionRegistrations, autoTransitionVehicleStatus, autoTransitionInsurances } from "./services/reminders.js";
+import { autoTransitionRegistrations, autoTransitionVehicleStatus, autoTransitionInsurances, sweepOrphanStorage } from "./services/reminders.js";
 import { generateNotificationsForAllUsers, cleanupOldNotifications } from "./services/notification.js";
 import authRoutes from "./routes/auth.js";
 import vehicleRoutes from "./routes/vehicles.js";
@@ -96,11 +96,13 @@ app.listen(PORT, () => {
   runScheduledJob("registration-transition", () => autoTransitionRegistrations().then(() => undefined));
   runScheduledJob("vehicle-status-transition", () => autoTransitionVehicleStatus().then(() => undefined));
   runScheduledJob("notification-sweep", () => generateNotificationsForAllUsers().then(() => undefined));
+  runScheduledJob("storage-orphan-sweep", () => sweepOrphanStorage().then(() => undefined));
 
   // Durable fixed schedules (node-cron). Single-process, guarded against overlap.
   schedule("0 1 * * *", "registration-transition", () => autoTransitionRegistrations().then(() => undefined));
   schedule("5 1 * * *", "vehicle-status-transition", () => autoTransitionVehicleStatus().then(() => undefined));
   schedule("10 1 * * *", "insurance-transition", () => autoTransitionInsurances().then(() => undefined));
   schedule("15 * * * *", "notification-sweep", () => generateNotificationsForAllUsers().then(() => undefined));
+  schedule("0 2 * * *", "storage-orphan-sweep", () => sweepOrphanStorage().then(() => undefined));
   schedule("30 1 * * *", "notification-cleanup", () => cleanupOldNotifications().then(() => undefined));
 });

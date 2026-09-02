@@ -6,6 +6,7 @@ import { writeAudit, type AuditReq } from "../lib/audit.js";
 import { defaultPageSize } from "./setting.js";
 import { reconcileVehicleAssignStatus } from "./vehicleStatus.js";
 import { autoFormalizeCurrentDriver } from "./assignment.js";
+import { deleteFiles } from "../lib/storage.js";
 
 export class DuplicateVehicleError extends Error {
   field: string;
@@ -234,7 +235,16 @@ export async function deleteVehicle(id: string, ctx: Context = {}) {
     );
   }
 
+  const [docPaths, imgPaths] = await Promise.all([
+    prisma.vehicleDocument.findMany({ where: { vehicleId: id }, select: { path: true } }),
+    prisma.vehicleImage.findMany({ where: { vehicleId: id }, select: { path: true } }),
+  ]);
+
   await prisma.vehicle.delete({ where: { id } });
+
+  // Clean up object-storage blobs (the DB cascade deletes rows; blobs are removed here
+  // so deleting a vehicle does not leave orphaned files in the bucket).
+  await deleteFiles(docPaths.map((d) => d.path).concat(imgPaths.map((i) => i.path)));
 
   await writeAudit({
     action: "DELETE",

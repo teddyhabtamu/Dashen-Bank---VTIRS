@@ -1,6 +1,7 @@
 import { getSetting } from "./setting.js";
 import { REGISTRATION_STATUS, VEHICLE_STATUS, INSURANCE_STATUS } from "../lib/constants.js";
 import { prisma } from "../lib/prisma.js";
+import { deleteFiles, listObjects, storageEnabled } from "../lib/storage.js";
 
 export type ExpiryState = "EXPIRED" | "CRITICAL" | "WARNING" | "OK";
 export type ReminderWindows = [number, number, number, number];
@@ -174,4 +175,24 @@ export async function autoTransitionVehicleStatus(): Promise<{ transitioned: num
 
   const total = assignedResult.count + activeResult.count;
   return { transitioned: total };
+}
+
+// Removes object-storage blobs that no longer have a matching database record
+// (documents or images). The document route already deletes blobs on delete, but
+// vehicle deletion cascades DB rows without touching storage — this sweep is the
+// safety net for anything the app misses. It never touches keys that still exist
+// in the DB. Returns the number of stale objects removed.
+export async function sweepOrphanStorage(): Promise<{ removed: number; examined: number }> {
+  if (!storageEnabled()) return { removed: 0, examined: 0 };
+
+  const [stored, docPaths, imgPaths] = await Promise.all([
+    listObjects(),
+    prisma.vehicleDocument.findMany({ select: { path: true } }),
+    prisma.vehicleImage.findMany({ select: { path: true } }),
+  ]);
+
+  const known = new Set(docPaths.map((d) => d.path).concat(imgPaths.map((i) => i.path)));
+  const orphans = stored.objects.filter((key) => !known.has(key));
+  if (orphans.length > 0) await deleteFiles(orphans);
+  return { removed: orphans.length, examined: stored.objects.length };
 }
