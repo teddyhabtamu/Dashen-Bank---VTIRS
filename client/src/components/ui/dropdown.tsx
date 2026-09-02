@@ -10,6 +10,8 @@ export interface DropdownItem {
   href?: string;
   danger?: boolean;
   disabled?: boolean;
+  // Non-interactive section label (renders as a small muted header row).
+  header?: boolean;
 }
 
 interface DropdownProps {
@@ -97,6 +99,13 @@ export function Dropdown({
             role="menu"
           >
             {items.map((item, i) => {
+              if (item.header) {
+                return (
+                  <div key={i} className="px-3 pb-0.5 pt-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400 first:pt-1" role="presentation">
+                    {item.label}
+                  </div>
+                );
+              }
               const cls = cn(
                 "flex w-full items-center gap-2 whitespace-nowrap px-3 py-2 text-left text-sm transition-colors",
                 item.disabled

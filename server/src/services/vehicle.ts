@@ -309,35 +309,69 @@ export async function bulkUpdateVehicleStatus(
 }
 
 // List with pagination + filtering for the registry table.
+// Whitelisted sort columns for the registry table. Anything else falls back
+// to the default ordering (newest first).
+const SORTABLE_COLUMNS: Record<string, boolean> = {
+  vehicleCode: true,
+  plateNumber: true,
+  make: true,
+  year: true,
+  status: true,
+  createdAt: true,
+  updatedAt: true,
+};
+
 export async function listVehicles(opts: {
   search?: string;
   status?: string;
   branchId?: string;
+  type?: string;
+  year?: number;
+  sortBy?: string;
+  sortDir?: "asc" | "desc";
   page?: number;
   pageSize?: number;
 }) {
-  const { search, status, branchId, page = 1, pageSize } = opts;
+  const { search, status, branchId, type, year, sortBy, sortDir, page = 1, pageSize } = opts;
   const ps = pageSize ?? await defaultPageSize();
   const where: any = {};
   if (status) where.status = status;
   if (branchId) where.branchId = branchId;
+  if (type) where.type = type;
+  if (year && Number.isFinite(year)) where.year = year;
   if (search) {
+    // Case-insensitive: Postgres `contains` without mode is a case-sensitive
+    // LIKE — "toyota" missed "Toyota" here while every other list page
+    // already searched insensitively.
+    const q = { contains: search, mode: "insensitive" as const };
     where.OR = [
-      { plateNumber: { contains: search } },
-      { vehicleCode: { contains: search } },
-      { engineNo: { contains: search } },
-      { chassisNo: { contains: search } },
-      { make: { contains: search } },
-      { model: { contains: search } },
-      { ownerName: { contains: search } },
+      { plateNumber: q },
+      { vehicleCode: q },
+      { engineNo: q },
+      { chassisNo: q },
+      { make: q },
+      { model: q },
+      { ownerName: q },
     ];
   }
+
+  const orderBy =
+    sortBy && SORTABLE_COLUMNS[sortBy]
+      ? { [sortBy]: sortDir === "asc" ? "asc" : "desc" }
+      : { createdAt: "desc" as const };
 
   const [items, total] = await Promise.all([
     prisma.vehicle.findMany({
       where,
-      include: { branch: true, department: true, currentDriver: true },
-      orderBy: { createdAt: "desc" },
+      // Slim driver include: the list only renders the name (the peek modal
+      // re-fetches full details by id) — pulling entire driver rows with
+      // department relations for every vehicle row was pure over-fetch.
+      include: {
+        branch: { select: { name: true } },
+        department: { select: { name: true } },
+        currentDriver: { select: { id: true, fullName: true, employeeId: true, isActive: true } },
+      },
+      orderBy,
       skip: (page - 1) * ps,
       take: ps,
     }),

@@ -23,6 +23,10 @@ router.get("/", requireAuth(PERMISSIONS.VEHICLE_VIEW), async (req, res) => {
     search: (q.search as string) ?? undefined,
     status: (q.status as string) ?? undefined,
     branchId: (q.branchId as string) ?? undefined,
+    type: (q.type as string) ?? undefined,
+    year: q.year !== undefined && q.year !== "" ? Number(q.year) : undefined,
+    sortBy: (q.sortBy as string) ?? undefined,
+    sortDir: q.sortDir === "asc" ? "asc" : q.sortDir === "desc" ? "desc" : undefined,
     page: Number(q.page ?? "1"),
     pageSize: q.pageSize ? Number(q.pageSize) : undefined,
   });
@@ -55,6 +59,17 @@ router.post("/", requireAuth(PERMISSIONS.VEHICLE_CREATE), async (req, res) => {
     }
     throw e;
   }
+});
+
+// Distinct model years for the registry's year filter. Registered before
+// GET /:id so "years" is not swallowed as an :id param.
+router.get("/years", requireAuth(PERMISSIONS.VEHICLE_VIEW), async (_req, res) => {
+  const rows = await prisma.vehicle.findMany({
+    select: { year: true },
+    distinct: ["year"],
+    orderBy: { year: "desc" },
+  });
+  res.json({ years: rows.map((r) => r.year) });
 });
 
 router.get("/:id", requireAuth(PERMISSIONS.VEHICLE_VIEW), async (req, res) => {
