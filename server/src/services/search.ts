@@ -128,7 +128,7 @@ export async function globalSearch(filters: SearchFilters): Promise<SearchResult
       include: {
         branch: { select: { name: true } },
         department: { select: { name: true } },
-        currentDriver: { select: { fullName: true } },
+        currentDriver: { select: { id: true, fullName: true } },
         registrations: { orderBy: { createdAt: "desc" }, take: 1 },
         insurances: { orderBy: { endDate: "desc" }, take: 1 },
       },
