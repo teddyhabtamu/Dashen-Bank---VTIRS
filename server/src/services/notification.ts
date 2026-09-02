@@ -1,5 +1,5 @@
 import { prisma } from "../lib/prisma.js";
-import { daysUntil, getReminderWindows, DEFAULT_REMINDER_WINDOWS, type ReminderWindows } from "./reminders.js";
+import { daysUntil, getReminderWindows, getReminderWindowsForType, DEFAULT_REMINDER_WINDOWS, type ReminderWindows } from "./reminders.js";
 import { defaultPageSize, getSetting } from "./setting.js";
 
 // ---------- generation ----------
@@ -21,13 +21,13 @@ export async function generateNotifications(userId: string) {
         status: { notIn: ["SUSPENDED", "ARCHIVED"] },
       },
       include: {
-        vehicle: { select: { id: true, plateNumber: true, vehicleCode: true } },
+        vehicle: { select: { id: true, plateNumber: true, vehicleCode: true, type: true } },
       },
     }),
     prisma.vehicleInsurance.findMany({
       where: { endDate: { lte: horizon } },
       include: {
-        vehicle: { select: { id: true, plateNumber: true, vehicleCode: true } },
+        vehicle: { select: { id: true, plateNumber: true, vehicleCode: true, type: true } },
       },
     }),
   ]);
@@ -36,9 +36,14 @@ export async function generateNotifications(userId: string) {
 
   if (enableReg !== "false") {
     for (const reg of expiringRegs) {
+      const typeWindows = await getReminderWindowsForType(reg.vehicle.type);
+      const typeHorizon = Math.max(...typeWindows);
       const days = daysUntil(reg.expiryDate);
       const expired = days !== null && days < 0;
-      const stage = getReminderStage(days, windows, horizonDays);
+      // Skip entries outside this type's (narrower) horizon so per-type
+      // preferences actually gate what a user is reminded about.
+      if (!expired && days !== null && days > typeHorizon) continue;
+      const stage = getReminderStage(days, typeWindows, typeHorizon);
       const title = expired ? "Registration Expired" : "Registration Expiring Soon";
       const message = expired
         ? `${reg.vehicle.plateNumber} (${reg.vehicle.vehicleCode}) registration expired on ${reg.expiryDate.toLocaleDateString("en-GB")}. Renew immediately.`
@@ -55,9 +60,12 @@ export async function generateNotifications(userId: string) {
 
   if (enableIns !== "false") {
     for (const ins of expiringIns) {
+      const typeWindows = await getReminderWindowsForType(ins.vehicle.type);
+      const typeHorizon = Math.max(...typeWindows);
       const days = daysUntil(ins.endDate);
       const expired = days !== null && days < 0;
-      const stage = getReminderStage(days, windows, horizonDays);
+      if (!expired && days !== null && days > typeHorizon) continue;
+      const stage = getReminderStage(days, typeWindows, typeHorizon);
       const title = expired ? "Insurance Expired" : "Insurance Expiring Soon";
       const message = expired
         ? `${ins.vehicle.plateNumber} (${ins.vehicle.vehicleCode}) insurance expired on ${ins.endDate.toLocaleDateString("en-GB")}. Renew immediately.`

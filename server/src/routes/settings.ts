@@ -2,7 +2,7 @@ import { Router } from "express";
 import { requireAuth } from "../lib/guard.js";
 import { PERMISSIONS } from "../lib/rbac.js";
 import { listSettings, updateSettings, getSetting } from "../services/setting.js";
-import { getReminderWindows } from "../services/reminders.js";
+import { getReminderWindows, listVehicleTypes } from "../services/reminders.js";
 
 const router = Router();
 
@@ -28,8 +28,8 @@ router.get(
   "/",
   requireAuth(PERMISSIONS.SETTING_MANAGE),
   async (_req, res) => {
-    const settings = await listSettings();
-    res.json(settings);
+    const [settings, vehicleTypes] = await Promise.all([listSettings(), listVehicleTypes()]);
+    res.json({ ...settings, _vehicleTypes: vehicleTypes });
   }
 );
 

@@ -50,6 +50,7 @@ function helps(key: string): string {
     max_login_attempts: "Account locks after this many failed sign-in attempts",
     notify_registration: "Send push notifications when registrations are about to expire",
     notify_insurance: "Send push notifications when insurance is about to expire",
+    reminder_windows_by_type: "Override the default reminder windows for specific vehicle types. Fields are primary, secondary, warning, and critical days before expiry.",
     required_document_categories: "Document categories every vehicle must have to be considered compliant",
   };
   return H[key] ?? "";
@@ -58,6 +59,7 @@ function helps(key: string): string {
 export default function SettingsPage() {
   const [grouped, setGrouped] = useState<Grouped>({});
   const [values, setValues] = useState<Record<string, string>>({});
+  const [vehicleTypes, setVehicleTypes] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
@@ -69,9 +71,11 @@ export default function SettingsPage() {
     try {
       const res = await fetch("/api/settings");
       const data = await res.json();
-      setGrouped(data ?? {});
+      const { _vehicleTypes, ...groups } = data ?? {};
+      setGrouped(groups ?? {});
+      setVehicleTypes(Array.isArray(_vehicleTypes) ? _vehicleTypes : []);
       const flat: Record<string, string> = {};
-      for (const items of Object.values(data ?? {}) as SettingItem[][]) {
+      for (const items of Object.values(groups ?? {}) as SettingItem[][]) {
         for (const item of items) {
           flat[item.id] = item.value;
         }
@@ -100,6 +104,36 @@ export default function SettingsPage() {
 
   function isRequiredCatKey(key: string): boolean {
     return key === "required_document_categories";
+  }
+
+  function isPerTypeKey(key: string): boolean {
+    return key === "reminder_windows_by_type";
+  }
+
+  function perTypeMap(current: string): Record<string, number[]> {
+    let m: Record<string, number[]> = {};
+    try { m = JSON.parse(current); } catch { m = {}; }
+    if (!m || typeof m !== "object" || Array.isArray(m)) m = {};
+    return m;
+  }
+
+  function setTypeWindow(id: string, current: string, type: string, index: number, value: string) {
+    const m = perTypeMap(current);
+    const win = (m[type] ?? []).slice();
+    while (win.length < 4) win.push(0);
+    win[index] = Number(value) || 0;
+    m[type] = win;
+    setValue(id, JSON.stringify(m));
+  }
+
+  function setTypeEnabled(id: string, current: string, type: string, enabled: boolean) {
+    const m = perTypeMap(current);
+    if (enabled) {
+      if (!m[type]) m[type] = [90, 60, 30, 7];
+    } else {
+      delete m[type];
+    }
+    setValue(id, JSON.stringify(m));
   }
 
   function toggleRequiredCat(id: string, cat: string, current: string) {
@@ -238,6 +272,46 @@ export default function SettingsPage() {
                             >
                               <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-0 transition-transform ${values[item.id] === "true" ? "translate-x-6" : "translate-x-1"}`} />
                             </button>
+                          ) : isPerTypeKey(item.key) ? (
+                            <div className="w-full space-y-2 sm:w-auto">
+                              {vehicleTypes.length === 0 ? (
+                                <div className="text-xs text-slate-400">No vehicle types on record. Add vehicles to configure per-type windows.</div>
+                              ) : (
+                                vehicleTypes.map((type) => {
+                                  const m = perTypeMap(values[item.id] ?? "{}");
+                                  const win = m[type] ?? null;
+                                  return (
+                                    <div key={type} className="flex flex-wrap items-center gap-2 rounded-md border border-slate-100 px-2 py-1.5">
+                                      <button
+                                        type="button"
+                                        role="switch"
+                                        aria-checked={!!win}
+                                        className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors ${win ? "bg-primary" : "bg-slate-200"}`}
+                                        onClick={() => setTypeEnabled(item.id, values[item.id] ?? "{}", type, !win)}
+                                      >
+                                        <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-sm transition-transform ${win ? "translate-x-5" : "translate-x-0.5"}`} />
+                                      </button>
+                                      <span className="w-16 truncate text-xs font-medium text-slate-700">{type}</span>
+                                      {win && (
+                                        <div className="flex items-center gap-1">
+                                          {win.map((v, i) => (
+                                            <input
+                                              key={i}
+                                              type="number"
+                                              min="0"
+                                              className="h-7 w-12 border border-slate-200 rounded-md px-1 text-center text-xs text-slate-700"
+                                              value={v}
+                                              onChange={(e) => setTypeWindow(item.id, values[item.id] ?? "{}", type, i, e.target.value)}
+                                              title={i === 0 ? "Primary (90)" : i === 1 ? "Secondary (60)" : i === 2 ? "Warning (30)" : "Critical (7)"}
+                                            />
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })
+                              )}
+                            </div>
                           ) : isRequiredCatKey(item.key) ? (
                             <div className="flex w-full flex-wrap gap-1.5 sm:justify-end">
                               {(() => {

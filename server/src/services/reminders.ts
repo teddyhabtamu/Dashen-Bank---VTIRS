@@ -25,6 +25,46 @@ export async function getReminderHorizonDays(): Promise<number> {
   return Math.max(...windows);
 }
 
+// Parse a stored per-type windows map ({ [type]: [w90,w60,w30,w7] }). Invalid
+// entries are dropped so bad data never yields NaN windows.
+export async function getReminderWindowsByType(): Promise<Record<string, ReminderWindows>> {
+  const raw = await getSetting("reminder_windows_by_type", "{}");
+  try {
+    const parsed = JSON.parse(raw);
+    const out: Record<string, ReminderWindows> = {};
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      for (const [type, w] of Object.entries(parsed as Record<string, unknown>)) {
+        if (!Array.isArray(w) || w.length < 4) continue;
+        const [a, b, c, d] = w as unknown[];
+        const nums = [Number(a), Number(b), Number(c), Number(d)];
+        if (nums.some((n) => !Number.isFinite(n) || n <= 0)) continue;
+        out[type] = [nums[0], nums[1], nums[2], nums[3]];
+      }
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+// Reminder windows effective for a given vehicle type: the type-specific
+// override if configured, otherwise the global windows.
+export async function getReminderWindowsForType(type: string | null | undefined): Promise<ReminderWindows> {
+  const global = await getReminderWindows();
+  if (!type) return global;
+  const byType = await getReminderWindowsByType();
+  return byType[type] ?? global;
+}
+
+// Distinct vehicle types currently in the fleet, for the per-type settings UI.
+export async function listVehicleTypes(): Promise<string[]> {
+  const rows = await prisma.vehicle.groupBy({ by: ["type"], _count: { _all: true } });
+  return rows
+    .map((r) => r.type)
+    .filter((t): t is string => typeof t === "string" && t.trim().length > 0)
+    .sort((a, b) => a.localeCompare(b));
+}
+
 // Days from today until `date` (negative = already past).
 export function daysUntil(date: Date | string | null | undefined): number | null {
   if (!date) return null;
