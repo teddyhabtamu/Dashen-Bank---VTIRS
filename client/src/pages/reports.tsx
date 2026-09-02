@@ -139,7 +139,7 @@ export default function ReportsPage() {
                       <div className={`flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md ${isActive ? "bg-white/15 text-white" : "bg-slate-100 text-slate-500 group-hover:text-slate-700"}`}>
                         <Icon className="h-3.5 w-3.5" />
                       </div>
-                      <span className="flex-1 truncate text-sm font-medium text-slate-800" title={m.desc}>
+                      <span className={`flex-1 truncate text-sm font-medium ${isActive ? "text-white" : "text-slate-800"}`} title={m.desc}>
                         {m.title}
                       </span>
                     </button>
