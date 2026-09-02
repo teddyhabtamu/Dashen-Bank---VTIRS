@@ -16,6 +16,7 @@ import DriverDetailPage from "@/pages/drivers/detail";
 import RegistrationsPage from "@/pages/registrations";
 import RegistrationHistoryPage from "@/pages/registrations/history";
 import InsurancesPage from "@/pages/insurances";
+import InsuranceHistoryPage from "@/pages/insurances/history";
 import DocumentsPage from "@/pages/documents";
 import SearchPage from "@/pages/search";
 import ReportsPage from "@/pages/reports";
@@ -43,6 +44,7 @@ const router = createBrowserRouter([
       { path: "registrations", element: <RegistrationsPage /> },
       { path: "registrations/:id/history", element: <RegistrationHistoryPage /> },
       { path: "insurances", element: <InsurancesPage /> },
+      { path: "insurances/:id/history", element: <InsuranceHistoryPage /> },
       { path: "documents", element: <DocumentsPage /> },
       { path: "search", element: <SearchPage /> },
       { path: "reports", element: <ReportsPage /> },

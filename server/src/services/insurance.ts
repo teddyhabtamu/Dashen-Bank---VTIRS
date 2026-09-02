@@ -1,4 +1,5 @@
 import { prisma } from "../lib/prisma.js";
+import type { Prisma } from "@prisma/client";
 import { insuranceSchema, InsuranceInput, insuranceUpdateSchema, InsuranceUpdateInput } from "../validation/insurance.js";
 import { writeAudit, type AuditReq } from "../lib/audit.js";
 import { DuplicateInsuranceError, ValidationError } from "./errors.js";
@@ -44,7 +45,35 @@ async function findActivePolicy(vehicleId: string, excludeId?: string) {
       status: INSURANCE_STATUS.ACTIVE,
       ...(excludeId ? { NOT: { id: excludeId } } : {}),
     },
-    select: { id: true, policyNo: true },
+  });
+}
+
+type Db = Prisma.TransactionClient | typeof prisma;
+
+async function logHistory(db: Db, insuranceId: string, vehicleId: string, action: string, data: {
+  prevStatus?: string | null;
+  newStatus?: string | null;
+  prevStartDate?: Date | null;
+  newStartDate?: Date | null;
+  prevEndDate?: Date | null;
+  newEndDate?: Date | null;
+  note?: string | null;
+  performedById?: string | null;
+}) {
+  await db.vehicleInsuranceHistory.create({
+    data: {
+      insuranceId,
+      vehicleId,
+      action,
+      prevStatus: data.prevStatus ?? null,
+      newStatus: data.newStatus ?? null,
+      prevStartDate: data.prevStartDate ?? null,
+      newStartDate: data.newStartDate ?? null,
+      prevEndDate: data.prevEndDate ?? null,
+      newEndDate: data.newEndDate ?? null,
+      note: data.note ?? null,
+      performedById: data.performedById ?? null,
+    },
   });
 }
 
@@ -71,8 +100,16 @@ export async function createInsurance(input: InsuranceCreateInput, ctx: Context 
           where: { id: current.id },
           data: { status: INSURANCE_STATUS.CANCELLED },
         });
+        await logHistory(tx, current.id, current.vehicleId, "CANCELLED", {
+          prevStatus: current.status,
+          newStatus: INSURANCE_STATUS.CANCELLED,
+          prevEndDate: current.endDate,
+          newEndDate: current.endDate,
+          note: `Superseded by new policy ${data.policyNo}`,
+          performedById: ctx.userId ?? null,
+        });
       }
-      return tx.vehicleInsurance.create({
+      const created = await tx.vehicleInsurance.create({
         data: {
           vehicleId: data.vehicleId,
           company: data.company,
@@ -84,6 +121,13 @@ export async function createInsurance(input: InsuranceCreateInput, ctx: Context 
           createdById: ctx.userId ?? null,
         },
       });
+      await logHistory(tx, created.id, created.vehicleId, "CREATE", {
+        newStatus: created.status,
+        newStartDate: created.startDate,
+        newEndDate: created.endDate,
+        performedById: ctx.userId ?? null,
+      });
+      return created;
     });
   } catch (e) {
     if (isUniqueViolation(e)) {
@@ -174,8 +218,18 @@ export async function updateInsurance(id: string, input: InsuranceUpdateInput, c
     },
   });
 
+  await logHistory(prisma, id, ins.vehicleId, "AMEND", {
+    prevStatus: existing.status,
+    newStatus: ins.status,
+    prevStartDate: existing.startDate,
+    newStartDate: ins.startDate,
+    prevEndDate: existing.endDate,
+    newEndDate: ins.endDate,
+    performedById: ctx.userId ?? null,
+  });
+
   await writeAudit({
-    action: "UPDATE",
+    action: "AMEND",
     entity: "VehicleInsurance",
     entityId: ins.id,
     vehicleId: ins.vehicleId,
@@ -230,6 +284,14 @@ export async function renewInsurance(
     data: { endDate: newEnd, status: INSURANCE_STATUS.ACTIVE },
   });
 
+  await logHistory(prisma, id, ins.vehicleId, "RENEW", {
+    prevStatus: existing.status,
+    newStatus: ins.status,
+    prevEndDate: existing.endDate,
+    newEndDate: ins.endDate,
+    performedById: ctx.userId ?? null,
+  });
+
   await writeAudit({
     action: "RENEW",
     entity: "VehicleInsurance",
@@ -259,6 +321,13 @@ export async function deleteInsurance(id: string, ctx: Context = {}) {
   }
 
   await prisma.vehicleInsurance.delete({ where: { id } });
+
+  await logHistory(prisma, id, existing.vehicleId, "DELETE", {
+    prevStatus: existing.status,
+    prevStartDate: existing.startDate,
+    prevEndDate: existing.endDate,
+    performedById: ctx.userId ?? null,
+  });
 
   await writeAudit({
     action: "DELETE",
@@ -348,8 +417,28 @@ export async function listInsurances(opts: {
 }
 
 export async function getInsurance(id: string) {
-  return prisma.vehicleInsurance.findUnique({
+  const ins = await prisma.vehicleInsurance.findUnique({
     where: { id },
-    include: { vehicle: true },
+    include: {
+      vehicle: true,
+      history: { orderBy: { createdAt: "desc" } },
+    },
   });
+  if (!ins) return null;
+
+  const userIds = Array.from(
+    new Set(ins.history.map((h) => h.performedById).filter((x): x is string => Boolean(x)))
+  );
+  const users = userIds.length
+    ? await prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, fullName: true } })
+    : [];
+  const byId = new Map(users.map((u) => [u.id, u]));
+
+  return {
+    ...ins,
+    history: ins.history.map((h) => ({
+      ...h,
+      performedBy: h.performedById && byId.has(h.performedById) ? byId.get(h.performedById)! : null,
+    })),
+  };
 }

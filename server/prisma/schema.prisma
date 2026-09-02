@@ -235,9 +235,30 @@ model VehicleInsurance {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   createdById String?
+  history     VehicleInsuranceHistory[]
 
   @@index([vehicleId])
   @@index([endDate])
+}
+
+model VehicleInsuranceHistory {
+  id             String   @id @default(cuid())
+  insuranceId    String
+  insurance      VehicleInsurance @relation(fields: [insuranceId], references: [id], onDelete: Cascade)
+  vehicleId      String
+  action         String // CREATE, AMEND, RENEW, CANCELLED, DELETE
+  prevStatus     String?
+  newStatus      String?
+  prevStartDate  DateTime?
+  newStartDate   DateTime?
+  prevEndDate    DateTime?
+  newEndDate     DateTime?
+  note           String?
+  performedById  String?
+  createdAt      DateTime @default(now())
+
+  @@index([vehicleId])
+  @@index([insuranceId])
 }
 
 model VehicleDocument {

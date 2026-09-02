@@ -259,10 +259,10 @@ export default function InsurancesPage() {
                       ]}
                     />
                   )}
-                  {can("insurance:view") && r.status !== "ACTIVE" && (
-                    <a href={`/insurances/${r.id}`} className="underline text-slate-400 hover:text-slate-600" title="View Details">
-                      View
-                    </a>
+                  {can("insurance:view") && (
+                    <Link to={`/insurances/${r.id}/history`} className="underline text-slate-400 hover:text-slate-600" title="View History">
+                      History
+                    </Link>
                   )}
                 </div>
               </li>
