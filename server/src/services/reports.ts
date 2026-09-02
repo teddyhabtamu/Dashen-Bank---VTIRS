@@ -386,15 +386,21 @@ export const REPORT_BUILDERS: Record<string, (f: ReportFilters) => Promise<any>>
 };
 
 export const REPORT_META = [
-  { key: "inventory", title: "Vehicle Inventory", type: "table", icon: "Car" },
-  { key: "registrationStatus", title: "Registration Status", type: "chart", icon: "ClipboardList" },
-  { key: "registrationExpiry", title: "Registration Expiry", type: "table", icon: "CalendarClock" },
-  { key: "insuranceExpiry", title: "Insurance Expiry", type: "table", icon: "ShieldCheck" },
-  { key: "byBranch", title: "Vehicles by Branch", type: "chart", icon: "Building2" },
-  { key: "byDepartment", title: "Vehicles by Department", type: "chart", icon: "Users" },
-  { key: "age", title: "Vehicle Age", type: "chart", icon: "Clock" },
-  { key: "cost", title: "Vehicle Cost", type: "mixed", icon: "DollarSign" },
-  { key: "documentCompleteness", title: "Document Completeness", type: "mixed", icon: "FileCheck" },
-  { key: "fleetAcquisition", title: "Fleet Acquisition", type: "mixed", icon: "TrendingUp" },
-  { key: "renewalForecast", title: "Renewal Forecast", type: "mixed", icon: "CalendarRange" },
+  { key: "inventory", title: "Vehicle Inventory", type: "table", icon: "Car", group: "overview", desc: "Full list of vehicles with key details and document counts" },
+  { key: "byBranch", title: "Vehicles by Branch", type: "chart", icon: "Building2", group: "overview", desc: "Fleet size distribution across branches" },
+  { key: "byDepartment", title: "Vehicles by Department", type: "chart", icon: "Users", group: "overview", desc: "Fleet size distribution across departments" },
+  { key: "age", title: "Vehicle Age", type: "chart", icon: "Clock", group: "overview", desc: "Fleet breakdown by vehicle age bands" },
+  { key: "fleetAcquisition", title: "Fleet Acquisition", type: "mixed", icon: "TrendingUp", group: "overview", desc: "Vehicles by acquisition year and average fleet age" },
+  { key: "registrationExpiry", title: "Registration Expiry", type: "table", icon: "CalendarClock", group: "expiries", desc: "Registrations ordered by soonest expiry" },
+  { key: "insuranceExpiry", title: "Insurance Expiry", type: "table", icon: "ShieldCheck", group: "expiries", desc: "Insurance policies ordered by soonest end date" },
+  { key: "renewalForecast", title: "Renewal Forecast", type: "mixed", icon: "CalendarRange", group: "expiries", desc: "Registrations and insurance due in the next year" },
+  { key: "registrationStatus", title: "Registration Status", type: "chart", icon: "ClipboardList", group: "compliance", desc: "Counts by effective registration status" },
+  { key: "documentCompleteness", title: "Document Compliance", type: "mixed", icon: "FileCheck", group: "compliance", desc: "Per-vehicle checklist of required documents" },
+  { key: "cost", title: "Vehicle Cost", type: "mixed", icon: "DollarSign", group: "compliance", desc: "Purchase cost summary and top vehicles" },
+];
+
+export const REPORT_GROUPS: Array<{ key: string; title: string; desc: string }> = [
+  { key: "overview", title: "Overview", desc: "Fleet composition and tenure" },
+  { key: "expiries", title: "Expiries & Renewals", desc: "What's due soon" },
+  { key: "compliance", title: "Compliance & Cost", desc: "Health and value" },
 ];

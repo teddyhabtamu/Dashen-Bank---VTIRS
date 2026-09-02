@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import ReactECharts from "echarts-for-react";
-import { Download, CalendarRange } from "lucide-react";
+import { Download, CalendarRange, Car, Building2, Users, Clock, TrendingUp, CalendarClock, ShieldCheck, ClipboardList, FileCheck, DollarSign, BarChart3, type LucideIcon } from "lucide-react";
 import { Select } from "@/components/ui/select";
 import { DatePicker } from "@/components/ui/datepicker";
 import { BrandLoader } from "@/components/ui/brand-loader";
@@ -14,26 +14,26 @@ import { exportCsv, exportXlsx, exportPdf, rowsToHtmlTable } from "@/lib/export"
 
 const PALETTE = ["#273274", "#012169", "#e8941a", "#f59e0b", "#698dcf", "#10b981", "#ec4899", "#64748b"];
 
-interface Meta { key: string; title: string; type: string; icon: string }
+const ICON_MAP: Record<string, LucideIcon> = {
+  Car, Building2, Users, Clock, TrendingUp,
+  CalendarClock, ShieldCheck, CalendarRange,
+  ClipboardList, FileCheck, DollarSign,
+};
+
+interface Meta { key: string; title: string; type: string; icon: string; desc?: string; group?: string }
+interface GroupDef { key: string; title: string; desc: string }
 interface ReportResp {
   reports: Record<string, any>;
   meta: Meta[];
+  groups: GroupDef[];
   branches: { id: string; name: string }[];
   departments: { id: string; name: string }[];
 }
 
-const TABS: { key: string; label: string }[] = [
-  { key: "inventory", label: "Inventory" },
-  { key: "registrationStatus", label: "Reg. Status" },
-  { key: "registrationExpiry", label: "Reg. Expiry" },
-  { key: "insuranceExpiry", label: "Ins. Expiry" },
-  { key: "byBranch", label: "By Branch" },
-  { key: "byDepartment", label: "By Dept" },
-  { key: "age", label: "Age" },
-  { key: "cost", label: "Cost" },
-  { key: "documentCompleteness", label: "Doc Compliance" },
-  { key: "fleetAcquisition", label: "Acquisition" },
-  { key: "renewalForecast", label: "Renewal Forecast" },
+const DEFAULT_GROUPS: GroupDef[] = [
+  { key: "overview", title: "Overview", desc: "Fleet composition and tenure" },
+  { key: "expiries", title: "Expiries & Renewals", desc: "What's due soon" },
+  { key: "compliance", title: "Compliance & Cost", desc: "Health and value" },
 ];
 
 export default function ReportsPage() {
@@ -114,15 +114,47 @@ export default function ReportsPage() {
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-1.5">
-        {TABS.map((t) => (
-          <button key={t.key} onClick={() => setActive(t.key)}
-            className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
-              active === t.key
-                ? "bg-primary text-white shadow-sm"
-                : "border border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:text-slate-700"
-            }`}>{t.label}</button>
-        ))}
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[260px_1fr] lg:items-start">
+      <div className="space-y-5">
+        {(data?.groups?.length ? data.groups : DEFAULT_GROUPS).map((g) => {
+          const items = (data?.meta ?? []).filter((m) => (m.group ?? g.key) === g.key);
+          if (items.length === 0) return null;
+          return (
+            <div key={g.key} className="space-y-2">
+              <div>
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400">{g.title}</h3>
+                <p className="text-xs text-slate-400">{g.desc}</p>
+              </div>
+              <div className="grid grid-cols-1 gap-2">
+                {items.map((m) => {
+                  const Icon = ICON_MAP[m.icon] ?? BarChart3;
+                  const isActive = active === m.key;
+                  return (
+                    <button
+                      key={m.key}
+                      onClick={() => setActive(m.key)}
+                      className={`group relative w-full overflow-hidden rounded-xl border p-3 text-left transition-all ${
+                        isActive
+                          ? "border-primary bg-primary text-white shadow-sm"
+                          : "border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm"
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg ${isActive ? "bg-white/15 text-white" : "bg-slate-100 text-slate-500 group-hover:text-slate-700"}`}>
+                          <Icon className="h-4 w-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className={`text-sm font-medium ${isActive ? "text-white" : "text-slate-800"}`}>{m.title}</div>
+                          <div className={`mt-0.5 line-clamp-2 text-xs ${isActive ? "text-white/80" : "text-slate-400"}`}>{m.desc}</div>
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
       </div>
 
       {loading ? (
@@ -151,6 +183,7 @@ export default function ReportsPage() {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

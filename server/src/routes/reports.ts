@@ -4,6 +4,7 @@ import { PERMISSIONS } from "../lib/rbac.js";
 import {
   REPORT_BUILDERS,
   REPORT_META,
+  REPORT_GROUPS,
   costByBranch,
   type ReportFilters,
 } from "../services/reports.js";
@@ -44,6 +45,7 @@ router.get("/", requireAuth(PERMISSIONS.REPORT_VIEW), async (req, res) => {
   res.json({
     reports: { [reportKey]: payload },
     meta: REPORT_META,
+    groups: REPORT_GROUPS,
     filters,
     branches,
     departments,
