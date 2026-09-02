@@ -92,6 +92,13 @@ export const COVERAGE_TYPE = {
 } as const;
 export const COVERAGE_OPTIONS = Object.values(COVERAGE_TYPE);
 
+export const INSURANCE_STATUS = {
+  ACTIVE: "ACTIVE",
+  EXPIRED: "EXPIRED",
+  CANCELLED: "CANCELLED",
+} as const;
+export const INSURANCE_STATUS_OPTIONS = Object.values(INSURANCE_STATUS);
+
 export const NOTIFICATION_TYPE = {
   REGISTRATION_REMINDER: "REGISTRATION_REMINDER",
   INSURANCE_REMINDER: "INSURANCE_REMINDER",
@@ -102,6 +109,7 @@ export const NOTIFICATION_TYPE_OPTIONS = Object.values(NOTIFICATION_TYPE);
 
 // Human-friendly labels for enums (used in UI dropdowns & reports).
 export const LABELS: Record<string, string> = {
+
   ACTIVE: "Active",
   INACTIVE: "Inactive",
   LOCKED: "Locked",
@@ -127,7 +135,6 @@ export const LABELS: Record<string, string> = {
   EXPIRED: "Expired",
   SUSPENDED: "Suspended",
   ARCHIVED: "Archived",
-  REGISTRATION_CERT: "Registration Certificate",
   INSURANCE_CERT: "Insurance Certificate",
   PURCHASE_AGREEMENT: "Purchase Agreement",
   INSPECTION_CERT: "Inspection Certificate",

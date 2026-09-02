@@ -1,7 +1,7 @@
 
 import { Link } from "react-router-dom";
 import { useCallback, useEffect, useState } from "react";
-import { Download, Plus, Search, ShieldCheck, MoreVertical, CalendarRange, Pencil, Trash2 } from "lucide-react";
+import { Download, Plus, Search, ShieldCheck, MoreVertical, CalendarRange, Pencil, Trash2, RefreshCcw } from "lucide-react";
 import { BrandLoader } from "@/components/ui/brand-loader";
 import { Dropdown } from "@/components/ui/dropdown";
 import { Select } from "@/components/ui/select";
@@ -14,6 +14,7 @@ import { useToast } from "@/lib/toast-context";
 import { exportCsv, exportXlsx, exportPdf, rowsToHtmlTable } from "@/lib/export";
 import { Tooltip } from "@/components/ui/tooltip";
 import { COVERAGE_OPTIONS } from "@/lib/constants";
+import { INSURANCE_STATUS_OPTIONS } from "@/lib/constants";
 import { formatDate } from "@/lib/format";
 
 interface InsRow {
@@ -23,6 +24,7 @@ interface InsRow {
   coverage: string;
   startDate: string;
   endDate: string;
+  status: string;
   vehicle: { id: string; plateNumber: string; vehicleCode: string; branch?: { name: string } | null };
 }
 
@@ -53,6 +55,7 @@ export default function InsurancesPage() {
     qs.set("page", String(page));
     if (search) qs.set("search", search);
     if (coverage) qs.set("coverage", coverage);
+    if (status) qs.set("status", status);
     if (from) qs.set("from", from);
     if (to) qs.set("to", to);
     const res = await fetch(`/api/insurances?${qs.toString()}`);
@@ -70,13 +73,14 @@ export default function InsurancesPage() {
     await load();
   }
 
-  const [form, setForm] = useState({ vehicleId: "", company: "", policyNo: "", coverage: "", startDate: "", endDate: "" });
+  const [form, setForm] = useState({ vehicleId: "", company: "", policyNo: "", coverage: "", startDate: "", endDate: "", confirmSupersede: false });
   const [vehicles, setVehicles] = useState<{ value: string; label: string }[]>([]);
   const [err, setErr] = useState<string | null>(null);
+  const [status, setStatus] = useState<string>("");
 
   async function openCreate() {
     setErr(null);
-    setForm({ vehicleId: "", company: "", policyNo: "", coverage: "Comprehensive", startDate: "", endDate: "" });
+    setForm({ vehicleId: "", company: "", policyNo: "", coverage: "Comprehensive", startDate: "", endDate: "", confirmSupersede: false });
     const res = await fetch("/api/vehicles?pageSize=9999");
     const data = await res.json();
     setVehicles((data.items ?? []).map((v: any) => ({ value: v.id, label: `${v.plateNumber} (${v.vehicleCode})` })));
@@ -85,20 +89,29 @@ export default function InsurancesPage() {
 
   async function openEdit(r: InsRow) {
     setErr(null);
-    setForm({ vehicleId: r.vehicle.id, company: r.company, policyNo: r.policyNo, coverage: r.coverage, startDate: r.startDate.slice(0, 10), endDate: r.endDate.slice(0, 10) });
+    setForm({ vehicleId: r.vehicle.id, company: r.company, policyNo: r.policyNo, coverage: r.coverage, startDate: r.startDate.slice(0, 10), endDate: r.endDate.slice(0, 10), confirmSupersede: r.status !== "ACTIVE" });
     setEditId(r.id);
+  }
+
+  async function openRenew(r: InsRow) {
+    setErr(null);
+    setForm({ vehicleId: r.vehicle.id, company: r.company, policyNo: r.policyNo, coverage: r.coverage, startDate: r.startDate.slice(0, 10), endDate: "", confirmSupersede: false });
+    setEditId(r.id + "-renew");
+    setCreateOpen(true);
   }
 
   async function submitSave() {
     setBusy(true); setErr(null);
     try {
-      const url = editId ? `/api/insurances/${editId}` : "/api/insurances";
-      const method = editId ? "PATCH" : "POST";
+      const isRenew = editId?.endsWith("-renew");
+      const url = isRenew ? `/api/insurances/${editId!.replace("-renew", "")}/renew` : (editId ? `/api/insurances/${editId}` : "/api/insurances");
+      const method = isRenew ? "POST" : (editId ? "PATCH" : "POST");
+      const body = isRenew ? JSON.stringify({ endDate: form.endDate }) : JSON.stringify(form);
       const res = await fetch(url, {
-        method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(form),
+        method, headers: { "Content-Type": "application/json" }, body,
       });
       if (!res.ok) { const d = await res.json(); setErr(d.error ?? "Failed to save"); return; }
-      toast("success", editId ? "Insurance policy updated" : "Insurance policy created");
+      toast("success", isRenew ? "Insurance policy renewed" : (editId ? "Insurance policy updated" : "Insurance policy created"));
       await afterAction();
     } finally { setBusy(false); }
   }
@@ -132,6 +145,7 @@ export default function InsurancesPage() {
   const chips: { key: string; label: string; clear: () => void }[] = [];
   if (search) chips.push({ key: "q", label: `"${search}"`, clear: () => setSearch("") });
   if (coverage) chips.push({ key: "cov", label: `Coverage: ${coverage}`, clear: () => setCoverage("") });
+  if (status) chips.push({ key: "stat", label: `Status: ${status}`, clear: () => setStatus("") });
   if (from) chips.push({ key: "from", label: `From: ${from}`, clear: () => setFrom("") });
   if (to) chips.push({ key: "to", label: `To: ${to}`, clear: () => setTo("") });
 
@@ -166,9 +180,12 @@ export default function InsurancesPage() {
             <input className="input pl-9" placeholder="Search policy, company, plate..." value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
           </div>
-          <Select className="w-auto" value={coverage} onChange={(v) => { setCoverage(v); setPage(1); }}
-            placeholder="All coverage"
-            options={[{ value: "", label: "All coverage" }, ...COVERAGE_OPTIONS.map((c) => ({ value: c, label: c }))]} />
+<Select className="w-auto" value={coverage} onChange={(v) => { setCoverage(v); setPage(1); }}
+          placeholder="All coverage"
+          options={[{ value: "", label: "All coverage" }, ...COVERAGE_OPTIONS.map((c) => ({ value: c, label: c }))]} />
+          <Select className="w-auto" value={status} onChange={(v) => { setStatus(v); setPage(1); }}
+            placeholder="All status"
+            options={[{ value: "", label: "All status" }, ...INSURANCE_STATUS_OPTIONS.map((s) => ({ value: s, label: s }))]} />
           <div className="inline-flex w-full items-center gap-1 rounded-md border border-slate-200 px-2 py-1 sm:w-auto">
             <CalendarRange className="h-3.5 w-3.5 shrink-0 text-slate-400" />
             <DatePicker value={from} onChange={(v) => { setFrom(v); setPage(1); }} placeholder="End from" className="w-24" />
@@ -233,9 +250,19 @@ export default function InsurancesPage() {
                       trigger={({ toggle }) => (<button onClick={toggle} className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100" title="Actions"><MoreVertical className="h-4 w-4" /></button>)}
                       items={[
                         { label: "Edit", icon: <Pencil className="h-4 w-4" />, onClick: () => openEdit(r) },
-                        { label: "Delete", icon: <Trash2 className="h-4 w-4" />, danger: true, onClick: () => setDeleteId(r.id) },
+                        ...(r.status === "ACTIVE" ? [] : [
+                          { label: "Delete", icon: <Trash2 className="h-4 w-4" />, danger: true, onClick: () => setDeleteId(r.id) },
+                        ]),
+                        ...(r.status === "ACTIVE" || r.status === "EXPIRED" ? [
+                          { label: "Renew", icon: <RefreshCcw className="h-4 w-4" />, onClick: () => openRenew(r) },
+                        ] : []),
                       ]}
                     />
+                  )}
+                  {can("insurance:view") && r.status !== "ACTIVE" && (
+                    <a href={`/insurances/${r.id}`} className="underline text-slate-400 hover:text-slate-600" title="View Details">
+                      View
+                    </a>
                   )}
                 </div>
               </li>
@@ -291,6 +318,10 @@ export default function InsurancesPage() {
           <label className="text-sm">End Date <span className="text-red-400">*</span>
             <div className="mt-1"><DatePicker value={form.endDate} onChange={(v) => setForm({ ...form, endDate: v })} /></div>
           </label>
+          <div className="mt-2">
+            <input type="checkbox" checked={form.confirmSupersede} onChange={(e) => setForm({ ...form, confirmSupersede: e.target.checked })} className="rounded-md accent-color-primary" />
+            <span className="ml-2 text-xs text-slate-500">Confirm to supersede existing active policy</span>
+          </div>
         </div>
       </Modal>
 
