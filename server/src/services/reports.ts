@@ -1,6 +1,7 @@
 import { prisma } from "../lib/prisma.js";
 import { label } from "../lib/constants.js";
 import { daysUntil, effectiveRegistrationStatus, expiryState } from "./reminders.js";
+import { requiredDocumentCategories } from "./setting.js";
 
 export interface ReportFilters {
   branchId?: string;
@@ -234,6 +235,49 @@ export async function expiryTimeline(f: ReportFilters) {
   return { months, regCounts, insCounts };
 }
 
+// 10. Document Completeness — per-vehicle checklist against required categories
+export async function documentCompleteness(f: ReportFilters) {
+  const required = await requiredDocumentCategories();
+  const vehicles = await prisma.vehicle.findMany({
+    where: baseWhere(f),
+    include: {
+      branch: { select: { name: true } },
+      department: { select: { name: true } },
+      documents: {
+        where: { deletedAt: null },
+        select: { category: true, expiresAt: true },
+      },
+    },
+    orderBy: { vehicleCode: "asc" },
+  });
+
+  const rows = vehicles.map((v) => {
+    const present = new Set(v.documents.map((d) => d.category));
+    const missing = required.filter((c) => !present.has(c));
+    // Expired: doc present but past its expiry, or missing entirely (count missing as incomplete only).
+    const expiredDocs = v.documents.filter((d) => d.expiresAt && new Date(d.expiresAt).getTime() < Date.now())
+      .map((d) => d.category);
+    return {
+      vehicleCode: v.vehicleCode,
+      plateNumber: v.plateNumber,
+      branch: v.branch?.name ?? "-",
+      department: v.department?.name ?? "-",
+      present: required.filter((c) => present.has(c)).length,
+      requiredTotal: required.length,
+      missing: missing.map(label),
+      expired: expiredDocs.map(label),
+      complete: missing.length === 0 && expiredDocs.length === 0,
+    };
+  });
+
+  const completeCount = rows.filter((r) => r.complete).length;
+  return {
+    required: required.map(label),
+    summary: { total: rows.length, complete: completeCount, incomplete: rows.length - completeCount },
+    rows,
+  };
+}
+
 export const REPORT_BUILDERS: Record<string, (f: ReportFilters) => Promise<any>> = {
   inventory: vehicleInventory,
   registrationStatus: registrationStatus,
@@ -245,6 +289,7 @@ export const REPORT_BUILDERS: Record<string, (f: ReportFilters) => Promise<any>>
   cost: vehicleCost,
   costByBranch: costByBranch,
   expiryTimeline: expiryTimeline,
+  documentCompleteness: documentCompleteness,
 };
 
 export const REPORT_META = [
@@ -256,4 +301,5 @@ export const REPORT_META = [
   { key: "byDepartment", title: "Vehicles by Department", type: "chart", icon: "Users" },
   { key: "age", title: "Vehicle Age", type: "chart", icon: "Clock" },
   { key: "cost", title: "Vehicle Cost", type: "mixed", icon: "DollarSign" },
+  { key: "documentCompleteness", title: "Document Completeness", type: "mixed", icon: "FileCheck" },
 ];

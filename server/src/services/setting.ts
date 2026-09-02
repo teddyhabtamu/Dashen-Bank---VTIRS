@@ -29,6 +29,19 @@ export async function defaultPageSize(): Promise<number> {
   return Math.max(1, Number(v) || 20);
 }
 
+export async function requiredDocumentCategories(): Promise<string[]> {
+  const raw = await getSetting(
+    "required_document_categories",
+    '["REGISTRATION_CERT","INSURANCE_CERT","INSPECTION_CERT"]'
+  );
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((c) => typeof c === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
 export async function listSettings() {
   const settings = await prisma.setting.findMany({
     orderBy: [{ group: "asc" }, { key: "asc" }],
@@ -84,6 +97,7 @@ export async function seedDefaultSettings() {
     { key: "max_login_attempts", value: "5", label: "Max failed logins before account lockout", group: "Security" },
     { key: "notify_registration", value: "true", label: "Generate registration expiry reminders", group: "Reminders" },
     { key: "notify_insurance", value: "true", label: "Generate insurance expiry reminders", group: "Reminders" },
+    { key: "required_document_categories", value: "[\"REGISTRATION_CERT\",\"INSURANCE_CERT\",\"INSPECTION_CERT\"]", label: "Required document categories", group: "Documents" },
   ];
 
   for (const d of defaults) {

@@ -31,6 +31,7 @@ const TABS: { key: string; label: string }[] = [
   { key: "byDepartment", label: "By Dept" },
   { key: "age", label: "Age" },
   { key: "cost", label: "Cost" },
+  { key: "documentCompleteness", label: "Doc Compliance" },
 ];
 
 export default function ReportsPage() {
@@ -161,12 +162,14 @@ function ReportView({ active, payload }: { active: string; payload: any }) {
   if (active === "byDepartment") return <BarChart rows={payload ?? []} nameKey="department" valueKey="count" />;
   if (active === "age") return <BarChart rows={payload ?? []} nameKey="range" valueKey="count" horizontal />;
   if (active === "cost") return <CostReport data={payload} />;
+  if (active === "documentCompleteness") return <CompletenessReport data={payload} />;
   return null;
 }
 
 function flattenRows(key: string, payload: any): Record<string, unknown>[] {
   if (!payload) return [];
   if (key === "cost") return payload.top ?? [];
+  if (key === "documentCompleteness") return payload.rows ?? [];
   if (Array.isArray(payload)) return payload;
   return [];
 }
@@ -389,4 +392,60 @@ function Stat({ label, value }: { label: string; value: string }) {
 
 function Empty() {
   return <div className="py-12 text-center text-sm text-slate-400">No data for the current filters.</div>;
+}
+
+function CompletenessReport({ data }: { data: { required: string[]; summary: { total: number; complete: number; incomplete: number }; rows: any[] } | null }) {
+  if (!data) return <Empty />;
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <Stat label="Vehicles" value={String(data.summary.total)} />
+        <Stat label="Complete" value={String(data.summary.complete)} />
+        <Stat label="Incomplete" value={String(data.summary.incomplete)} />
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        <span className="text-xs uppercase tracking-wide text-slate-400">Required:</span>
+        {data.required.map((r) => (
+          <span key={r} className="badge bg-primary/10 text-primary">{r}</span>
+        ))}
+      </div>
+      {data.rows.length === 0 ? <Empty /> : (
+        <div className="flex flex-col gap-3">
+          {data.rows.map((r, i) => {
+            const missing = Array.isArray(r.missing) ? r.missing : [];
+            const expired = Array.isArray(r.expired) ? r.expired : [];
+            return (
+              <div key={i} className="rounded-lg border border-slate-100 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="truncate text-sm font-semibold text-slate-800">{r.plateNumber}</span>
+                      <span className="badge bg-slate-100 text-slate-600">{r.vehicleCode}</span>
+                    </div>
+                    <div className="text-xs text-slate-400">{r.branch}{r.department !== "-" ? ` · ${r.department}` : ""}</div>
+                  </div>
+                  <div className="flex flex-shrink-0 items-center gap-2">
+                    <span className="badge bg-slate-100 text-slate-600">{r.present}/{r.requiredTotal} present</span>
+                    {r.complete
+                      ? <span className="badge bg-green-100 text-green-700">Complete</span>
+                      : <span className="badge bg-red-100 text-red-700">Incomplete</span>}
+                  </div>
+                </div>
+                {missing.length > 0 && (
+                  <div className="mt-2 text-xs text-slate-500">
+                    <span className="font-medium text-slate-600">Missing:</span> {missing.join(", ")}
+                  </div>
+                )}
+                {expired.length > 0 && (
+                  <div className="mt-1 text-xs text-amber-600">
+                    <span className="font-medium">Expired:</span> {expired.join(", ")}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
 }

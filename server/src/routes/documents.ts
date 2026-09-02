@@ -143,10 +143,11 @@ router.post(
   upload.single("file"),
   async (req, res) => {
     const file = req.file;
-    const { vehicleId, category, title } = req.body as {
+    const { vehicleId, category, title, expiresAt } = req.body as {
       vehicleId?: string;
       category?: string;
       title?: string;
+      expiresAt?: string;
     };
     const kind = (req.body.kind as string) || "document";
 
@@ -176,6 +177,9 @@ router.post(
     const cat = category || "OTHER";
 
     let record: any;
+    const parsedExpiry = expiresAt && !Number.isNaN(new Date(expiresAt).getTime())
+      ? new Date(expiresAt)
+      : null;
     if (kind === "image") {
       const existingImg = await prisma.vehicleImage.findFirst({
         where: { vehicleId, originalName: file.originalname, category: cat },
@@ -213,6 +217,7 @@ router.post(
           path: objectKey,
           version,
           uploadedById: req.session!.userId,
+          ...(parsedExpiry && { expiresAt: parsedExpiry }),
         },
       });
     }
@@ -362,12 +367,12 @@ router.patch(
   "/:id",
   requireAuth(PERMISSIONS.DOCUMENT_UPLOAD),
   async (req, res) => {
-    const { title, category } = req.body as { title?: string; category?: string };
-    if (!title?.trim() && !category) {
+    const { title, category, expiresAt } = req.body as { title?: string; category?: string; expiresAt?: string | null };
+    if (!title?.trim() && !category && expiresAt === undefined) {
       return res.status(400).json({ error: "Nothing to update" });
     }
 
-    const updated = await updateDocument(req.params.id, { title, category }, {
+    const updated = await updateDocument(req.params.id, { title, category, expiresAt }, {
       userId: req.session!.userId,
       req,
     });

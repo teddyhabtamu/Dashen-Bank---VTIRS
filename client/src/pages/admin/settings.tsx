@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Settings as SettingsIcon, Save, Building2, Bell, Monitor, ShieldCheck } from "lucide-react";
 import { BrandLoader } from "@/components/ui/brand-loader";
 import { useToast } from "@/lib/toast-context";
+import { DOCUMENT_CATEGORY_OPTIONS, label } from "@/lib/constants";
 
 interface SettingItem {
   id: string;
@@ -49,6 +50,7 @@ function helps(key: string): string {
     max_login_attempts: "Account locks after this many failed sign-in attempts",
     notify_registration: "Send push notifications when registrations are about to expire",
     notify_insurance: "Send push notifications when insurance is about to expire",
+    required_document_categories: "Document categories every vehicle must have to be considered compliant",
   };
   return H[key] ?? "";
 }
@@ -94,6 +96,18 @@ export default function SettingsPage() {
 
   function isBooleanKey(key: string): boolean {
     return ["notify_registration", "notify_insurance"].includes(key);
+  }
+
+  function isRequiredCatKey(key: string): boolean {
+    return key === "required_document_categories";
+  }
+
+  function toggleRequiredCat(id: string, cat: string, current: string) {
+    let arr: string[] = [];
+    try { arr = JSON.parse(current); } catch { arr = []; }
+    if (!Array.isArray(arr)) arr = [];
+    const next = arr.includes(cat) ? arr.filter((c) => c !== cat) : [...arr, cat];
+    setValue(id, JSON.stringify(next));
   }
 
   function displayLabel(item: SettingItem): string {
@@ -224,6 +238,27 @@ export default function SettingsPage() {
                             >
                               <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-0 transition-transform ${values[item.id] === "true" ? "translate-x-6" : "translate-x-1"}`} />
                             </button>
+                          ) : isRequiredCatKey(item.key) ? (
+                            <div className="flex w-full flex-wrap gap-1.5 sm:justify-end">
+                              {(() => {
+                                let arr: string[] = [];
+                                try { arr = JSON.parse(values[item.id] ?? "[]"); } catch { arr = []; }
+                                if (!Array.isArray(arr)) arr = [];
+                                return DOCUMENT_CATEGORY_OPTIONS.map((c) => {
+                                  const on = arr.includes(c);
+                                  return (
+                                    <button
+                                      key={c}
+                                      type="button"
+                                      onClick={() => toggleRequiredCat(item.id, c, values[item.id] ?? "[]")}
+                                      className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${on ? "bg-primary text-white" : "border border-slate-200 text-slate-500 hover:border-slate-300"}`}
+                                    >
+                                      {on ? "✓ " : ""}{label(c)}
+                                    </button>
+                                  );
+                                });
+                              })()}
+                            </div>
                           ) : (
                             <input
                               id={`setting-${item.id}`}

@@ -23,6 +23,7 @@ interface Doc {
   version: number;
   isLatest: boolean;
   createdAt: string;
+  expiresAt?: string | null;
   deletedAt?: string | null;
   vehicle: { id: string; plateNumber: string; vehicleCode: string };
 }
@@ -38,6 +39,7 @@ export default function DocumentsPage() {
   const [editingDoc, setEditingDoc] = useState<Doc | null>(null);
   const [editTitle, setEditTitle] = useState("");
   const [editCat, setEditCat] = useState("");
+  const [editExpires, setEditExpires] = useState("");
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [purgeId, setPurgeId] = useState<string | null>(null);
   const [docsPage, setDocsPage] = useState(1);
@@ -69,9 +71,13 @@ export default function DocumentsPage() {
 
   async function handleEditSave() {
     if (!editingDoc) return;
-    const body: Record<string, string> = {};
+    const body: Record<string, unknown> = {};
     if (editTitle.trim()) body.title = editTitle.trim();
     if (editCat) body.category = editCat;
+    const currentExpiry = editingDoc.expiresAt?.slice(0, 10) ?? "";
+    if (editExpires !== currentExpiry) {
+      body.expiresAt = editExpires ? new Date(editExpires).toISOString() : null;
+    }
     const res = await fetch(`/api/documents/${editingDoc.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -242,6 +248,12 @@ export default function DocumentsPage() {
                     <span className="badge bg-slate-100 text-slate-500">v{d.version}</span>
                     {view === "all" && d.isLatest && <span className="badge bg-green-100 text-green-700">Latest</span>}
                     {view === "trash" && d.deletedAt && <span className="badge bg-amber-100 text-amber-700">Deleted {formatDate(d.deletedAt)}</span>}
+                    {view === "all" && d.expiresAt && new Date(d.expiresAt).getTime() < Date.now() && (
+                      <span className="badge bg-red-100 text-red-700" title={`Expired ${formatDate(d.expiresAt)}`}>Expired</span>
+                    )}
+                    {view === "all" && d.expiresAt && new Date(d.expiresAt).getTime() >= Date.now() && (
+                      <span className="badge bg-slate-100 text-slate-500">Expires {formatDate(d.expiresAt)}</span>
+                    )}
                   </div>
                   <div className="truncate text-xs text-slate-400">
                     <Link to={`/vehicles/${d.vehicle.id}`} className="text-blue-600 hover:underline">{d.vehicle.plateNumber}</Link>
@@ -259,7 +271,7 @@ export default function DocumentsPage() {
                     ? [
                         { label: "Preview", icon: <Eye className="h-4 w-4" />, onClick: () => window.open(`/api/documents/${d.id}`, "_blank") },
                         { label: "Download", icon: <Download className="h-4 w-4" />, onClick: () => window.open(`/api/documents/${d.id}?download=1`, "_blank") },
-                        { label: "Edit metadata", icon: <Pencil className="h-4 w-4" />, onClick: () => { setEditingDoc(d); setEditTitle(d.title); setEditCat(d.category); } },
+                        { label: "Edit metadata", icon: <Pencil className="h-4 w-4" />, onClick: () => { setEditingDoc(d); setEditTitle(d.title); setEditCat(d.category); setEditExpires(d.expiresAt?.slice(0, 10) ?? ""); } },
                         { label: "Move to trash", icon: <Trash2 className="h-4 w-4" />, danger: true, onClick: () => setDeleteId(d.id) },
                       ]
                     : [
@@ -308,6 +320,10 @@ export default function DocumentsPage() {
               onChange={setEditCat}
               options={DOCUMENT_CATEGORY_OPTIONS.map((c) => ({ value: c, label: label(c) }))}
             />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-600">Expiry date (optional)</label>
+            <input type="date" className="input w-full" value={editExpires} onChange={(e) => setEditExpires(e.target.value)} />
           </div>
         </div>
       </Modal>

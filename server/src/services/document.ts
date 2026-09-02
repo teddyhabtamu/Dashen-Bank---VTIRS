@@ -16,15 +16,22 @@ async function findDocOrImg(id: string): Promise<{ kind: "doc" | "img"; row: Doc
   return null;
 }
 
-export async function updateDocument(id: string, data: { title?: string; category?: string }, ctx: Ctx = {}) {
+export async function updateDocument(id: string, data: { title?: string; category?: string; expiresAt?: string | null }, ctx: Ctx = {}) {
   const doc = await prisma.vehicleDocument.findUnique({ where: { id } });
   if (!doc) return null;
+
+  const expiresAt = data.expiresAt === undefined
+    ? undefined
+    : data.expiresAt && !Number.isNaN(new Date(data.expiresAt).getTime())
+      ? new Date(data.expiresAt)
+      : null;
 
   const updated = await prisma.vehicleDocument.update({
     where: { id },
     data: {
       ...(data.title !== undefined && { title: data.title }),
       ...(data.category !== undefined && { category: data.category }),
+      ...(expiresAt !== undefined && { expiresAt }),
     },
   });
 
@@ -34,8 +41,8 @@ export async function updateDocument(id: string, data: { title?: string; categor
     entityId: id,
     vehicleId: doc.vehicleId,
     userId: ctx.userId,
-    oldValue: { title: doc.title, category: doc.category },
-    newValue: { title: updated.title, category: updated.category },
+    oldValue: { title: doc.title, category: doc.category, expiresAt: doc.expiresAt },
+    newValue: { title: updated.title, category: updated.category, expiresAt: updated.expiresAt },
     req: ctx.req,
   });
 

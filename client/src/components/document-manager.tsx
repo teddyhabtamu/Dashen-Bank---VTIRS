@@ -17,6 +17,7 @@ interface DocItem {
   sizeBytes: number;
   version: number;
   createdAt: string;
+  expiresAt?: string | null;
 }
 interface ImgItem {
   id: string;
@@ -312,6 +313,8 @@ export function DocumentManager({
                             <span className="badge shrink-0 bg-blue-50 text-blue-600">{versions.length} versions</span>
                           )}
                           <span className="badge shrink-0 bg-primary/10 text-primary">{label(latest.category)}</span>
+                          {latest.expiresAt && new Date(latest.expiresAt).getTime() < Date.now() &&
+                            <span className="badge shrink-0 bg-red-100 text-red-700" title={`Expired ${formatDate(latest.expiresAt)}`}>Expired</span>}
                         </div>
                         <div className="truncate text-xs text-slate-400">
                           {latest.originalName} · {formatFileSize(latest.sizeBytes)} · {formatDate(latest.createdAt)}

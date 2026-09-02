@@ -276,6 +276,7 @@ model VehicleDocument {
   uploadedById String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+  expiresAt    DateTime?
   deletedAt    DateTime?
   deletedById  String?
 
