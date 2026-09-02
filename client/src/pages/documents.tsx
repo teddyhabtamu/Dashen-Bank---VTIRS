@@ -25,6 +25,7 @@ interface Doc {
   createdAt: string;
   expiresAt?: string | null;
   deletedAt?: string | null;
+  uploadedBy?: { fullName?: string } | null;
   vehicle: { id: string; plateNumber: string; vehicleCode: string };
 }
 
@@ -42,6 +43,7 @@ export default function DocumentsPage() {
   const [editExpires, setEditExpires] = useState("");
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [purgeId, setPurgeId] = useState<string | null>(null);
+  const [preview, setPreview] = useState<Doc | null>(null);
   const [docsPage, setDocsPage] = useState(1);
   const [docsPageSize, setDocsPageSize] = useState(25);
   const [docsTotal, setDocsTotal] = useState(0);
@@ -227,15 +229,13 @@ export default function DocumentsPage() {
               {filtered.map((d) => (
                 <li key={d.id} className="flex items-center gap-4 px-5 py-3 transition-colors hover:bg-slate-50">
                 {d.mimeType.startsWith("image/") ? (
-                  <a
-                    href={`/api/documents/${d.id}`}
-                    target="_blank"
-                    rel="noreferrer"
+                  <button
+                    onClick={() => setPreview(d)}
                     className="flex h-10 w-10 flex-shrink-0 items-center justify-center overflow-hidden rounded-lg bg-slate-100"
-                    title="Open image"
+                    title="Preview image"
                   >
                     <img src={`/api/documents/${d.id}`} alt={d.originalName} className="h-full w-full object-cover" />
-                  </a>
+                  </button>
                 ) : (
                   <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
                     <FileText className="h-5 w-5" />
@@ -258,6 +258,7 @@ export default function DocumentsPage() {
                   <div className="truncate text-xs text-slate-400">
                     <Link to={`/vehicles/${d.vehicle.id}`} className="text-blue-600 hover:underline">{d.vehicle.plateNumber}</Link>
                     {" · "}{d.vehicle.vehicleCode} · {formatFileSize(d.sizeBytes)} · {formatDate(d.createdAt)}
+                    {d.uploadedBy?.fullName ? ` · by ${d.uploadedBy.fullName}` : ""}
                   </div>
                 </div>
                 <Dropdown
@@ -269,13 +270,13 @@ export default function DocumentsPage() {
                   )}
                   items={view === "all"
                     ? [
-                        { label: "Preview", icon: <Eye className="h-4 w-4" />, onClick: () => window.open(`/api/documents/${d.id}`, "_blank") },
+                        { label: "Preview", icon: <Eye className="h-4 w-4" />, onClick: () => setPreview(d) },
                         { label: "Download", icon: <Download className="h-4 w-4" />, onClick: () => window.open(`/api/documents/${d.id}?download=1`, "_blank") },
                         { label: "Edit metadata", icon: <Pencil className="h-4 w-4" />, onClick: () => { setEditingDoc(d); setEditTitle(d.title); setEditCat(d.category); setEditExpires(d.expiresAt?.slice(0, 10) ?? ""); } },
                         { label: "Move to trash", icon: <Trash2 className="h-4 w-4" />, danger: true, onClick: () => setDeleteId(d.id) },
                       ]
                     : [
-                        { label: "Preview", icon: <Eye className="h-4 w-4" />, onClick: () => window.open(`/api/documents/${d.id}`, "_blank") },
+                        { label: "Preview", icon: <Eye className="h-4 w-4" />, onClick: () => setPreview(d) },
                         { label: "Download", icon: <Download className="h-4 w-4" />, onClick: () => window.open(`/api/documents/${d.id}?download=1`, "_blank") },
                         { label: "Restore", icon: <RotateCcw className="h-4 w-4" />, onClick: () => handleRestore(d.id) },
                         { label: "Delete permanently", icon: <Trash className="h-4 w-4" />, danger: true, onClick: () => setPurgeId(d.id) },
@@ -345,6 +346,22 @@ export default function DocumentsPage() {
         message="This permanently removes the file from storage. This action cannot be undone."
         confirmLabel="Delete permanently"
       />
+
+      <Modal open={preview !== null} onClose={() => setPreview(null)} title={preview?.title ?? "Preview"} size="xl">
+        {preview && (
+          preview.mimeType.startsWith("image/") ? (
+            <div className="flex items-center justify-center bg-slate-50">
+              <img src={`/api/documents/${preview.id}`} alt={preview.title} className="max-h-[65dvh] rounded-lg object-contain" />
+            </div>
+          ) : (
+            <iframe
+              src={`/api/documents/${preview.id}`}
+              title={preview.title}
+              className="h-[65dvh] w-full rounded-lg border border-slate-200 bg-white"
+            />
+          )
+        )}
+      </Modal>
     </div>
   );
 }

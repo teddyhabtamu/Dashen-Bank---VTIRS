@@ -50,18 +50,22 @@ router.get("/", requireAuth(PERMISSIONS.DOCUMENT_VIEW), async (req, res) => {
   const vehicleSelect = {
     select: { id: true, plateNumber: true, vehicleCode: true },
   };
+  const fileInclude = {
+    vehicle: vehicleSelect,
+    uploadedBy: { select: { fullName: true } },
+  };
 
   const [docs, images, docTotal, imgTotal] = await Promise.all([
     prisma.vehicleDocument.findMany({
       where: docWhere,
-      include: { vehicle: vehicleSelect },
+      include: fileInclude,
       orderBy: { createdAt: "desc" },
       skip,
       take: pageSize,
     }),
     prisma.vehicleImage.findMany({
       where: imgWhere,
-      include: { vehicle: vehicleSelect },
+      include: fileInclude,
       orderBy: { createdAt: "desc" },
       skip,
       take: pageSize,
@@ -74,6 +78,7 @@ router.get("/", requireAuth(PERMISSIONS.DOCUMENT_VIEW), async (req, res) => {
   // both appear together in the repository list.
   const normalizedImages = images.map((img) => ({
     id: img.id,
+    uploadedBy: img.uploadedBy,
     title: img.originalName,
     category: img.category,
     fileName: img.fileName,
@@ -298,18 +303,22 @@ router.get("/trash", requireAuth(PERMISSIONS.DOCUMENT_VIEW), async (req, res) =>
   const vehicleSelect = {
     select: { id: true, plateNumber: true, vehicleCode: true },
   };
+  const fileInclude = {
+    vehicle: vehicleSelect,
+    uploadedBy: { select: { fullName: true } },
+  };
 
   const [docs, images, docTotal, imgTotal] = await Promise.all([
     prisma.vehicleDocument.findMany({
       where: docWhere,
-      include: { vehicle: vehicleSelect },
+      include: fileInclude,
       orderBy: { deletedAt: "desc" },
       skip,
       take: pageSize,
     }),
     prisma.vehicleImage.findMany({
       where: imgWhere,
-      include: { vehicle: vehicleSelect },
+      include: fileInclude,
       orderBy: { deletedAt: "desc" },
       skip,
       take: pageSize,
@@ -320,6 +329,7 @@ router.get("/trash", requireAuth(PERMISSIONS.DOCUMENT_VIEW), async (req, res) =>
 
   const normalizedImages = images.map((img) => ({
     id: img.id,
+    uploadedBy: img.uploadedBy,
     title: img.originalName,
     category: img.category,
     fileName: img.fileName,

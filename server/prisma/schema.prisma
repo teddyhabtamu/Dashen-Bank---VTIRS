@@ -58,6 +58,8 @@ model User {
   updatedAt    DateTime @updatedAt
   auditLogs    AuditLog[]
   notifications Notification[]
+  uploadedDocuments VehicleDocument[]
+  uploadedImages    VehicleImage[]
 
   @@index([roleId])
   @@index([branchId])
@@ -276,6 +278,7 @@ model VehicleDocument {
   contentHash  String?
   documentRef  String?
   uploadedById String?
+  uploadedBy   User?    @relation(fields: [uploadedById], references: [id])
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   expiresAt    DateTime?
@@ -300,6 +303,7 @@ model VehicleImage {
   path         String
   version      Int      @default(1)
   uploadedById String?
+  uploadedBy   User?    @relation(fields: [uploadedById], references: [id])
   createdAt    DateTime @default(now())
   deletedAt    DateTime?
   deletedById  String?

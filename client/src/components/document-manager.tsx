@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Upload, FileText, Image as ImageIcon, Trash2, Download, Eye, X, ChevronDown, ChevronRight, RotateCcw } from "lucide-react";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
+import { Modal } from "@/components/ui/modal";
 import { Select } from "@/components/ui/select";
 import { DOCUMENT_CATEGORY_OPTIONS, IMAGE_CATEGORY_OPTIONS, label } from "@/lib/constants";
 import { formatFileSize, formatDate } from "@/lib/format";
@@ -18,6 +19,7 @@ interface DocItem {
   version: number;
   createdAt: string;
   expiresAt?: string | null;
+  uploadedBy?: { fullName?: string } | null;
 }
 interface ImgItem {
   id: string;
@@ -93,7 +95,9 @@ export function DocumentManager({
   const [expandedDocs, setExpandedDocs] = useState<Set<string>>(new Set());
   const [expandedImgs, setExpandedImgs] = useState<Set<string>>(new Set());
   const [restoreId, setRestoreId] = useState<string | null>(null);
+  const [preview, setPreview] = useState<{ id: string; name: string; mimeType: string } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const [dragOver, setDragOver] = useState(false);
   const { toast } = useToast();
 
   const hasPending = staged.length > 0;
@@ -208,14 +212,24 @@ export function DocumentManager({
   return (
     <div className="space-y-4">
       {canUpload && (
-        <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4">
+        <div
+          onDragOver={(e) => { e.preventDefault(); if (!busy) setDragOver(true); }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setDragOver(false);
+            if (busy) return;
+            pickFiles(e.dataTransfer.files);
+          }}
+          className={`rounded-xl border border-dashed p-4 transition-colors ${dragOver ? "border-primary bg-primary/5" : "border-slate-300 bg-slate-50"}`}
+        >
           <button
             type="button"
             onClick={() => fileRef.current?.click()}
             disabled={busy}
-            className="flex w-full items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm font-medium text-slate-600 transition-colors hover:border-primary hover:text-primary disabled:opacity-50"
+            className={`flex w-full items-center justify-center gap-2 rounded-lg border px-4 py-3 text-sm font-medium transition-colors disabled:opacity-50 ${dragOver ? "border-primary text-primary" : "border-slate-300 bg-white text-slate-600 hover:border-primary hover:text-primary"}`}
           >
-            <Upload className="h-4 w-4" /> {busy ? "Uploading…" : "Choose file(s) (PDF, JPG, PNG)"}
+            <Upload className="h-4 w-4" /> {busy ? "Uploading…" : dragOver ? "Drop file(s) to upload" : "Choose or drag file(s) (PDF, JPG, PNG)"}
           </button>
           <input ref={fileRef} type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" multiple hidden onChange={(e) => pickFiles(e.target.files)} />
 
@@ -318,12 +332,13 @@ export function DocumentManager({
                         </div>
                         <div className="truncate text-xs text-slate-400">
                           {latest.originalName} · {formatFileSize(latest.sizeBytes)} · {formatDate(latest.createdAt)}
+                          {latest.uploadedBy?.fullName ? ` · by ${latest.uploadedBy.fullName}` : ""}
                         </div>
                       </div>
                       <div className="flex items-center gap-1">
-                        <a href={`/api/documents/${latest.id}`} target="_blank" rel="noreferrer" className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100" title="Preview">
+                        <button onClick={() => setPreview({ id: latest.id, name: latest.originalName, mimeType: latest.mimeType })} className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100" title="Preview">
                           <Eye className="h-4 w-4" />
-                        </a>
+                        </button>
                         <a href={`/api/documents/${latest.id}?download=1`} className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100" title="Download">
                           <Download className="h-4 w-4" />
                         </a>
@@ -352,9 +367,9 @@ export function DocumentManager({
                               <div className="truncate text-xs text-slate-400">{v.originalName}</div>
                             </div>
                             <div className="flex items-center gap-1">
-                              <a href={`/api/documents/${v.id}`} target="_blank" rel="noreferrer" className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100" title="Preview">
+                              <button onClick={() => setPreview({ id: v.id, name: v.originalName, mimeType: v.mimeType })} className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100" title="Preview">
                                 <Eye className="h-3.5 w-3.5" />
-                              </a>
+                              </button>
                               <a href={`/api/documents/${v.id}?download=1`} className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100" title="Download">
                                 <Download className="h-3.5 w-3.5" />
                               </a>
@@ -497,6 +512,27 @@ export function DocumentManager({
         message="This will create a new document entry from the selected version. The current latest version is preserved."
         confirmLabel="Restore"
       />
+
+      <Modal
+        open={preview !== null}
+        onClose={() => setPreview(null)}
+        title={preview?.name ?? "Preview"}
+        size="xl"
+      >
+        {preview && (
+          preview.mimeType.startsWith("image/") ? (
+            <div className="flex items-center justify-center bg-slate-50">
+              <img src={`/api/documents/${preview.id}`} alt={preview.name} className="max-h-[65dvh] rounded-lg object-contain" />
+            </div>
+          ) : (
+            <iframe
+              src={`/api/documents/${preview.id}`}
+              title={preview.name}
+              className="h-[65dvh] w-full rounded-lg border border-slate-200 bg-white"
+            />
+          )
+        )}
+      </Modal>
     </div>
   );
 }
