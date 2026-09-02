@@ -2,23 +2,17 @@ import { Router } from "express";
 import multer from "multer";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import { mkdir, writeFile } from "node:fs/promises";
-import { createReadStream, existsSync } from "node:fs";
 import { requireAuth } from "../lib/guard.js";
 import { PERMISSIONS } from "../lib/rbac.js";
 import { prisma } from "../lib/prisma.js";
 import { deleteDocument, updateDocument } from "../services/document.js";
 import { writeAudit } from "../lib/audit.js";
+import { copyFile, openFileStream, putFile } from "../lib/storage.js";
 
 const router = Router();
 
 const ALLOWED = new Set(["application/pdf", "image/jpeg", "image/png"]);
 const MAX_BYTES = 10 * 1024 * 1024; // 10 MB
-
-function uploadRoot() {
-  const dir = process.env.UPLOAD_DIR || "./uploads";
-  return path.isAbsolute(dir) ? dir : path.join(process.cwd(), dir);
-}
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -173,9 +167,8 @@ router.post(
     const ext = path.extname(file.originalname) || "";
     const storedName = `${randomUUID()}${ext}`;
     const sub = kind === "image" ? "images" : "documents";
-    const destDir = path.join(uploadRoot(), sub);
-    await mkdir(destDir, { recursive: true });
-    await writeFile(path.join(destDir, storedName), file.buffer);
+    const objectKey = path.join(sub, storedName);
+    await putFile(objectKey, file.buffer, file.mimetype);
 
     const baseTitle = (title && title.trim()) || file.originalname;
     const cat = category || "OTHER";
@@ -195,7 +188,7 @@ router.post(
           originalName: file.originalname,
           mimeType: file.mimetype,
           sizeBytes: file.size,
-          path: path.join(sub, storedName),
+          path: objectKey,
           version: imgVersion,
           uploadedById: req.session!.userId,
         },
@@ -215,7 +208,7 @@ router.post(
           originalName: file.originalname,
           mimeType: file.mimetype,
           sizeBytes: file.size,
-          path: path.join(sub, storedName),
+          path: objectKey,
           version,
           uploadedById: req.session!.userId,
         },
@@ -249,9 +242,9 @@ router.get("/:id", requireAuth(PERMISSIONS.DOCUMENT_VIEW), async (req, res) => {
     (await prisma.vehicleImage.findUnique({ where: { id: req.params.id } }));
   if (!file) return res.status(404).json({ error: "Not found" });
 
-  const full = path.join(uploadRoot(), file.path);
-  if (!existsSync(full)) {
-    return res.status(404).json({ error: "File missing on disk" });
+  const stream = await openFileStream(file.path);
+  if (!stream) {
+    return res.status(404).json({ error: "File missing on storage" });
   }
 
   const disposition = req.query.download === "1" ? "attachment" : "inline";
@@ -261,7 +254,7 @@ router.get("/:id", requireAuth(PERMISSIONS.DOCUMENT_VIEW), async (req, res) => {
     `${disposition}; filename="${encodeURIComponent(file.originalName)}"`
   );
   res.setHeader("Cache-Control", "private, max-age=3600");
-  createReadStream(full).pipe(res);
+  stream.pipe(res);
 });
 
 router.patch(
@@ -305,20 +298,22 @@ router.post(
     const source = doc ?? img;
     if (!source) return res.status(404).json({ error: "Not found" });
 
-    const srcPath = path.join(uploadRoot(), source.path);
-    if (!existsSync(srcPath)) {
-      return res.status(404).json({ error: "Source file missing on disk" });
+    const srcPath = source.path;
+    try {
+      const existing = await openFileStream(srcPath);
+      if (!existing) {
+        return res.status(404).json({ error: "Source file missing on storage" });
+      }
+      existing.destroy();
+    } catch {
+      return res.status(404).json({ error: "Source file missing on storage" });
     }
 
     const ext = path.extname(source.originalName) || "";
     const storedName = `${randomUUID()}${ext}`;
     const sub = source.path.startsWith("images") ? "images" : "documents";
-    const destDir = path.join(uploadRoot(), sub);
-    await mkdir(destDir, { recursive: true });
-
-    const { readFile } = await import("node:fs/promises");
-    const buf = await readFile(srcPath);
-    await writeFile(path.join(destDir, storedName), buf);
+    const destKey = path.join(sub, storedName);
+    await copyFile(srcPath, destKey);
 
     const docTitle = doc?.title ?? source.originalName;
     const existing = await prisma.vehicleDocument.findFirst({
