@@ -5,6 +5,7 @@ import { writeAudit, type AuditReq } from "../lib/audit.js";
 import { DuplicateInsuranceError, ValidationError } from "./errors.js";
 import { INSURANCE_STATUS } from "../lib/constants.js";
 import { defaultPageSize } from "./setting.js";
+import { resolveRemindersForVehicle } from "./notification.js";
 
 export { DuplicateInsuranceError, ValidationError };
 
@@ -165,6 +166,11 @@ export async function createInsurance(input: InsuranceCreateInput, ctx: Context 
     });
   }
 
+  // A new policy (possibly superseding an expiring one) invalidates any
+  // reminder tied to the old end date. Best-effort cleanup; the sweep re-creates
+  // a reminder if the new policy is itself close to expiry.
+  await resolveRemindersForVehicle(ins.vehicleId, "INSURANCE_REMINDER").catch(() => undefined);
+
   return ins;
 }
 
@@ -303,6 +309,10 @@ export async function renewInsurance(
     req: ctx.req,
   });
 
+  // The renewal fixed the policy — stale "expiring/expired" reminders are no
+  // longer actionable. Best-effort cleanup.
+  await resolveRemindersForVehicle(ins.vehicleId, "INSURANCE_REMINDER").catch(() => undefined);
+
   return ins;
 }
 
@@ -338,6 +348,10 @@ export async function deleteInsurance(id: string, ctx: Context = {}) {
     oldValue: existing,
     req: ctx.req,
   });
+
+  // With the policy gone there is nothing left to be reminded about.
+  // Best-effort cleanup.
+  await resolveRemindersForVehicle(existing.vehicleId, "INSURANCE_REMINDER").catch(() => undefined);
 
   return existing;
 }

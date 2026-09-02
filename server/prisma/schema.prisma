@@ -342,6 +342,12 @@ model Notification {
   @@index([userId])
   @@index([isRead])
   @@index([dismissed])
+  // Covers the hourly sweep's dedupe lookup (shouldCreate): findFirst by
+  // (userId, type, link) ordered by createdAt — previously it scanned every
+  // notification row for the user on each candidate reminder.
+  @@index([userId, type, link])
+  // Covers resolveRemindersForVehicle's deleteMany by link.
+  @@index([link])
 }
 
 model AuditLog {

@@ -6,6 +6,7 @@ import { writeAudit, type AuditReq } from "../lib/audit.js";
 import { DuplicateRegistrationError, ValidationError } from "./errors.js";
 import { defaultPageSize } from "./setting.js";
 import { daysUntil, getReminderWindows } from "./reminders.js";
+import { resolveRemindersForVehicle } from "./notification.js";
 
 export { DuplicateRegistrationError };
 
@@ -233,6 +234,11 @@ export async function createRegistration(input: RegistrationInput, ctx: Context 
     });
   }
 
+  // A fresh registration (possibly superseding an expiring one) invalidates
+  // any reminder tied to the old expiry. Best-effort cleanup; the hourly sweep
+  // re-creates a reminder if the new registration is itself close to expiry.
+  await resolveRemindersForVehicle(reg.vehicleId, "REGISTRATION_REMINDER").catch(() => undefined);
+
   return reg;
 }
 
@@ -312,6 +318,10 @@ export async function deleteRegistration(id: string, ctx: Context = {}) {
     req: ctx.req,
   });
 
+  // With the record gone there is nothing left to be reminded about.
+  // Best-effort cleanup.
+  await resolveRemindersForVehicle(existing.vehicleId, "REGISTRATION_REMINDER").catch(() => undefined);
+
   return existing;
 }
 
@@ -346,6 +356,10 @@ export async function archiveRegistration(id: string, note: string | undefined, 
     newValue: reg,
     req: ctx.req,
   });
+
+  // Archived registrations are excluded from reminder generation, so any live
+  // reminders for this vehicle are stale. Best-effort cleanup.
+  await resolveRemindersForVehicle(reg.vehicleId, "REGISTRATION_REMINDER").catch(() => undefined);
 
   return reg;
 }
@@ -460,6 +474,11 @@ export async function renewRegistration(
     newValue: reg,
     req: ctx.req,
   });
+
+  // The renewal fixed the expiry — stale "expiring/expired" reminders are no
+  // longer actionable for anyone. Best-effort: never fail the renewal because
+  // the reminder cleanup errored.
+  await resolveRemindersForVehicle(reg.vehicleId, "REGISTRATION_REMINDER").catch(() => undefined);
 
   return reg;
 }

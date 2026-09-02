@@ -1,21 +1,49 @@
 import { prisma } from "../lib/prisma.js";
-import { daysUntil, getReminderWindows, getReminderWindowsForType, DEFAULT_REMINDER_WINDOWS, type ReminderWindows } from "./reminders.js";
+import { daysUntil, getReminderWindows, getReminderWindowsByType, DEFAULT_REMINDER_WINDOWS, type ReminderWindows } from "./reminders.js";
 import { defaultPageSize, getSetting } from "./setting.js";
 
 // ---------- generation ----------
 
-export async function generateNotifications(userId: string) {
-  const windows = await getReminderWindows();
-  const horizonDays = Math.max(...windows);
-  const horizon = new Date(Date.now() + horizonDays * 24 * 60 * 60 * 1000);
+// Data shared across all users in a single sweep run. Loading this once
+// instead of per user / per vehicle turns an O(users × vehicles) stream of
+// settings queries into a handful — the old sweep issued tens of thousands of
+// getSetting/findFirst round-trips per hour at fleet scale.
+interface SweepContext {
+  windows: ReminderWindows;
+  windowsByType: Record<string, ReminderWindows>;
+  enableReg: string;
+  enableIns: string;
+}
 
-  const [enableReg, enableIns] = await Promise.all([
+async function loadSweepContext(): Promise<SweepContext> {
+  const [windows, windowsByType, enableReg, enableIns] = await Promise.all([
+    getReminderWindows(),
+    getReminderWindowsByType(),
     getSetting("notify_registration", "true"),
     getSetting("notify_insurance", "true"),
   ]);
+  return { windows, windowsByType, enableReg, enableIns };
+}
 
-  const [expiringRegs, expiringIns] = await Promise.all([
-    prisma.vehicleRegistration.findMany({
+function windowsFor(ctx: SweepContext, type: string | null | undefined): ReminderWindows {
+  if (!type) return ctx.windows;
+  return ctx.windowsByType[type] ?? ctx.windows;
+}
+
+export async function generateNotifications(userId: string) {
+  const ctx = await loadSweepContext();
+  return generateNotificationsWith(userId, ctx);
+}
+
+async function generateNotificationsWith(userId: string, ctx: SweepContext) {
+  const windows = ctx.windows;
+  const horizonDays = Math.max(...windows);
+  const horizon = new Date(Date.now() + horizonDays * 24 * 60 * 60 * 1000);
+
+  let count = 0;
+
+  if (ctx.enableReg !== "false") {
+    const expiringRegs = await prisma.vehicleRegistration.findMany({
       where: {
         expiryDate: { lte: horizon },
         status: { notIn: ["SUSPENDED", "ARCHIVED"] },
@@ -23,20 +51,10 @@ export async function generateNotifications(userId: string) {
       include: {
         vehicle: { select: { id: true, plateNumber: true, vehicleCode: true, type: true } },
       },
-    }),
-    prisma.vehicleInsurance.findMany({
-      where: { endDate: { lte: horizon } },
-      include: {
-        vehicle: { select: { id: true, plateNumber: true, vehicleCode: true, type: true } },
-      },
-    }),
-  ]);
+    });
 
-  let count = 0;
-
-  if (enableReg !== "false") {
     for (const reg of expiringRegs) {
-      const typeWindows = await getReminderWindowsForType(reg.vehicle.type);
+      const typeWindows = windowsFor(ctx, reg.vehicle.type);
       const typeHorizon = Math.max(...typeWindows);
       const days = daysUntil(reg.expiryDate);
       const expired = days !== null && days < 0;
@@ -58,9 +76,16 @@ export async function generateNotifications(userId: string) {
     }
   }
 
-  if (enableIns !== "false") {
+  if (ctx.enableIns !== "false") {
+    const expiringIns = await prisma.vehicleInsurance.findMany({
+      where: { endDate: { lte: horizon } },
+      include: {
+        vehicle: { select: { id: true, plateNumber: true, vehicleCode: true, type: true } },
+      },
+    });
+
     for (const ins of expiringIns) {
-      const typeWindows = await getReminderWindowsForType(ins.vehicle.type);
+      const typeWindows = windowsFor(ctx, ins.vehicle.type);
       const typeHorizon = Math.max(...typeWindows);
       const days = daysUntil(ins.endDate);
       const expired = days !== null && days < 0;
@@ -84,17 +109,43 @@ export async function generateNotifications(userId: string) {
 }
 
 export async function generateNotificationsForAllUsers() {
-  const users = await prisma.user.findMany({
-    where: { status: "ACTIVE" },
-    select: { id: true },
-  });
+  const [users, ctx] = await Promise.all([
+    prisma.user.findMany({
+      where: { status: "ACTIVE" },
+      select: { id: true },
+    }),
+    loadSweepContext(),
+  ]);
 
   let created = 0;
   for (const user of users) {
-    created += await generateNotifications(user.id).catch(() => 0);
+    created += await generateNotificationsWith(user.id, ctx).catch(() => 0);
   }
 
   return created;
+}
+
+// Resolve stale reminders when the underlying record is fixed.
+//
+// Reminders point at /vehicles/:id and carry meta.vehicleId, so resolving by
+// vehicle (rather than by record id) catches every reminder shape. Two modes:
+//
+//   resolveRemindersForVehicle(vehicleId, type) — hard delete every reminder
+//     of that type for the vehicle (all users). Used when the item is fixed
+//     (renewed / new policy) or removed (archived / deleted): the alert is no
+//     longer actionable for anyone, and the hourly sweep will re-create it if
+//     the item expires again.
+//
+//   markRemindersResolvedForVehicle(vehicleId, type) — keep this variant for
+//     cases where history should be preserved.
+export async function resolveRemindersForVehicle(vehicleId: string, type: "REGISTRATION_REMINDER" | "INSURANCE_REMINDER") {
+  const result = await prisma.notification.deleteMany({
+    where: {
+      type,
+      link: `/vehicles/${vehicleId}`,
+    },
+  });
+  return { resolved: result.count };
 }
 
 // Only create if no matching unread or dismissed notification exists, or if
@@ -267,8 +318,10 @@ export async function getNotificationTypes(userId: string): Promise<string[]> {
 }
 
 // Hard-delete dismissed notifications older than `retentionDays` so the table
-// does not grow unbounded. Dismissed rows no longer suppress regeneration, so
-// removing them is safe.
+// does not grow unbounded. NOTE: dismissed rows DO suppress regeneration (see
+// shouldCreate — it matches any latest row, read or dismissed), so deleting
+// them only means "remind me again about still-expiring items", never
+// duplicate spam within a sweep.
 export async function cleanupOldNotifications(retentionDays = 30): Promise<{ deleted: number }> {
   const cutoff = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000);
   const result = await prisma.notification.deleteMany({
