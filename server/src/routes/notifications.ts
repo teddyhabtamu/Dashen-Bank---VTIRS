@@ -5,6 +5,8 @@ import {
   getUnreadCount,
   markRead,
   markAllRead,
+  bulkMarkRead,
+  bulkDismiss,
   getNotificationTypes,
   deleteNotification,
   clearAllNotifications,
@@ -41,6 +43,26 @@ router.patch("/:id/read", requireAuth(), async (req, res) => {
 router.post("/read-all", requireAuth(), async (req, res) => {
   await markAllRead(req.session!.userId);
   res.json({ ok: true });
+});
+
+// Bulk actions from the multi-select UI: { action: "read" | "dismiss", ids: string[] }
+router.post("/bulk", requireAuth(), async (req, res) => {
+  const { action, ids } = (req.body ?? {}) as { action?: string; ids?: string[] };
+  if (!Array.isArray(ids) || ids.length === 0 || ids.some((id) => typeof id !== "string")) {
+    return res.status(422).json({ error: "ids (string[]) is required" });
+  }
+  if (ids.length > 500) {
+    return res.status(422).json({ error: "Too many ids at once (max 500)" });
+  }
+  if (action === "read") {
+    const result = await bulkMarkRead(req.session!.userId, ids);
+    return res.json({ ok: true, updated: result.updated });
+  }
+  if (action === "dismiss") {
+    const result = await bulkDismiss(req.session!.userId, ids);
+    return res.json({ ok: true, updated: result.updated });
+  }
+  return res.status(422).json({ error: "action must be 'read' or 'dismiss'" });
 });
 
 router.delete("/:id", requireAuth(), async (req, res) => {

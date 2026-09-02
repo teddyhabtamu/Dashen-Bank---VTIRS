@@ -170,7 +170,12 @@ export async function listNotifications(
   if (unreadOnly) where.isRead = false;
   if (!showDismissed) where.dismissed = false;
 
-  const [items, total] = await Promise.all([
+  // Unread count applies the same filter (type/unread) so the page can show a
+  // correct "N unread" even when paginating — counting only the current page
+  // slice under-reports badly.
+  const unreadWhere: Record<string, unknown> = { ...where, isRead: false };
+
+  const [items, total, unreadTotal] = await Promise.all([
     prisma.notification.findMany({
       where: where as any,
       orderBy: { createdAt: "desc" },
@@ -178,6 +183,7 @@ export async function listNotifications(
       take: ps,
     }),
     prisma.notification.count({ where: where as any }),
+    prisma.notification.count({ where: unreadWhere as any }),
   ]);
 
   return {
@@ -192,6 +198,7 @@ export async function listNotifications(
       createdAt: n.createdAt,
     })),
     total,
+    unreadTotal,
     page,
     pageSize: ps,
     totalPages: Math.ceil(total / ps),
@@ -214,6 +221,26 @@ export async function markAllRead(userId: string) {
     where: { userId, isRead: false } as any,
     data: { isRead: true },
   });
+}
+
+// Bulk actions for the multi-select UI. Both are scoped to the caller's own
+// notifications (IDOR-safe) and ignore rows already in the target state.
+export async function bulkMarkRead(userId: string, ids: string[]) {
+  if (ids.length === 0) return { updated: 0 };
+  const result = await prisma.notification.updateMany({
+    where: { userId, id: { in: ids }, isRead: false } as any,
+    data: { isRead: true },
+  });
+  return { updated: result.count };
+}
+
+export async function bulkDismiss(userId: string, ids: string[]) {
+  if (ids.length === 0) return { updated: 0 };
+  const result = await prisma.notification.updateMany({
+    where: { userId, id: { in: ids }, dismissed: false } as any,
+    data: { dismissed: true },
+  });
+  return { updated: result.count };
 }
 
 export async function deleteNotification(id: string, userId: string) {

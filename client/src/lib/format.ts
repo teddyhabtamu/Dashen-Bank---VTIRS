@@ -36,6 +36,24 @@ export function formatDateTime(value: Date | string | number | null | undefined)
   });
 }
 
+// Relative time for scannable lists ("just now", "5m ago", "2h ago", "3d ago").
+// Anything older than 7 days falls back to the short absolute date, which is
+// more useful than "243d ago".
+export function formatRelative(value: Date | string | number | null | undefined): string {
+  if (!value) return "-";
+  const d = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(d.getTime())) return "-";
+  const diffMs = d.getTime() - Date.now();
+  const abs = Math.abs(diffMs);
+  const MIN = 60_000, HOUR = 60 * MIN, DAY = 24 * HOUR;
+  const suffix = diffMs < 0 ? "ago" : "from now";
+  if (abs < 30_000) return "just now";
+  if (abs < HOUR) return `${Math.round(abs / MIN)}m ${suffix}`;
+  if (abs < DAY) return `${Math.round(abs / HOUR)}h ${suffix}`;
+  if (abs < 7 * DAY) return `${Math.round(abs / DAY)}d ${suffix}`;
+  return formatDate(d, { year: abs < 365 * DAY ? undefined : "numeric", month: "short", day: "numeric" } as Intl.DateTimeFormatOptions);
+}
+
 export function daysUntil(date: Date | string | null | undefined): number | null {
   if (!date) return null;
   const d = date instanceof Date ? date : new Date(date);
