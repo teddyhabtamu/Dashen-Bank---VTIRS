@@ -115,17 +115,14 @@ export default function ReportsPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-[260px_1fr] lg:items-start">
-      <div className="space-y-5">
+      <div className="space-y-4">
         {(data?.groups?.length ? data.groups : DEFAULT_GROUPS).map((g) => {
           const items = (data?.meta ?? []).filter((m) => (m.group ?? g.key) === g.key);
           if (items.length === 0) return null;
           return (
-            <div key={g.key} className="space-y-2">
-              <div>
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400">{g.title}</h3>
-                <p className="text-xs text-slate-400">{g.desc}</p>
-              </div>
-              <div className="grid grid-cols-1 gap-2">
+            <div key={g.key} className="space-y-1.5">
+              <h3 className="px-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{g.title}</h3>
+              <div className="grid grid-cols-1 gap-1.5">
                 {items.map((m) => {
                   const Icon = ICON_MAP[m.icon] ?? BarChart3;
                   const isActive = active === m.key;
@@ -133,21 +130,18 @@ export default function ReportsPage() {
                     <button
                       key={m.key}
                       onClick={() => setActive(m.key)}
-                      className={`group relative w-full overflow-hidden rounded-xl border p-3 text-left transition-all ${
+                      className={`group flex w-full items-center gap-2.5 rounded-lg border px-2.5 py-2 text-left transition-colors ${
                         isActive
-                          ? "border-primary bg-primary text-white shadow-sm"
-                          : "border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm"
+                          ? "border-primary bg-primary text-white"
+                          : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
                       }`}
                     >
-                      <div className="flex items-start gap-3">
-                        <div className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg ${isActive ? "bg-white/15 text-white" : "bg-slate-100 text-slate-500 group-hover:text-slate-700"}`}>
-                          <Icon className="h-4 w-4" />
-                        </div>
-                        <div className="min-w-0">
-                          <div className={`text-sm font-medium ${isActive ? "text-white" : "text-slate-800"}`}>{m.title}</div>
-                          <div className={`mt-0.5 line-clamp-2 text-xs ${isActive ? "text-white/80" : "text-slate-400"}`}>{m.desc}</div>
-                        </div>
+                      <div className={`flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md ${isActive ? "bg-white/15 text-white" : "bg-slate-100 text-slate-500 group-hover:text-slate-700"}`}>
+                        <Icon className="h-3.5 w-3.5" />
                       </div>
+                      <span className="flex-1 truncate text-sm font-medium text-slate-800" title={m.desc}>
+                        {m.title}
+                      </span>
                     </button>
                   );
                 })}
