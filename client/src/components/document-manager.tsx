@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Upload, FileText, Image as ImageIcon, Trash2, Download, Eye, X, ChevronDown, ChevronRight, RotateCcw } from "lucide-react";
+import { Upload, FileText, Image as ImageIcon, Trash2, Download, Eye, X, ChevronDown, ChevronRight, RotateCcw, RefreshCw, CheckCircle2, Paperclip } from "lucide-react";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { Modal } from "@/components/ui/modal";
 import { Select } from "@/components/ui/select";
@@ -127,6 +127,11 @@ export function DocumentManager({
     return map;
   }, [requiredCategories, docs]);
 
+  const requiredStagedCount = useMemo(
+    () => (requiredCategories ?? []).filter((c) => staged.some((s) => s.locked && s.category === c)).length,
+    [requiredCategories, staged]
+  );
+
   const requiredComplete = useMemo(
     () => (requiredCategories ?? []).every((c) => requiredCatStatus[c]),
     [requiredCategories, requiredCatStatus]
@@ -150,13 +155,19 @@ export function DocumentManager({
     requiredPickCat.current = null;
     if (requiredInputRef.current) requiredInputRef.current.value = "";
     if (picked.length === 0 || !category) return;
-    const next: StagedFile[] = picked.map((f) => ({
-      file: f,
+    // A required category maps to a single document — if a file is already
+    // staged for it, the new pick replaces it instead of queueing a duplicate.
+    const last = picked[picked.length - 1];
+    const stagedForCategory: StagedFile = {
+      file: last,
       category,
-      title: titleFromName(f.name),
+      title: titleFromName(last.name),
       locked: true,
-    }));
-    setStaged((prev) => [...prev, ...next]);
+    };
+    setStaged((prev) => {
+      const withoutCat = prev.filter((s) => !(s.locked && s.category === category));
+      return [...withoutCat, stagedForCategory];
+    });
   }
 
   function pickFiles(files: FileList | null) {
@@ -263,8 +274,12 @@ export function DocumentManager({
               <h3 className="text-sm font-semibold text-slate-700">Required documents</h3>
               <p className="text-xs text-slate-400">Every vehicle must have these on file to be compliant.</p>
             </div>
-            <span className={`badge ${requiredComplete ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"}`}>
-              {requiredComplete ? "All complete" : "Incomplete"}
+            <span className={`badge ${requiredComplete ? "bg-green-100 text-green-700" : requiredStagedCount > 0 ? "bg-blue-50 text-blue-600" : "bg-amber-100 text-amber-700"}`}>
+              {requiredComplete
+                ? "All complete"
+                : requiredStagedCount > 0
+                  ? `${requiredStagedCount} file${requiredStagedCount > 1 ? "s" : ""} ready to upload`
+                  : "Incomplete"}
             </span>
           </div>
           <input
@@ -278,17 +293,25 @@ export function DocumentManager({
           <div className="divide-y divide-slate-100">
             {requiredCategories.map((cat) => {
               const has = requiredCatStatus[cat] ?? false;
-              const stagedForCat = staged.some((s) => s.category === cat && s.locked);
+              const stagedFile = staged.find((s) => s.locked && s.category === cat);
+              const stagedForCat = Boolean(stagedFile);
               return (
                 <div key={cat} className="flex flex-wrap items-center justify-between gap-2 py-2.5">
-                  <div className="flex min-w-0 items-center gap-2">
+                  <div className="flex min-w-0 flex-1 items-center gap-2">
+                    <span className={`h-2 w-2 flex-shrink-0 rounded-full ${stagedForCat ? "bg-blue-500" : has ? "bg-green-500" : "bg-red-400"}`} />
                     <span className="truncate text-sm font-medium text-slate-700">{label(cat)}</span>
                     {stagedForCat ? (
-                      <span className="badge bg-blue-50 text-blue-600">Ready to upload</span>
+                      <span className="badge max-w-[12rem] shrink-0 bg-blue-50 text-blue-600">
+                        <Paperclip className="mr-1 h-3 w-3 shrink-0" />
+                        <span className="truncate">{stagedFile!.file.name}</span>
+                      </span>
                     ) : has ? (
-                      <span className="badge bg-green-100 text-green-700">Complete</span>
+                      <span className="badge shrink-0 bg-green-100 text-green-700">
+                        <CheckCircle2 className="mr-1 h-3 w-3" />
+                        Complete
+                      </span>
                     ) : (
-                      <span className="badge bg-red-100 text-red-700">Missing</span>
+                      <span className="badge shrink-0 bg-red-100 text-red-700">Missing</span>
                     )}
                   </div>
                   {canUpload && (
@@ -296,10 +319,31 @@ export function DocumentManager({
                       type="button"
                       onClick={() => pickRequiredFile(cat)}
                       disabled={busy}
-                      className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors disabled:opacity-50 ${has ? "border-slate-200 bg-white text-slate-500 hover:border-primary hover:text-primary" : "border-primary bg-primary/5 text-primary hover:bg-primary/10"}`}
+                      title={stagedForCat ? "Pick a different file for this category" : has ? "Upload a newer version of this document" : "Upload this document"}
+                      className={`inline-flex flex-shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors disabled:opacity-50 ${
+                        stagedForCat
+                          ? "border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
+                          : has
+                            ? "border-slate-200 bg-white text-slate-500 hover:border-primary hover:text-primary"
+                            : "border-primary bg-primary/5 text-primary hover:bg-primary/10"
+                      }`}
                     >
-                      <Upload className="h-3.5 w-3.5" />
-                      {has ? "Replace / add version" : "Upload"}
+                      {stagedForCat ? (
+                        <>
+                          <RefreshCw className="h-3.5 w-3.5" />
+                          Change file
+                        </>
+                      ) : has ? (
+                        <>
+                          <RefreshCw className="h-3.5 w-3.5" />
+                          Replace / add version
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="h-3.5 w-3.5" />
+                          Upload
+                        </>
+                      )}
                     </button>
                   )}
                 </div>
