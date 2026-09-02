@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
-import { Plus, MoreVertical, Pencil, Trash2 } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Plus, MoreVertical, Pencil, Trash2, History } from "lucide-react";
 import { Modal } from "@/components/ui/modal";
 import { Select } from "@/components/ui/select";
 import { DatePicker } from "@/components/ui/datepicker";
@@ -144,6 +145,9 @@ export function InsurancePanel({ vehicleId, initial, canManage }: {
                     <span className={`badge ${EXPIRY_BADGE[state]}`}>
                       {days !== null && days >= 0 ? `${days}d left` : "expired"}
                     </span>
+                    <Link to={`/insurances/${ins.id}/history`} className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-primary" title="Policy history">
+                      <History className="h-4 w-4" />
+                    </Link>
                     {canManage && (
                       <Dropdown align="right"
                         trigger={({ toggle }) => (<Tooltip content="Actions"><button onClick={toggle} className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100"><MoreVertical className="h-4 w-4" /></button></Tooltip>)}

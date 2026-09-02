@@ -1,6 +1,7 @@
 
 import { useCallback, useEffect, useState } from "react";
-import { RefreshCw, Ban, Play } from "lucide-react";
+import { Link } from "react-router-dom";
+import { RefreshCw, Ban, Play, History } from "lucide-react";
 import { StatusBadge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
 import { Dropdown } from "@/components/ui/dropdown";
@@ -83,7 +84,17 @@ export function RegistrationPanel({ vehicleId, initial, canRenew, canSuspend }: 
   }
 
   if (regs.length === 0) {
-    return <p className="text-sm text-slate-400">No registration recorded yet.</p>;
+    return (
+      <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50/50 px-4 py-6 text-center">
+        <p className="text-sm text-slate-400">No registration recorded for this vehicle yet.</p>
+        <Link
+          to="/registrations"
+          className="btn-outline mt-3 inline-flex items-center gap-1.5 text-xs"
+        >
+          Register this vehicle <History className="h-3.5 w-3.5" />
+        </Link>
+      </div>
+    );
   }
 
   return (
@@ -96,9 +107,16 @@ export function RegistrationPanel({ vehicleId, initial, canRenew, canSuspend }: 
         return (
           <div key={r.id} className="rounded-lg border border-slate-100 p-3">
             <div className="flex items-center justify-between">
-              <div className="font-medium text-slate-800">{r.regNumber}</div>
-              <div className="flex items-center gap-2">
+              <div className="flex min-w-0 items-center gap-2">
+                <Link to={`/registrations/${r.id}/history`} className="truncate font-medium text-slate-800 hover:text-primary" title="Registration history">
+                  {r.regNumber}
+                </Link>
                 <StatusBadge status={eff} />
+              </div>
+              <div className="flex flex-shrink-0 items-center gap-2">
+                <Link to={`/registrations/${r.id}/history`} className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-primary" title="History">
+                  <History className="h-4 w-4" />
+                </Link>
                 {(canRenew || canSuspend) && (
                   <Dropdown align="right"
                     trigger={({ toggle }) => (<Tooltip content="Actions"><button onClick={toggle} className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100"><MoreVertical className="h-4 w-4" /></button></Tooltip>)}
@@ -132,16 +150,23 @@ export function RegistrationPanel({ vehicleId, initial, canRenew, canSuspend }: 
 
 function RenewModal({ open, onClose, onConfirm, loading }: { open: boolean; onClose: () => void; onConfirm: (date: string) => void; loading: boolean }) {
   const [date, setDate] = useState("");
+  // Renewals must land in the future (server-enforced); catch it client-side
+  // so the user isn't told only after submitting.
+  const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const valid = Boolean(date) && date > tomorrow.slice(0, 10);
   return (
     <Modal open={open} onClose={loading ? () => {} : onClose} title="Renew Registration" footer={
       <><button className="btn-outline" onClick={onClose} disabled={loading}>Cancel</button>
-      <button className="btn-primary" onClick={() => onConfirm(date)} disabled={loading || !date}>Renew</button></>
+      <button className="btn-primary" onClick={() => onConfirm(date)} disabled={loading || !valid}>Renew</button></>
     }>
       <label className="text-sm">New Expiry Date
         <div className="mt-1">
           <DatePicker value={date} onChange={(v) => setDate(v)} />
         </div>
       </label>
+      {date && !valid && (
+        <p className="mt-2 text-xs text-red-500">The new expiry must be after tomorrow — the current date can't be extended to today or the past.</p>
+      )}
     </Modal>
   );
 }

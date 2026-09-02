@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Check, ChevronLeft, ChevronRight, Eye, Plus } from "lucide-react";
 import { cn } from "@/lib/format";
 import { BrandLoader } from "@/components/ui/brand-loader";
@@ -7,6 +7,7 @@ import { useToast } from "@/lib/toast-context";
 import { Field, Select } from "@/components/ui/field";
 import type { SelectOption } from "@/components/ui/field";
 import { Modal } from "@/components/ui/modal";
+import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { DatePicker } from "@/components/ui/datepicker";
 import { PhoneInput } from "@/components/ui/phone-input";
 import {
@@ -167,11 +168,24 @@ export function VehicleForm({ vehicleId, returnTo = "/vehicles" }: { vehicleId?:
   const [branches, setBranches] = useState<Option[]>([]);
   const [departments, setDepartments] = useState<Option[]>([]);
   const [drivers, setDrivers] = useState<SelectOption[]>([]);
+  // Category/Type are fed from the fleet's existing values so the registry's
+  // grouping filters stay clean ("Corolla" vs "corolla" fragmentation).
+  const [categories, setCategories] = useState<Option[]>([]);
+  const [types, setTypes] = useState<Option[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  // Dirty guard: one misclick on Cancel shouldn't discard 30 typed fields.
+  const [cancelConfirm, setCancelConfirm] = useState(false);
+  const dirtyRef = useRef(false);
+  const lastDataRef = useRef(data);
+  if (data !== lastDataRef.current) {
+    lastDataRef.current = data;
+    dirtyRef.current = true;
+  }
 
-  const [addModal, setAddModal] = useState<"branch" | "department" | "driver" | null>(null);
+  const [addModal, setAddModal] = useState<"branch" | "department" | "driver" | "category" | "type" | null>(null);
   const [addBusy, setAddBusy] = useState(false);
   const [addForm, setAddForm] = useState({ code: "", name: "", fullName: "", employeeId: "", licenseNo: "", phone: "" });
 
@@ -182,6 +196,8 @@ export function VehicleForm({ vehicleId, returnTo = "/vehicles" }: { vehicleId?:
         setBranches(d.branches ?? []);
         setDepartments(d.departments ?? []);
         setDrivers((d.drivers ?? []).map((dr: any) => ({ value: dr.value, label: dr.label, description: dr.phone || undefined, indicator: dr.occupied ? { label: "Occupied", variant: "warning" } : undefined })));
+        if (Array.isArray(d.vehicleCategories)) setCategories(d.vehicleCategories);
+        if (Array.isArray(d.vehicleTypes)) setTypes(d.vehicleTypes);
       });
     if (!vehicleId) {
       fetch("/api/settings/public")
@@ -194,9 +210,14 @@ export function VehicleForm({ vehicleId, returnTo = "/vehicles" }: { vehicleId?:
     if (vehicleId) {
       setLoading(true);
       fetch(`/api/vehicles/${vehicleId}`)
-        .then((r) => r.json())
+        .then((r) => {
+          if (r.status === 404) throw new Error("not-found");
+          if (!r.ok) throw new Error("load-failed");
+          return r.json();
+        })
         .then((d) => {
-          const v = d.vehicle;
+          const v = d?.vehicle;
+          if (!v) throw new Error("load-failed");
           setData({
             ...EMPTY,
             plateNumber: v.plateNumber ?? "",
@@ -224,6 +245,10 @@ export function VehicleForm({ vehicleId, returnTo = "/vehicles" }: { vehicleId?:
             supplier: v.supplier ?? "",
             status: v.status ?? "ACTIVE",
           });
+          dirtyRef.current = false;
+        })
+        .catch((e) => {
+          setLoadError(e.message === "not-found" ? "Vehicle not found — it may have been deleted." : "Could not load this vehicle.");
         })
         .finally(() => setLoading(false));
     }
@@ -248,6 +273,8 @@ export function VehicleForm({ vehicleId, returnTo = "/vehicles" }: { vehicleId?:
       if (k === "branchId") { setAddForm({ code: "", name: "", fullName: "", employeeId: "", licenseNo: "", phone: "" }); setAddModal("branch"); }
       if (k === "departmentId") { setAddForm({ code: "", name: "", fullName: "", employeeId: "", licenseNo: "", phone: "" }); setAddModal("department"); }
       if (k === "currentDriverId") { setAddForm({ code: "", name: "", fullName: "", employeeId: "", licenseNo: "", phone: "" }); setAddModal("driver"); }
+      if (k === "category") { setAddForm({ code: "", name: "", fullName: "", employeeId: "", licenseNo: "", phone: "" }); setAddModal("category"); }
+      if (k === "type") { setAddForm({ code: "", name: "", fullName: "", employeeId: "", licenseNo: "", phone: "" }); setAddModal("type"); }
       return;
     }
     setData((d) => ({ ...d, [k]: v }));
@@ -255,6 +282,28 @@ export function VehicleForm({ vehicleId, returnTo = "/vehicles" }: { vehicleId?:
   }
 
   async function handleAddSave() {
+    if (addModal === "category" || addModal === "type") {
+      // Categories/types are plain strings on the vehicle, not reference
+      // records — the "add" modal just appends to the local option list and
+      // selects it.
+      const name = addForm.name.trim();
+      if (!name) {
+        toast("error", `New ${addModal} name is required`);
+        return;
+      }
+      const opt = { value: name, label: name };
+      if (addModal === "category") {
+        setCategories((prev) => (prev.some((c) => c.value === name) ? prev : [...prev, opt]));
+        setData((d) => ({ ...d, category: name }));
+      } else {
+        setTypes((prev) => (prev.some((t) => t.value === name) ? prev : [...prev, opt]));
+        setData((d) => ({ ...d, type: name }));
+      }
+      toast("success", `${addModal === "category" ? "Category" : "Type"} "${name}" added`);
+      setAddModal(null);
+      return;
+    }
+
     setAddBusy(true);
     let url = "";
     let method = "POST";
@@ -269,6 +318,9 @@ export function VehicleForm({ vehicleId, returnTo = "/vehicles" }: { vehicleId?:
     } else if (addModal === "driver") {
       url = "/api/reference/drivers";
       body = { fullName: addForm.fullName, employeeId: addForm.employeeId || undefined, licenseNo: addForm.licenseNo || undefined, phone: addForm.phone || undefined };
+    } else {
+      setAddBusy(false);
+      return;
     }
 
     const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -296,63 +348,106 @@ export function VehicleForm({ vehicleId, returnTo = "/vehicles" }: { vehicleId?:
     setAddModal(null);
   }
 
-  function validateStep(s: number): boolean {
-    const fields = STEP_FIELDS[s];
-    const newErrors: Record<string, string> = {};
-    let valid = true;
-    for (const f of fields) {
-      if (REQUIRED.has(f) && !data[f]?.trim()) {
-        newErrors[f] = `${LABELS[f]} is required`;
-        valid = false;
-      }
+// Field -> wizard step index, used to jump to the right step when the server
+// reports a field-level error (e.g. duplicate plate on a 409).
+const FIELD_STEP: Partial<Record<keyof VehicleFormData, number>> = Object.fromEntries(
+  STEP_FIELDS.flatMap((fields, idx) => fields.map((f) => [f, idx] as const))
+);
+
+function validateStep(s: number): boolean {
+  const fields = STEP_FIELDS[s];
+  const newErrors: Record<string, string> = {};
+  let valid = true;
+  let firstInvalid: keyof VehicleFormData | null = null;
+  for (const f of fields) {
+    if (REQUIRED.has(f) && !data[f]?.trim()) {
+      newErrors[f] = `${LABELS[f]} is required`;
+      valid = false;
+      if (firstInvalid === null) firstInvalid = f;
     }
-    setErrors((prev) => ({ ...prev, ...newErrors }));
-    return valid;
   }
-
-  function goNext() {
-    if (validateStep(step)) {
-      setStep((s) => Math.min(s + 1, STEPS.length - 1));
-    }
+  setErrors((prev) => ({ ...prev, ...newErrors }));
+  // Scroll the first invalid field into view — in a 3-column grid the error
+  // can sit off-screen, and a Next click that "does nothing" reads as a bug.
+  if (firstInvalid !== null) {
+    requestAnimationFrame(() => {
+      document.querySelector<HTMLElement>(`[data-field="${firstInvalid}"]`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
   }
+  return valid;
+}
 
-  function goBack() {
-    setStep((s) => Math.max(s - 1, 0));
+function goNext() {
+  if (validateStep(step)) {
+    setStep((s) => Math.min(s + 1, STEPS.length - 1));
   }
+}
 
-  async function handleSubmit() {
-    setSaving(true);
-    setErrors({});
-    const payload: Record<string, unknown> = {
-      ...data,
-      year: Number(data.year),
-      engineCC: data.engineCC ? Number(data.engineCC) : undefined,
-      odometer: Number(data.odometer || 0),
-      purchaseCost: data.purchaseCost ? Number(data.purchaseCost) : undefined,
-    };
-    const res = await fetch(
-      isEdit ? `/api/vehicles/${vehicleId}` : "/api/vehicles",
-      {
-        method: isEdit ? "PATCH" : "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      }
-    );
-    const json = await res.json();
-    if (!res.ok) {
-      if (json.issues) {
-        const fe: Record<string, string> = {};
-        for (const [k, v] of Object.entries(json.issues)) fe[k] = (v as string[])[0];
-        setErrors(fe);
-      } else {
-        setErrors({ _form: json.error ?? "Save failed" });
-      }
-      setSaving(false);
+function goBack() {
+  setStep((s) => Math.max(s - 1, 0));
+}
+
+// Jump to the step owning a field (server-reported errors) and highlight it.
+function jumpToFieldError(fe: Record<string, string>) {
+  for (const key of Object.keys(fe)) {
+    const stepIdx = FIELD_STEP[key as keyof VehicleFormData];
+    if (stepIdx !== undefined) {
+      setStep(stepIdx);
+      requestAnimationFrame(() => {
+        document.querySelector<HTMLElement>(`[data-field="${key}"]`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+      });
       return;
     }
-    toast("success", isEdit ? "Vehicle updated" : "Vehicle registered");
-    navigate(returnTo);
   }
+}
+
+async function handleSubmit() {
+  setSaving(true);
+  setErrors({});
+  const payload: Record<string, unknown> = {
+    ...data,
+    year: Number(data.year),
+    engineCC: data.engineCC ? Number(data.engineCC) : undefined,
+    odometer: Number(data.odometer || 0),
+    purchaseCost: data.purchaseCost ? Number(data.purchaseCost) : undefined,
+  };
+  const res = await fetch(
+    isEdit ? `/api/vehicles/${vehicleId}` : "/api/vehicles",
+    {
+      method: isEdit ? "PATCH" : "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }
+  );
+  const json = await res.json();
+  if (!res.ok) {
+    if (json.issues) {
+      // Zod field errors from the API.
+      const fe: Record<string, string> = {};
+      for (const [k, v] of Object.entries(json.issues)) fe[k] = (v as string[])[0];
+      setErrors(fe);
+      jumpToFieldError(fe);
+    } else if (json.field) {
+      // Domain duplicate error (409): map onto the offending field and jump
+      // to its step so the user sees exactly which plate/engine/VIN collides.
+      const fe: Record<string, string> = { [json.field]: json.error ?? "Already in use" };
+      setErrors(fe);
+      jumpToFieldError(fe);
+    } else {
+      setErrors({ _form: json.error ?? "Save failed" });
+    }
+    setSaving(false);
+    return;
+  }
+  dirtyRef.current = false;
+  toast("success", isEdit ? "Vehicle updated" : "Vehicle registered");
+  navigate(returnTo);
+}
+
+function requestCancel() {
+  if (dirtyRef.current) setCancelConfirm(true);
+  else navigate(isEdit ? returnTo : "/vehicles");
+}
 
   function renderField(f: keyof VehicleFormData) {
     const value = data[f];
@@ -373,8 +468,17 @@ export function VehicleForm({ vehicleId, returnTo = "/vehicles" }: { vehicleId?:
           </div>
         );
       }
-      return <Select value={value} onChange={set} options={MANUAL_VEHICLE_STATUS_OPTIONS.map((o) => ({ value: o, label: label(o) }))} />;
+      // A vehicle can't be born disposed — that's a lifecycle state entered
+      // later. Hide DISPOSED from the create wizard; edit keeps it.
+      const statusOptions = isEdit
+        ? MANUAL_VEHICLE_STATUS_OPTIONS
+        : MANUAL_VEHICLE_STATUS_OPTIONS.filter((s) => s !== VEHICLE_STATUS.DISPOSED);
+      return <Select value={value} onChange={set} options={statusOptions.map((o) => ({ value: o, label: label(o) }))} />;
     }
+    if (f === "category")
+      return <Select searchable clearable value={value} onChange={set} options={[{ value: ADD_NEW, label: "Add new category", icon: <Plus className="h-4 w-4" /> }, ...categories]} placeholder="Select category" />;
+    if (f === "type")
+      return <Select searchable clearable value={value} onChange={set} options={[{ value: ADD_NEW, label: "Add new type", icon: <Plus className="h-4 w-4" /> }, ...types]} placeholder="Select type" />;
     if (f === "branchId")
       return <Select searchable clearable value={value} onChange={set} options={[{ value: ADD_NEW, label: "Add new branch", icon: <Plus className="h-4 w-4" /> }, ...branches]} placeholder="Select branch" />;
     if (f === "departmentId")
@@ -384,22 +488,34 @@ export function VehicleForm({ vehicleId, returnTo = "/vehicles" }: { vehicleId?:
     if (f === "acquisitionDate")
       return <DatePicker value={value} onChange={set} />;
 
+    const isNumeric = f === "year" || f === "engineCC" || f === "odometer" || f === "purchaseCost";
     return (
       <input
         className="input"
         value={value}
-        onChange={(e) => set(e.target.value)}
-        inputMode={
-          f === "year" || f === "engineCC" || f === "odometer" || f === "purchaseCost"
-            ? "numeric"
-            : "text"
-        }
+        onChange={(e) => {
+          // Hard-reject non-numeric input for numeric fields so a parse
+          // failure can never reach the server ("12,000abc" died only at
+          // submit before). Leading '-' is blocked too — all are non-negative.
+          if (isNumeric && !/^\d*$/.test(e.target.value)) return;
+          set(e.target.value);
+        }}
+        inputMode={isNumeric ? "numeric" : "text"}
       />
     );
   }
 
   if (loading) {
     return <BrandLoader />;
+  }
+
+  if (loadError) {
+    return (
+      <div className="flex flex-col items-center gap-3 rounded-lg border border-slate-200 bg-white py-16 text-center">
+        <span className="text-sm font-medium text-slate-600">{loadError}</span>
+        <Link to="/vehicles" className="text-xs text-primary hover:underline">Back to registry</Link>
+      </div>
+    );
   }
 
   const isReview = step === STEPS.length - 1;
@@ -476,6 +592,7 @@ export function VehicleForm({ vehicleId, returnTo = "/vehicles" }: { vehicleId?:
           <div className="grid grid-cols-1 gap-x-4 gap-y-2.5 sm:grid-cols-2 md:grid-cols-3">
             {STEP_FIELDS[step].map((f) => (
               <Field key={f} label={LABELS[f]} error={errors[f]} required={REQUIRED.has(f)}
+                dataField={f}
                 className={STEP_FIELDS[step].length === 1 ? "md:col-span-3" : ""}>
                 {renderField(f)}
               </Field>
@@ -485,7 +602,7 @@ export function VehicleForm({ vehicleId, returnTo = "/vehicles" }: { vehicleId?:
       )}
 
       <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 px-3 py-2.5 sm:px-4">
-        <button type="button" onClick={() => navigate(-1)} className="btn-outline text-xs">
+        <button type="button" onClick={requestCancel} className="btn-outline text-xs">
           Cancel
         </button>
         <div className="flex items-center gap-2">
@@ -593,6 +710,49 @@ export function VehicleForm({ vehicleId, returnTo = "/vehicles" }: { vehicleId?:
           </div>
         </div>
       </Modal>
+
+      <Modal
+        open={addModal === "category" || addModal === "type"}
+        onClose={() => setAddModal(null)}
+        title={addModal === "category" ? "New Category" : "New Type"}
+        size="sm"
+        footer={
+          <>
+            <button className="btn-outline" onClick={() => setAddModal(null)}>Cancel</button>
+            <button className="btn btn-primary" onClick={handleAddSave} disabled={addBusy}>
+              {addBusy ? "Saving..." : "Save"}
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-600">
+              {addModal === "category" ? "Category" : "Type"} Name *
+            </label>
+            <input
+              className="input"
+              value={addForm.name}
+              onChange={(e) => setAddForm({ ...addForm, name: e.target.value })}
+              placeholder={addModal === "category" ? "e.g. Sedan" : "e.g. Saloon Car"}
+            />
+            <p className="mt-1 text-[11px] text-slate-400">
+              This will be available for every vehicle going forward.
+            </p>
+          </div>
+        </div>
+      </Modal>
+
+      <ConfirmModal
+        open={cancelConfirm}
+        onClose={() => setCancelConfirm(false)}
+        onConfirm={() => { dirtyRef.current = false; navigate(isEdit ? returnTo : "/vehicles"); }}
+        title="Discard changes?"
+        message={isEdit
+          ? "You've edited this vehicle but haven't saved. Leave without saving?"
+          : "You've started registering a vehicle but haven't saved. Leave without saving?"}
+        confirmLabel="Discard"
+      />
     </div>
   );
 }

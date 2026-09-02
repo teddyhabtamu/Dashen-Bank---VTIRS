@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useParams, useBlocker } from "react-router-dom";
-import { Pencil, History, ArrowRight } from "lucide-react";
+import { Pencil, History, ArrowRight, Copy, Check, Car, ShieldCheck, FileCheck, AlertTriangle } from "lucide-react";
 import { StatusBadge } from "@/components/ui/badge";
 import { BrandLoader } from "@/components/ui/brand-loader";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
@@ -12,6 +12,8 @@ import { useAuth } from "@/components/auth-context";
 import { label } from "@/lib/constants";
 import { formatCurrency, formatDate, formatDateTime } from "@/lib/format";
 import { PERMISSIONS } from "@/lib/rbac";
+import { expiryState } from "@/lib/services/reminders";
+import { useToast } from "@/lib/toast-context";
 
 type AuditRow = {
   id: string;
@@ -29,6 +31,39 @@ function Attr({ label, value }: { label: string; value: React.ReactNode }) {
     </div>
   );
 }
+
+// One-click copy for identity fields (plate, code, VIN, engine no) — registry
+// work means pasting these into other systems constantly.
+function CopyChip({ value, label: text, mono = true }: { value: string | null | undefined; label: string; mono?: boolean }) {
+  const [copied, setCopied] = useState(false);
+  const { toast } = useToast();
+  if (!value) return null;
+  return (
+    <button
+      onClick={() => {
+        navigator.clipboard.writeText(value).then(() => {
+          setCopied(true);
+          toast("success", `${text} copied`);
+          setTimeout(() => setCopied(false), 1500);
+        }).catch(() => toast("error", "Copy failed"));
+      }}
+      className="group inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-500 transition-colors hover:border-slate-300 hover:text-slate-700"
+      title={`Copy ${text}: ${value}`}
+    >
+      <span className={mono ? "font-mono" : ""}>{value}</span>
+      {copied
+        ? <Check className="h-3 w-3 text-emerald-500" />
+        : <Copy className="h-3 w-3 opacity-0 transition-opacity group-hover:opacity-60" />}
+    </button>
+  );
+}
+
+const COMPLIANCE_BADGE: Record<string, string> = {
+  EXPIRED: "bg-red-100 text-red-700",
+  CRITICAL: "bg-orange-100 text-orange-700",
+  WARNING: "bg-amber-100 text-amber-700",
+  OK: "bg-green-100 text-green-700",
+};
 
 export default function VehicleDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -108,11 +143,34 @@ export default function VehicleDetailPage() {
   }
 
   const documents = (v.documents ?? []) as any[];
+  const images = (v.images ?? []) as any[];
   const latestRegistration = (v.registrations ?? [])[0];
+  const activeInsurance = (v.insurances ?? []).find(
+    (i: any) => i.status === "ACTIVE" && (!i.endDate || new Date(i.endDate).getTime() >= Date.now())
+  );
   const auditLink = {
     pathname: "/audit",
     search: `?search=${encodeURIComponent(v.vehicleCode)}`,
   };
+
+  // Compliance strip: answers "is this vehicle OK?" in one glance without
+  // scrolling through four sections.
+  const regExpiryState = latestRegistration
+    ? expiryState(latestRegistration.expiryDate)
+    : null;
+  const insExpiryState = activeInsurance
+    ? expiryState(activeInsurance.endDate)
+    : null;
+  const requiredTotal = requiredCategories.length;
+  const requiredPresent = requiredCategories.filter((c) =>
+    documents.some((d) => d.category === c)
+  ).length;
+  const docsComplete = requiredTotal === 0 || requiredPresent === requiredTotal;
+  const anyComplianceIssue =
+    (regExpiryState && regExpiryState !== "OK") ||
+    (insExpiryState && insExpiryState !== "OK") ||
+    !activeInsurance ||
+    !docsComplete;
 
   return (
     <div className="mx-auto max-w-5xl space-y-10">
@@ -124,25 +182,40 @@ export default function VehicleDetailPage() {
       {/* Hero */}
       <div className="flex flex-col gap-2">
         <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="space-y-2">
-            <h1 className="text-3xl font-bold tracking-tight text-slate-800">
-              {v.make} {v.model}{v.trim ? ` ${v.trim}` : ""}
-            </h1>
-            <div className="flex flex-wrap items-center gap-3">
-              <span className="text-xl font-semibold text-slate-600">{v.plateNumber}</span>
-              <StatusBadge status={v.status} />
-            </div>
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-slate-400">
-              {v.year && <span>{v.year}</span>}
-              {v.year && <span className="text-slate-300">·</span>}
-              <span>{label(v.transmission) || "—"}</span>
-              <span className="text-slate-300">·</span>
-              <span>{label(v.fuelType) || "—"}</span>
-              {v.driveType && <><span className="text-slate-300">·</span><span>{label(v.driveType)}</span></>}
-              <span className="text-slate-300">·</span>
-              <span>{(v.odometer ?? 0).toLocaleString()} km</span>
-              {v.engineNo && <><span className="text-slate-300">·</span><span className="font-mono">ENG {v.engineNo.slice(0, 8)}</span></>}
-              {v.chassisNo && <><span className="text-slate-300">·</span><span className="font-mono">VIN {v.chassisNo.slice(0, 8)}</span></>}
+          <div className="flex min-w-0 items-start gap-4">
+            {images.length > 0 && (
+              <Link to={`/vehicles/${v.id}`} className="hidden h-20 w-28 flex-shrink-0 overflow-hidden rounded-xl border border-slate-200 bg-slate-50 sm:block" title="Vehicle photo">
+                <img
+                  src={`/api/documents/${images[0].id}`}
+                  alt={`${v.make} ${v.model}`}
+                  className="h-full w-full object-cover"
+                  onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                />
+              </Link>
+            )}
+            <div className="min-w-0 space-y-2">
+              <h1 className="text-3xl font-bold tracking-tight text-slate-800">
+                {v.make} {v.model}{v.trim ? ` ${v.trim}` : ""}
+              </h1>
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="text-xl font-semibold text-slate-600">{v.plateNumber}</span>
+                <StatusBadge status={v.status} />
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <CopyChip value={v.vehicleCode} label="Code" />
+                {v.engineNo && <CopyChip value={v.engineNo} label="Engine No" />}
+                {v.chassisNo && <CopyChip value={v.chassisNo} label="VIN" />}
+              </div>
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-slate-400">
+                {v.year && <span>{v.year}</span>}
+                {v.year && <span className="text-slate-300">·</span>}
+                <span>{label(v.transmission) || "—"}</span>
+                <span className="text-slate-300">·</span>
+                <span>{label(v.fuelType) || "—"}</span>
+                {v.driveType && <><span className="text-slate-300">·</span><span>{label(v.driveType)}</span></>}
+                <span className="text-slate-300">·</span>
+                <span>{(v.odometer ?? 0).toLocaleString()} km</span>
+              </div>
             </div>
           </div>
           <div className="flex flex-shrink-0 flex-wrap items-center gap-2">
@@ -165,6 +238,52 @@ export default function VehicleDetailPage() {
               </Link>
             )}
           </div>
+        </div>
+
+        {/* Compliance strip — registration, insurance, required docs at a glance */}
+        <div className={`flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border px-4 py-2.5 text-sm ${anyComplianceIssue ? "border-amber-200 bg-amber-50/60" : "border-emerald-200 bg-emerald-50/60"}`}>
+          {anyComplianceIssue ? (
+            <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-800">
+              <AlertTriangle className="h-4 w-4" /> Needs attention
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700">
+              <Check className="h-4 w-4" /> Compliant
+            </span>
+          )}
+          <span className="inline-flex items-center gap-1.5">
+            <Car className="h-4 w-4 text-slate-400" />
+            {latestRegistration ? (
+              <>
+                <span className="text-slate-600">Registration</span>
+                <span className={`badge ${COMPLIANCE_BADGE[regExpiryState ?? "OK"]}`}>{regExpiryState === "EXPIRED" ? "Expired" : regExpiryState === "OK" ? "Valid" : regExpiryState === "CRITICAL" ? "Critical" : "Warning"}</span>
+              </>
+            ) : (
+              <span className="badge bg-red-100 text-red-700">No registration</span>
+            )}
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <ShieldCheck className="h-4 w-4 text-slate-400" />
+            {activeInsurance ? (
+              <>
+                <span className="text-slate-600">Insurance</span>
+                <span className={`badge ${COMPLIANCE_BADGE[insExpiryState ?? "OK"]}`}>{insExpiryState === "EXPIRED" ? "Expired" : insExpiryState === "OK" ? "Valid" : insExpiryState === "CRITICAL" ? "Critical" : "Warning"}</span>
+              </>
+            ) : (
+              <span className="badge bg-red-100 text-red-700">Uninsured</span>
+            )}
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <FileCheck className="h-4 w-4 text-slate-400" />
+            <span className="text-slate-600">Documents</span>
+            {requiredTotal > 0 ? (
+              <span className={`badge ${docsComplete ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
+                {requiredPresent}/{requiredTotal} required
+              </span>
+            ) : (
+              <span className="badge bg-slate-100 text-slate-600">{documents.length} on file</span>
+            )}
+          </span>
         </div>
       </div>
 
