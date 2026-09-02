@@ -273,6 +273,8 @@ model VehicleDocument {
   sizeBytes    Int
   path         String
   version      Int      @default(1)
+  contentHash  String?
+  documentRef  String?
   uploadedById String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -282,6 +284,8 @@ model VehicleDocument {
 
   @@index([vehicleId])
   @@index([category])
+  @@index([contentHash])
+  @@index([documentRef])
 }
 
 model VehicleImage {

@@ -8,6 +8,7 @@ import { prisma } from "../lib/prisma.js";
 import { deleteDocument, purgeDocument, restoreDocument, updateDocument } from "../services/document.js";
 import { writeAudit } from "../lib/audit.js";
 import { copyFile, openFileStream, putFile } from "../lib/storage.js";
+import { sha256, sniffMimeType } from "../lib/file-check.js";
 
 const router = Router();
 
@@ -164,6 +165,30 @@ router.post(
       return res.status(413).json({ error: "File too large (max 10 MB)." });
     }
 
+    // Validate the file by its magic bytes, not the client-supplied MIME type.
+    const actualMime = sniffMimeType(new Uint8Array(file.buffer));
+    if (!actualMime) {
+      return res.status(415).json({ error: "File content does not match an accepted type (PDF, JPG, PNG)." });
+    }
+    if (actualMime !== file.mimetype) {
+      return res
+        .status(415)
+        .json({ error: `File signature (${actualMime}) does not match its declared type (${file.mimetype}).` });
+    }
+
+    // Duplicate detection: same content hash already stored for this vehicle.
+    const contentHash = sha256(new Uint8Array(file.buffer));
+    const dup = await prisma.vehicleDocument.findFirst({
+      where: { vehicleId, contentHash, deletedAt: null },
+      select: { title: true, category: true },
+    });
+    if (dup) {
+      return res.status(409).json({
+        error: "A file with identical content is already uploaded for this vehicle.",
+        duplicate: { title: dup.title, category: dup.category },
+      });
+    }
+
     const vehicle = await prisma.vehicle.findUnique({ where: { id: vehicleId } });
     if (!vehicle) return res.status(404).json({ error: "Vehicle not found" });
 
@@ -171,7 +196,7 @@ router.post(
     const storedName = `${randomUUID()}${ext}`;
     const sub = kind === "image" ? "images" : "documents";
     const objectKey = path.join(sub, storedName);
-    await putFile(objectKey, file.buffer, file.mimetype);
+    await putFile(objectKey, file.buffer, actualMime);
 
     const baseTitle = (title && title.trim()) || file.originalname;
     const cat = category || "OTHER";
@@ -192,7 +217,7 @@ router.post(
           category: cat,
           fileName: storedName,
           originalName: file.originalname,
-          mimeType: file.mimetype,
+          mimeType: actualMime,
           sizeBytes: file.size,
           path: objectKey,
           version: imgVersion,
@@ -212,10 +237,12 @@ router.post(
           title: baseTitle,
           fileName: storedName,
           originalName: file.originalname,
-          mimeType: file.mimetype,
+          mimeType: actualMime,
           sizeBytes: file.size,
           path: objectKey,
           version,
+          contentHash,
+          documentRef: existing?.documentRef ?? randomUUID(),
           uploadedById: req.session!.userId,
           ...(parsedExpiry && { expiresAt: parsedExpiry }),
         },
@@ -439,6 +466,8 @@ router.post(
         sizeBytes: source.sizeBytes,
         path: path.join(sub, storedName),
         version,
+        contentHash: doc?.contentHash ?? undefined,
+        documentRef: doc?.documentRef ?? undefined,
         uploadedById: req.session!.userId,
       },
     });
