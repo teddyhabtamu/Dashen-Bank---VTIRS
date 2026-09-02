@@ -31,12 +31,13 @@ export async function vehicleInventory(f: ReportFilters) {
     include: {
       branch: { select: { name: true } },
       department: { select: { name: true } },
-      currentDriver: { select: { fullName: true } },
+      currentDriver: { select: { id: true, fullName: true } },
       _count: { select: { registrations: true, insurances: true, documents: true } },
     },
     orderBy: { vehicleCode: "asc" },
   });
   return rows.map((v) => ({
+    id: v.id,
     vehicleCode: v.vehicleCode,
     plateNumber: v.plateNumber,
     make: v.make,
@@ -48,6 +49,7 @@ export async function vehicleInventory(f: ReportFilters) {
     branch: v.branch?.name ?? "-",
     department: v.department?.name ?? "-",
     driver: v.currentDriver?.fullName ?? "-",
+    driverId: v.currentDriver?.id ?? null,
     registrations: v._count.registrations,
     documents: v._count.documents,
   }));
@@ -73,12 +75,13 @@ export async function registrationStatus(f: ReportFilters) {
 export async function registrationExpiry(f: ReportFilters) {
   const rows = await prisma.vehicleRegistration.findMany({
     where: { vehicle: baseWhere(f) },
-    include: { vehicle: { select: { plateNumber: true, vehicleCode: true, branch: { select: { name: true } } } } },
+    include: { vehicle: { select: { id: true, plateNumber: true, vehicleCode: true, branch: { select: { name: true } } } } },
     orderBy: { expiryDate: "asc" },
   });
   return rows.map((r) => {
     const eff = effectiveRegistrationStatus(r.status, r.expiryDate);
     return {
+      id: r.vehicle.id,
       regNumber: r.regNumber,
       plateNumber: r.vehicle.plateNumber,
       vehicleCode: r.vehicle.vehicleCode,
@@ -95,10 +98,11 @@ export async function registrationExpiry(f: ReportFilters) {
 export async function insuranceExpiry(f: ReportFilters) {
   const rows = await prisma.vehicleInsurance.findMany({
     where: { vehicle: baseWhere(f) },
-    include: { vehicle: { select: { plateNumber: true, vehicleCode: true, branch: { select: { name: true } } } } },
+    include: { vehicle: { select: { id: true, plateNumber: true, vehicleCode: true, branch: { select: { name: true } } } } },
     orderBy: { endDate: "asc" },
   });
   return rows.map((i) => ({
+    id: i.vehicle.id,
     policyNo: i.policyNo,
     company: i.company,
     plateNumber: i.vehicle.plateNumber,
@@ -163,7 +167,7 @@ export async function vehicleAge(f: ReportFilters) {
 export async function vehicleCost(f: ReportFilters) {
   const rows = await prisma.vehicle.findMany({
     where: { ...baseWhere(f), purchaseCost: { not: null } },
-    select: { vehicleCode: true, plateNumber: true, make: true, model: true, purchaseCost: true, branch: { select: { name: true } } },
+    select: { id: true, vehicleCode: true, plateNumber: true, make: true, model: true, purchaseCost: true, branch: { select: { name: true } } },
     orderBy: { purchaseCost: "desc" },
   });
   const costs = rows.map((v) => v.purchaseCost ?? 0);
@@ -172,6 +176,7 @@ export async function vehicleCost(f: ReportFilters) {
   return {
     summary: { total, average: avg, count: rows.length },
     top: rows.slice(0, 20).map((v) => ({
+      id: v.id,
       vehicleCode: v.vehicleCode,
       plateNumber: v.plateNumber,
       make: v.make,
@@ -258,6 +263,7 @@ export async function documentCompleteness(f: ReportFilters) {
     const expiredDocs = v.documents.filter((d) => d.expiresAt && new Date(d.expiresAt).getTime() < Date.now())
       .map((d) => d.category);
     return {
+      id: v.id,
       vehicleCode: v.vehicleCode,
       plateNumber: v.plateNumber,
       branch: v.branch?.name ?? "-",
@@ -327,18 +333,19 @@ export async function renewalForecast(f: ReportFilters, months = 12) {
         expiryDate: { gte: start, lte: end },
         status: { notIn: ["SUSPENDED", "ARCHIVED"] },
       },
-      include: { vehicle: { select: { plateNumber: true, vehicleCode: true, branch: { select: { name: true } } } } },
+      include: { vehicle: { select: { id: true, plateNumber: true, vehicleCode: true, branch: { select: { name: true } } } } },
       orderBy: { expiryDate: "asc" },
     }),
     prisma.vehicleInsurance.findMany({
       where: { vehicle: baseWhere(f), endDate: { gte: start, lte: end } },
-      include: { vehicle: { select: { plateNumber: true, vehicleCode: true, branch: { select: { name: true } } } } },
+      include: { vehicle: { select: { id: true, plateNumber: true, vehicleCode: true, branch: { select: { name: true } } } } },
       orderBy: { endDate: "asc" },
     }),
   ]);
 
   const registrations = regs.map((r) => ({
     kind: "Registration",
+    id: r.vehicle.id,
     plateNumber: r.vehicle.plateNumber,
     vehicleCode: r.vehicle.vehicleCode,
     ref: r.regNumber,
@@ -348,6 +355,7 @@ export async function renewalForecast(f: ReportFilters, months = 12) {
   }));
   const insurance = ins.map((i) => ({
     kind: "Insurance",
+    id: i.vehicle.id,
     plateNumber: i.vehicle.plateNumber,
     vehicleCode: i.vehicle.vehicleCode,
     ref: i.policyNo,

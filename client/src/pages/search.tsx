@@ -214,7 +214,7 @@ export default function SearchPage() {
                           <div className="truncate text-xs text-slate-400">
                             {v.vehicleCode} · {v.make} {v.model} · {v.year}
                             {v.branchName && <> · {v.branchName}</>}
-                            {v.driverName && <> · Driver: {v.driverName}</>}
+                            {v.driverName && <> · Driver: <Link to={`/drivers/${v.driverId ?? ""}`} className="text-blue-600 hover:underline">{v.driverName}</Link></>}
                           </div>
                         </div>
                         <div className="flex flex-shrink-0 items-center gap-2 sm:gap-3">

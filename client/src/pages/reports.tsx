@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import ReactECharts from "echarts-for-react";
 import { Download, CalendarRange, Car, Building2, Users, Clock, TrendingUp, CalendarClock, ShieldCheck, ClipboardList, FileCheck, DollarSign, BarChart3, type LucideIcon } from "lucide-react";
 import { Select } from "@/components/ui/select";
@@ -217,18 +218,20 @@ function InventoryTable({ rows }: { rows: any[] }) {
         {rows.map((r, i) => (
           <div key={i} className="rounded-lg border border-slate-100 p-4">
             <div className="mb-2 flex items-start justify-between gap-2">
-              <span className="truncate text-sm font-semibold text-slate-800">{r.plateNumber}</span>
+              <VLink id={r.id} className="truncate text-sm font-semibold text-slate-800">
+                {r.plateNumber}
+              </VLink>
               <span className="badge flex-shrink-0 bg-slate-100 text-slate-600">{r.status}</span>
             </div>
             <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-slate-500">
-              <div><span className="font-medium text-slate-600">Code:</span> {r.vehicleCode}</div>
+              <div><span className="font-medium text-slate-600">Code:</span> <VLink id={r.id} className="font-medium text-slate-600">{r.vehicleCode}</VLink></div>
               <div><span className="font-medium text-slate-600">Make:</span> {r.make} {r.model}</div>
               <div><span className="font-medium text-slate-600">Year:</span> {r.year}</div>
               <div><span className="font-medium text-slate-600">Cat:</span> {r.category}</div>
               <div className="truncate"><span className="font-medium text-slate-600">Branch:</span> {r.branch}</div>
               <div className="truncate"><span className="font-medium text-slate-600">Dept:</span> {r.department}</div>
             </div>
-            {r.driver && <div className="mt-1 text-xs text-slate-400">Driver: {r.driver}</div>}
+            {r.driverId && <div className="mt-1 text-xs text-slate-400">Driver: <DLink id={r.driverId}>{r.driver}</DLink></div>}
             <div className="mt-1 flex gap-3 text-xs text-slate-400">
               <span>Regs: {r.registrations}</span>
               <span>Docs: {r.documents}</span>
@@ -245,9 +248,26 @@ function InventoryTable({ rows }: { rows: any[] }) {
             <tbody className="divide-y divide-slate-100">
               {rows.map((r, i) => (
                 <tr key={i} className="hover:bg-slate-50">
-                  {headers.map((h) => (
-                    <td key={h} className="px-3 py-2">{h === "status" ? <span className="badge bg-slate-100 text-slate-600">{r[h]}</span> : r[h]}</td>
-                  ))}
+                  <td className="px-3 py-2">
+                    <VLink id={r.id} className="font-medium text-slate-800 hover:underline">
+                      {r.plateNumber}
+                    </VLink>
+                  </td>
+                  <td className="px-3 py-2">
+                    <VLink id={r.id} className="font-medium text-slate-800 hover:underline">
+                      {r.vehicleCode}
+                    </VLink>
+                  </td>
+                  <td className="px-3 py-2">{r.make} {r.model}</td>
+                  <td className="px-3 py-2">{r.year}</td>
+                  <td className="px-3 py-2">{r.category}</td>
+                  <td className="px-3 py-2">{r.branch}</td>
+                  <td className="px-3 py-2">{r.department}</td>
+                  <td className="px-3 py-2">
+                    {r.driverId ? <DLink id={r.driverId}>{r.driver}</DLink> : <span className="text-slate-400">—</span>}
+                  </td>
+                  <td className="px-3 py-2">{r.registrations}</td>
+                  <td className="px-3 py-2">{r.documents}</td>
                 </tr>
               ))}
             </tbody>
@@ -289,7 +309,7 @@ function ExpiryTable({ rows, kind }: { rows: any[]; kind: "registration" | "insu
               </div>
               <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-slate-500">
                 <div><span className="font-medium text-slate-600">Plate:</span> {r.plateNumber}</div>
-                <div className="truncate"><span className="font-medium text-slate-600">Veh:</span> {r.vehicleCode}</div>
+                <div className="truncate"><span className="font-medium text-slate-600">Veh:</span> <VLink id={r.vehicleId} className="font-medium text-slate-600">{r.vehicleCode}</VLink></div>
                 <div className="truncate col-span-2"><span className="font-medium text-slate-600">Branch:</span> {r.branch}</div>
                 <div className="col-span-2">
                   <span className="font-medium text-slate-600">{isReg ? "Expiry" : "End"}:</span> {formatDate(r.expiryDate || r.endDate)}
@@ -311,14 +331,23 @@ function ExpiryTable({ rows, kind }: { rows: any[]; kind: "registration" | "insu
                 const days = r.daysLeft;
                 return (
                   <tr key={i} className="hover:bg-slate-50">
-                    {cols.map((c) => (
-                      <td key={c} className="px-3 py-2">
-                        {c === "status" ? <span className="badge bg-slate-100 text-slate-600">{r[c]}</span>
-                          : c === "daysLeft" ? <DaysBadge days={days} />
-                          : c === "expiryDate" || c === "endDate" ? formatDate(r[c])
-                          : r[c]}
-                      </td>
-                    ))}
+                    <td className="px-3 py-2">
+                      {isReg ? <span className="badge bg-slate-100 text-slate-600">{r.regNumber}</span> : <span className="badge bg-slate-100 text-slate-600">{r.policyNo}</span>}
+                    </td>
+                    <td className="px-3 py-2">{r.plateNumber}</td>
+                    <td className="px-3 py-2">
+                      <VLink id={r.vehicleId} className="font-medium text-slate-600 hover:underline">
+                        {r.vehicleCode}
+                      </VLink>
+                    </td>
+                    <td className="px-3 py-2">{r.branch}</td>
+                    <td className="px-3 py-2">{formatDate(r.expiryDate || r.endDate)}</td>
+                    <td className="px-3 py-2">
+                      {r.daysLeft !== undefined ? <DaysBadge days={days} /> : null}
+                    </td>
+                    <td className="px-3 py-2">
+                      <span className="badge bg-slate-100 text-slate-600">{r.status}</span>
+                    </td>
                   </tr>
                 );
               })}
@@ -427,6 +456,24 @@ function Empty() {
   return <div className="py-12 text-center text-sm text-slate-400">No data for the current filters.</div>;
 }
 
+function VLink({ id, children, className }: { id?: string | null; children: React.ReactNode; className?: string }) {
+  if (!id) return <>{children}</>;
+  return (
+    <Link to={`/vehicles/${id}`} className={`text-blue-600 hover:underline ${className ?? ""}`}>
+      {children}
+    </Link>
+  );
+}
+
+function DLink({ id, children, className }: { id?: string | null; children: React.ReactNode; className?: string }) {
+  if (!id) return <>{children}</>;
+  return (
+    <Link to={`/drivers/${id}`} className={`text-blue-600 hover:underline ${className ?? ""}`}>
+      {children}
+    </Link>
+  );
+}
+
 function AcquisitionReport({ data }: { data: { summary: { total: number; withAcquisitionDate: number; avgFleetAge: number }; trend: { year: string; count: number }[] } | null }) {
   if (!data) return <Empty />;
   const cats = data.trend.map((t) => t.year);
@@ -485,16 +532,18 @@ function RenewalForecast({ data }: { data: { months: number; summary: { registra
         <div className="space-y-3 sm:hidden">
           {rows.map((r, i) => (
             <div key={i} className="rounded-lg border border-slate-100 p-4">
-              <div className="mb-2 flex items-start justify-between gap-2">
-                <div className="flex flex-wrap items-center gap-2">
-                  <KindBadge kind={r.kind} />
-                  <span className="truncate text-sm font-semibold text-slate-800">{r.plateNumber}</span>
+<div className="mb-2 flex items-start justify-between gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <KindBadge kind={r.kind} />
+                    <VLink id={r.id} className="truncate text-sm font-semibold text-slate-800">
+                      {r.plateNumber}
+                    </VLink>
+                  </div>
+                  <DaysBadge days={r.daysLeft} />
                 </div>
-                <DaysBadge days={r.daysLeft} />
-              </div>
-              <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-slate-500">
-                <div><span className="font-medium text-slate-600">Vehicle:</span> {r.vehicleCode}</div>
-                <div className="truncate"><span className="font-medium text-slate-600">Ref:</span> {r.ref}</div>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-slate-500">
+                  <div><span className="font-medium text-slate-600">Vehicle:</span> <VLink id={r.id} className="font-medium text-slate-600">{r.vehicleCode}</VLink></div>
+                  <div className="truncate"><span className="font-medium text-slate-600">Ref:</span> {r.ref}</div>
                 <div className="truncate col-span-2"><span className="font-medium text-slate-600">Branch:</span> {r.branch}</div>
                 <div className="col-span-2"><span className="font-medium text-slate-600">Due:</span> {formatDate(r.dueDate)}</div>
               </div>
@@ -517,7 +566,11 @@ function RenewalForecast({ data }: { data: { months: number; summary: { registra
                         {c === "kind" ? <KindBadge kind={r[c]} />
                           : c === "daysLeft" ? <DaysBadge days={r[c]} />
                           : c === "dueDate" ? formatDate(r[c])
-                          : r[c]}
+                          : c === "vehicleCode" ? (
+                            <VLink id={r.id} className="font-medium text-slate-600 hover:underline">
+                              {r[c]}
+                            </VLink>
+                          ) : r[c]}
                       </td>
                     ))}
                   </tr>
@@ -555,9 +608,11 @@ function CompletenessReport({ data }: { data: { required: string[]; summary: { t
               <div key={i} className="rounded-lg border border-slate-100 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="truncate text-sm font-semibold text-slate-800">{r.plateNumber}</span>
-                      <span className="badge bg-slate-100 text-slate-600">{r.vehicleCode}</span>
+<div className="flex items-center gap-2">
+                       <span className="truncate text-sm font-semibold text-slate-800">
+                         <VLink id={r.id} className="font-medium text-slate-800 hover:underline">{r.plateNumber}</VLink>
+                       </span>
+                       <span className="badge bg-slate-100 text-slate-600">{r.vehicleCode}</span>
                     </div>
                     <div className="text-xs text-slate-400">{r.branch}{r.department !== "-" ? ` · ${r.department}` : ""}</div>
                   </div>

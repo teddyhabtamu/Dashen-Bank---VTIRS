@@ -231,7 +231,7 @@ export default function DashboardPage() {
           <ul className="divide-y divide-slate-100">
             {ins.map((i) => (
               <li key={i.id} className="flex items-center justify-between gap-3 py-2.5">
-                <div className="min-w-0"><div className="truncate text-sm font-medium text-slate-800">{i.company}</div><div className="truncate text-xs text-slate-400">{i.policyNo} · {i.vehicle.plateNumber}</div></div>
+                <div className="min-w-0"><div className="truncate text-sm font-medium text-slate-800"><Link to={`/vehicles/${i.vehicle.id}`} className="text-blue-600 hover:underline">{i.vehicle.plateNumber}</Link></div><div className="truncate text-xs text-slate-400">{i.policyNo} · {i.vehicle.branch?.name ?? "—"}</div></div>
                 <ExpiryBadge days={i.daysLeft} />
               </li>
             ))}

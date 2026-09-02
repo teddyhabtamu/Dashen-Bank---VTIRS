@@ -151,7 +151,7 @@ export async function globalSearch(filters: SearchFilters): Promise<SearchResult
     }),
   ]);
 
-  const mappedVehicles = vehicles.map((v) => ({
+const mappedVehicles = vehicles.map((v) => ({
     id: v.id,
     kind: "vehicle" as const,
     vehicleCode: v.vehicleCode,
@@ -164,6 +164,7 @@ export async function globalSearch(filters: SearchFilters): Promise<SearchResult
     departmentName: v.department?.name ?? null,
     driverName: v.currentDriver?.fullName ?? null,
     ownerName: v.ownerName,
+    driverId: v.currentDriver?.id ?? null,
     registrationStatus: v.registrations[0]?.status ?? null,
     insuranceEnd: v.insurances[0]?.endDate
       ? v.insurances[0].endDate.toISOString()
