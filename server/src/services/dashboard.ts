@@ -23,12 +23,52 @@ export interface DashboardKpis {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Lightweight in-memory cache. Dashboard numbers only move via cron sweeps /
+// user edits, so a 60-second TTL cuts ~25 queries per page view per user down
+// to a single originator. Keys are per-permission-shape (activity is gated by
+// AUDIT_VIEW, so the two variants are cached separately).
+// ---------------------------------------------------------------------------
+const CACHE_TTL_MS = 60_000;
+const kpiCache = new Map<string, { at: number; value: DashboardKpis }>();
+const windowListsCache = new Map<string, { at: number; value: unknown }>();
+
+function cacheGet<T>(cache: Map<string, { at: number; value: T }>, key: string, ttl: number): T | null {
+  const hit = cache.get(key);
+  if (!hit) return null;
+  if (Date.now() - hit.at > ttl) {
+    cache.delete(key);
+    return null;
+  }
+  return hit.value;
+}
+
+function cacheSet<T>(cache: Map<string, { at: number; value: T }>, key: string, value: T): void {
+  cache.set(key, { at: Date.now(), value });
+  // Keep the map bounded at one entry per key shape.
+  if (cache.size > 16) {
+    const oldest = Array.from(cache.entries()).sort((a, b) => a[1].at - b[1].at)[0];
+    if (oldest) cache.delete(oldest[0]);
+  }
+}
+
+// Invalidate after mutations that materially change KPIs (fire-and-forget).
+export function invalidateDashboardCache(): void {
+  kpiCache.clear();
+  windowListsCache.clear();
+}
+
 export async function getUpcomingRegistrations(_withinDays?: number, limit = 8) {
   const [w90] = await getReminderWindows();
   const withinDays = _withinDays ?? w90;
   const horizon = new Date(Date.now() + withinDays * 24 * 60 * 60 * 1000);
   const rows = await prisma.vehicleRegistration.findMany({
-    where: { expiryDate: { lte: horizon } },
+    where: {
+      expiryDate: { lte: horizon },
+      // Suspended/archived registrations are not renewal candidates — showing
+      // them as "upcoming" invites pointless renewal work.
+      status: { notIn: [REGISTRATION_STATUS.SUSPENDED, REGISTRATION_STATUS.ARCHIVED] },
+    },
     include: { vehicle: { select: { id: true, plateNumber: true, vehicleCode: true, branch: { select: { name: true } } } } },
     orderBy: { expiryDate: "asc" },
     take: limit,
@@ -64,12 +104,11 @@ export async function getUpcomingInsurances(_withinDays?: number, limit = 8) {
 }
 
 export async function getVehicleDistributions() {
-  const [byType, byStatus, byBranch, byMake, byModel, byYear, byFuel] = await Promise.all([
+  const [byType, byStatus, byBranch, byMake, byYear, byFuel] = await Promise.all([
     prisma.vehicle.groupBy({ by: ["type"], _count: { _all: true } }),
     prisma.vehicle.groupBy({ by: ["status"], _count: { _all: true } }),
     prisma.vehicle.groupBy({ by: ["branchId"], _count: { _all: true } }),
     prisma.vehicle.groupBy({ by: ["make"], _count: { _all: true } }),
-    prisma.vehicle.groupBy({ by: ["make", "model"], _count: { _all: true } }),
     prisma.vehicle.groupBy({ by: ["year"], _count: { _all: true } }),
     prisma.vehicle.groupBy({ by: ["fuelType"], _count: { _all: true } }),
   ]);
@@ -83,13 +122,12 @@ export async function getVehicleDistributions() {
       .map((r) => ({ name: r.branchId ? branchMap.get(r.branchId) ?? "Unknown" : "Unassigned", value: r._count._all }))
       .sort((a, b) => b.value - a.value),
     byMake: byMake.map((r) => ({ name: r.make, value: r._count._all })).sort((a, b) => b.value - a.value).slice(0, 8),
-    byModel: byModel.map((r) => ({ name: `${r.make} ${r.model}`, value: r._count._all })).sort((a, b) => b.value - a.value).slice(0, 8),
     byYear: byYear.map((r) => ({ name: String(r.year), value: r._count._all })).sort((a, b) => a.name.localeCompare(b.name)),
     byFuel: byFuel.map((r) => ({ name: label(r.fuelType), value: r._count._all })).sort((a, b) => b.value - a.value),
   };
 }
 
-export async function getRecentActivity(limit = 8) {
+export async function getRecentActivity(limit = 8, includeVehicle = false) {
   const rows = await prisma.auditLog.findMany({
     orderBy: { createdAt: "desc" },
     take: limit,
@@ -101,10 +139,14 @@ export async function getRecentActivity(limit = 8) {
     entity: a.entity,
     createdAt: a.createdAt,
     user: a.user?.fullName ?? a.user?.username ?? "System",
+    vehicleId: includeVehicle ? a.vehicleId : undefined,
   }));
 }
 
 export async function getDashboardKpis(): Promise<DashboardKpis> {
+  const cached = cacheGet(kpiCache, "kpis", CACHE_TTL_MS);
+  if (cached) return cached;
+
   const now = new Date();
   const nowYear = now.getFullYear();
   const CURRENT = {
@@ -127,6 +169,23 @@ export async function getDashboardKpis(): Promise<DashboardKpis> {
     ],
   };
   const ACTIVE_INS = { status: INSURANCE_STATUS.ACTIVE };
+
+  // All four window counts run in parallel with everything else (they used to
+  // be a sequential for-loop after the main batch — the slowest part of the
+  // endpoint).
+  const windows = await getReminderWindows();
+
+  const windowCount = (days: number, kind: "reg" | "ins") => {
+    const to = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+    return kind === "reg"
+      ? prisma.vehicleRegistration.count({
+          where: { expiryDate: { gte: now, lte: to } },
+        })
+      : prisma.vehicleInsurance.count({
+          where: { ...ACTIVE_INS, endDate: { gte: now, lte: to } },
+        });
+  };
+
   const [
     totalVehicles,
     registeredVehicles,
@@ -138,9 +197,10 @@ export async function getDashboardKpis(): Promise<DashboardKpis> {
     pendingRenewal,
     suspendedRegistrations,
     expiredInsurance,
-    ages,
+    ageAgg,
     newest,
     oldest,
+    ...windowResults
   ] = await Promise.all([
     prisma.vehicle.count(),
     prisma.vehicleRegistration.count({ where: CURRENT }),
@@ -152,28 +212,21 @@ export async function getDashboardKpis(): Promise<DashboardKpis> {
     prisma.vehicleRegistration.count({ where: { status: REGISTRATION_STATUS.PENDING_RENEWAL, expiryDate: { gte: now } } }),
     prisma.vehicleRegistration.count({ where: { status: REGISTRATION_STATUS.SUSPENDED } }),
     prisma.vehicleInsurance.count({ where: EFFECTIVE_EXPIRED_INS }),
-    prisma.vehicle.findMany({ where: { year: { gt: 1900 } } as any, select: { year: true } }),
+    // Aggregate average age in the database instead of pulling every vehicle
+    // row into JS.
+    prisma.vehicle.aggregate({ _avg: { year: true }, where: { year: { gt: 1900 } } }),
     prisma.vehicle.findFirst({ orderBy: { year: "desc" }, select: { vehicleCode: true, year: true } }),
     prisma.vehicle.findFirst({ orderBy: { year: "asc" }, select: { vehicleCode: true, year: true } }),
+    ...windows.map((w) => windowCount(w, "reg")),
+    ...windows.map((w) => windowCount(w, "ins")),
   ]);
 
-  const avgAge = ages.length
-    ? Math.round(ages.reduce((s, v) => s + (nowYear - (v.year ?? nowYear)), 0) / ages.length)
-    : 0;
-
-  const windows = await getReminderWindows();
   const regWindowCounts: Record<number, number> = {};
   const insWindowCounts: Record<number, number> = {};
-  for (const w of windows) {
-    const from = new Date();
-    const to = new Date(Date.now() + w * 24 * 60 * 60 * 1000);
-    regWindowCounts[w] = await prisma.vehicleRegistration.count({
-      where: { expiryDate: { gte: from, lte: to } },
-    });
-    insWindowCounts[w] = await prisma.vehicleInsurance.count({
-      where: { ...ACTIVE_INS, endDate: { gte: from, lte: to } },
-    });
-  }
+  windows.forEach((w, i) => {
+    regWindowCounts[w] = windowResults[i];
+    insWindowCounts[w] = windowResults[windows.length + i];
+  });
 
   const uninsuredVehicles = await prisma.vehicle.count({
     where: {
@@ -193,7 +246,11 @@ export async function getDashboardKpis(): Promise<DashboardKpis> {
     },
   });
 
-  return {
+  const avgAge = ageAgg._avg.year
+    ? Math.round(nowYear - ageAgg._avg.year)
+    : 0;
+
+  const value: DashboardKpis = {
     totalVehicles,
     registeredVehicles,
     activeVehicles,
@@ -213,4 +270,7 @@ export async function getDashboardKpis(): Promise<DashboardKpis> {
       insurance: insWindowCounts,
     },
   };
+
+  cacheSet(kpiCache, "kpis", value);
+  return value;
 }

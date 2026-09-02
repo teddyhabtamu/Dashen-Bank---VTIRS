@@ -392,10 +392,11 @@ export async function listInsurances(opts: {
   status?: string;
   from?: string;
   to?: string;
+  expiringWithin?: number;
   page?: number;
   pageSize?: number;
 }) {
-  const { search, coverage, status, from, to, page = 1, pageSize } = opts;
+  const { search, coverage, status, from, to, expiringWithin, page = 1, pageSize } = opts;
   const ps = pageSize ?? await defaultPageSize();
   const where: any = {};
   const statusCondition = status ? insuranceStatusCondition(status, new Date()) : null;
@@ -414,6 +415,15 @@ export async function listInsurances(opts: {
     where.endDate = {};
     if (from) where.endDate.gte = new Date(from);
     if (to) where.endDate.lte = new Date(to);
+  }
+  // Dashboard deep-link filter: positive = expires within N days (including
+  // already-expired so urgent items never hide between buckets); negative =
+  // only already-expired policies.
+  if (expiringWithin !== undefined && Number.isFinite(expiringWithin)) {
+    const now = new Date();
+    where.endDate = expiringWithin < 0
+      ? { ...where.endDate, lt: now }
+      : { ...where.endDate, lte: new Date(now.getTime() + expiringWithin * 24 * 60 * 60 * 1000) };
   }
 
   const [items, total] = await Promise.all([

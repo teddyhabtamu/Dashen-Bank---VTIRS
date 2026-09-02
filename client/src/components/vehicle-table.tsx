@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useState, useEffect, useCallback } from "react";
 import { Plus, Search, Car, Eye, Pencil, Trash2, ChevronLeft, ChevronRight, MoreVertical, Download } from "lucide-react";
 import { Tooltip } from "@/components/ui/tooltip";
@@ -46,7 +46,9 @@ export function VehicleTable() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
-  const [status, setStatus] = useState("");
+  // Hydrate from ?status= so dashboard stat cards can deep-link a filtered list.
+  const [searchParams] = useSearchParams();
+  const [status, setStatus] = useState(searchParams.get("status") ?? "");
   const [loading, setLoading] = useState(true);
   const [driverDetail, setDriverDetail] = useState<VehicleRow['currentDriver'] | null>(null);
   const [driverLoading, setDriverLoading] = useState(false);

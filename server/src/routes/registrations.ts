@@ -44,6 +44,7 @@ router.get(
     const result = await listRegistrations({
       search: (q.search as string) ?? undefined,
       status: (q.status as string) ?? undefined,
+      expiringWithin: q.expiringWithin !== undefined && q.expiringWithin !== "" ? Number(q.expiringWithin) : undefined,
       page: Number(q.page ?? "1"),
       pageSize: q.pageSize ? Number(q.pageSize) : undefined,
     });

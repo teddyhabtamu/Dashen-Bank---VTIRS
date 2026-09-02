@@ -6,27 +6,31 @@ import { ToastProvider } from "@/lib/toast-context";
 import { AuthProvider } from "@/components/auth-context";
 import { ProtectedLayout } from "@/components/protected-layout";
 import LoginPage from "@/pages/login";
-import DashboardPage from "@/pages/dashboard";
-import VehiclesPage from "@/pages/vehicles/list";
-import NewVehiclePage from "@/pages/vehicles/new";
-import EditVehiclePage from "@/pages/vehicles/edit";
-import VehicleDetailPage from "@/pages/vehicles/detail";
-import DriversPage from "@/pages/drivers/list";
-import DriverDetailPage from "@/pages/drivers/detail";
-import RegistrationsPage from "@/pages/registrations";
-import RegistrationHistoryPage from "@/pages/registrations/history";
-import InsurancesPage from "@/pages/insurances";
-import InsuranceHistoryPage from "@/pages/insurances/history";
-import DocumentsPage from "@/pages/documents";
-import SearchPage from "@/pages/search";
-import ReportsPage from "@/pages/reports";
-import AuditLogsPage from "@/pages/audit";
-import UsersPage from "@/pages/admin/users";
-import NotificationsPage from "@/pages/notifications";
-import RolesPage from "@/pages/admin/roles";
-import SettingsPage from "@/pages/admin/settings";
-import ProfilePage from "@/pages/profile";
 import "./index.css";
+
+// Route-level code splitting: each page (and its dependency tree — notably
+// echarts for reports/dashboard) loads only when visited. Login stays eager
+// so the very first paint of the app is unchanged.
+const DashboardPage = React.lazy(() => import("@/pages/dashboard"));
+const VehiclesPage = React.lazy(() => import("@/pages/vehicles/list"));
+const NewVehiclePage = React.lazy(() => import("@/pages/vehicles/new"));
+const EditVehiclePage = React.lazy(() => import("@/pages/vehicles/edit"));
+const VehicleDetailPage = React.lazy(() => import("@/pages/vehicles/detail"));
+const DriversPage = React.lazy(() => import("@/pages/drivers/list"));
+const DriverDetailPage = React.lazy(() => import("@/pages/drivers/detail"));
+const RegistrationsPage = React.lazy(() => import("@/pages/registrations"));
+const RegistrationHistoryPage = React.lazy(() => import("@/pages/registrations/history"));
+const InsurancesPage = React.lazy(() => import("@/pages/insurances"));
+const InsuranceHistoryPage = React.lazy(() => import("@/pages/insurances/history"));
+const DocumentsPage = React.lazy(() => import("@/pages/documents"));
+const SearchPage = React.lazy(() => import("@/pages/search"));
+const ReportsPage = React.lazy(() => import("@/pages/reports"));
+const AuditLogsPage = React.lazy(() => import("@/pages/audit"));
+const UsersPage = React.lazy(() => import("@/pages/admin/users"));
+const NotificationsPage = React.lazy(() => import("@/pages/notifications"));
+const RolesPage = React.lazy(() => import("@/pages/admin/roles"));
+const SettingsPage = React.lazy(() => import("@/pages/admin/settings"));
+const ProfilePage = React.lazy(() => import("@/pages/profile"));
 
 const router = createBrowserRouter([
   { path: "/login", element: <LoginPage /> },

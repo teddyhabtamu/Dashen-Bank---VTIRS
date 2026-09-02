@@ -9,6 +9,19 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        // echarts is huge but only used by the dashboard/reports charts. Split
+        // it (plus react-vendor) into its own chunks so the app shell stays
+        // small and charts download in parallel on first visit to those pages.
+        manualChunks: {
+          "echarts-chunk": ["echarts", "echarts-for-react"],
+          "react-chunk": ["react", "react-dom", "react-router-dom"],
+        },
+      },
+    },
+  },
   server: {
     port: 5173,
     proxy: {

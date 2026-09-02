@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "./auth-context";
 import { Sidebar } from "./sidebar";
@@ -42,7 +42,11 @@ export function ProtectedLayout() {
         <Breadcrumbs />
         <main className="flex-1 min-h-0 overflow-y-auto bg-slate-50 p-4 sm:p-6">
           <PageTransition key={location.pathname}>
-            <Outlet />
+            {/* Route pages are lazy-loaded (code-split); this fallback covers
+                the brief window while a chunk downloads on first visit. */}
+            <Suspense fallback={<BrandLoader fullscreen />}>
+              <Outlet />
+            </Suspense>
           </PageTransition>
         </main>
       </div>

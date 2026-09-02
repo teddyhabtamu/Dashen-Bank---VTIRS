@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import ReactECharts from "echarts-for-react";
 import { Download, CalendarRange, Car, Building2, Users, Clock, TrendingUp, CalendarClock, ShieldCheck, ClipboardList, FileCheck, DollarSign, BarChart3, type LucideIcon } from "lucide-react";
 import { Select } from "@/components/ui/select";
@@ -40,6 +40,7 @@ const DEFAULT_GROUPS: GroupDef[] = [
 export default function ReportsPage() {
   const { can } = useAuth();
   const { companyName } = useBrand();
+  const [searchParams] = useSearchParams();
   const [data, setData] = useState<ReportResp | null>(null);
   const [loading, setLoading] = useState(true);
   const [branchId, setBranchId] = useState("");
@@ -47,7 +48,8 @@ export default function ReportsPage() {
   const [status, setStatus] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
-  const [active, setActive] = useState("inventory");
+  // Deep-link support (?report=…) e.g. from the dashboard's compliance cards.
+  const [active, setActive] = useState(searchParams.get("report") ?? "inventory");
 
   useEffect(() => {
     const qs = new URLSearchParams();

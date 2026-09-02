@@ -1,5 +1,5 @@
 
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useCallback, useEffect, useState } from "react";
 import { Download, Plus, Search, ShieldCheck, MoreVertical, CalendarRange, Pencil, Trash2, RefreshCcw, History } from "lucide-react";
 import { BrandLoader } from "@/components/ui/brand-loader";
@@ -35,15 +35,18 @@ export default function InsurancesPage() {
   const { companyName } = useBrand();
   const { toast } = useToast();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [rows, setRows] = useState<InsRow[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(searchParams.get("search") ?? "");
   const [coverage, setCoverage] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
+  const [expiringWithin, setExpiringWithin] = useState<string | null>(searchParams.get("expiringWithin"));
   const [loading, setLoading] = useState(true);
   const [pageSize, setPageSize] = useState(15);
+  const [status, setStatus] = useState<string>("");
 
   const [createOpen, setCreateOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
@@ -59,13 +62,14 @@ export default function InsurancesPage() {
     if (status) qs.set("status", status);
     if (from) qs.set("from", from);
     if (to) qs.set("to", to);
+    if (expiringWithin) qs.set("expiringWithin", expiringWithin);
     const res = await fetch(`/api/insurances?${qs.toString()}`);
     const data = await res.json();
     setRows(data.items ?? []);
     setTotal(data.total ?? 0);
     if (data.pageSize) setPageSize(data.pageSize);
     setLoading(false);
-  }, [page, search, coverage, from, to]);
+  }, [page, search, coverage, from, to, expiringWithin, status]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -77,7 +81,6 @@ export default function InsurancesPage() {
   const [form, setForm] = useState({ vehicleId: "", company: "", policyNo: "", coverage: "", startDate: "", endDate: "", confirmSupersede: false });
   const [vehicles, setVehicles] = useState<{ value: string; label: string }[]>([]);
   const [err, setErr] = useState<string | null>(null);
-  const [status, setStatus] = useState<string>("");
 
   async function openCreate() {
     setErr(null);
@@ -149,6 +152,11 @@ export default function InsurancesPage() {
   if (status) chips.push({ key: "stat", label: `Status: ${status}`, clear: () => setStatus("") });
   if (from) chips.push({ key: "from", label: `From: ${from}`, clear: () => setFrom("") });
   if (to) chips.push({ key: "to", label: `To: ${to}`, clear: () => setTo("") });
+  if (expiringWithin) chips.push({
+    key: "window",
+    label: Number(expiringWithin) < 0 ? "Expired only" : `Expiring ≤ ${expiringWithin}d`,
+    clear: () => { setExpiringWithin(null); setPage(1); navigate("/insurances", { replace: true }); },
+  });
 
   return (
     <div className="space-y-4">

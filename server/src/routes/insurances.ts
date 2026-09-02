@@ -38,6 +38,7 @@ router.get("/", requireAuth(READ_PERMS), async (req, res) => {
     status: (q.status as string) ?? undefined,
     from: (q.from as string) ?? undefined,
     to: (q.to as string) ?? undefined,
+    expiringWithin: q.expiringWithin !== undefined && q.expiringWithin !== "" ? Number(q.expiringWithin) : undefined,
     page: Number(q.page ?? "1"),
     pageSize: q.pageSize ? Number(q.pageSize) : undefined,
   });

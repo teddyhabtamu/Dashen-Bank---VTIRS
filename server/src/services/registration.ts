@@ -607,15 +607,28 @@ function regStatusCondition(status: string, now: Date) {
 export async function listRegistrations(opts: {
   search?: string;
   status?: string;
+  expiringWithin?: number;
   page?: number;
   pageSize?: number;
 }) {
-  const { search, status, page = 1, pageSize } = opts;
+  const { search, status, expiringWithin, page = 1, pageSize } = opts;
   const ps = pageSize ?? await defaultPageSize();
 
   const conditions: any[] = [];
   if (status) {
     conditions.push(regStatusCondition(status, new Date()));
+  }
+  if (expiringWithin !== undefined && Number.isFinite(expiringWithin)) {
+    const now = new Date();
+    const to = new Date(now.getTime() + expiringWithin * 24 * 60 * 60 * 1000);
+    // Negative window = "already expired" (dashboard deep-link for expired
+    // counts); positive = "expires within N days" including anything already
+    // past its date so nothing urgent hides between the buckets.
+    conditions.push(
+      expiringWithin < 0
+        ? { expiryDate: { lt: now } }
+        : { expiryDate: { lte: to } }
+    );
   }
   if (search) {
     conditions.push({

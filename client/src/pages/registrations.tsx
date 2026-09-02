@@ -1,4 +1,4 @@
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useCallback, useEffect, useState } from "react";
 import { Plus, Search, MoreVertical, History, RotateCcw, AlertCircle, Archive, RefreshCw, Download, ClipboardList, Pencil, Play } from "lucide-react";
 import { StatusBadge } from "@/components/ui/badge";
@@ -34,12 +34,16 @@ export default function RegistrationsPage() {
   const { companyName } = useBrand();
   const { toast } = useToast();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const CURRENT = "CURRENT";
   const [rows, setRows] = useState<RegRow[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const [search, setSearch] = useState("");
-  const [status, setStatus] = useState(CURRENT);
+  const [search, setSearch] = useState(searchParams.get("search") ?? "");
+  const [status, setStatus] = useState(searchParams.get("status") ?? CURRENT);
+  // Deep-link window from the dashboard (?expiringWithin=30). Persisted so the
+  // user's own filter clicks don't fight the incoming link.
+  const [expiringWithin, setExpiringWithin] = useState<string | null>(searchParams.get("expiringWithin"));
   const [loading, setLoading] = useState(true);
   const [pageSize, setPageSize] = useState(15);
 
@@ -74,13 +78,14 @@ export default function RegistrationsPage() {
     qs.set("page", String(page));
     if (search) qs.set("search", search);
     if (status) qs.set("status", status);
+    if (expiringWithin) qs.set("expiringWithin", expiringWithin);
     const res = await fetch(`/api/registrations?${qs.toString()}`);
     const data = await res.json();
     setRows(data.items ?? []);
     setTotal(data.total ?? 0);
     if (data.pageSize) setPageSize(data.pageSize);
     setLoading(false);
-  }, [page, search, status]);
+  }, [page, search, status, expiringWithin]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -245,6 +250,11 @@ export default function RegistrationsPage() {
   const chips: { key: string; label: string; clear: () => void }[] = [];
   if (search) chips.push({ key: "q", label: `“${search}”`, clear: () => setSearch("") });
   if (status) chips.push({ key: "status", label: `Status: ${status === CURRENT ? "Current" : label(status)}`, clear: () => setStatus("") });
+  if (expiringWithin) chips.push({
+    key: "window",
+    label: Number(expiringWithin) < 0 ? "Expired only" : `Expiring ≤ ${expiringWithin}d`,
+    clear: () => { setExpiringWithin(null); setPage(1); navigate("/registrations", { replace: true }); },
+  });
 
   return (
     <div className="space-y-4">
