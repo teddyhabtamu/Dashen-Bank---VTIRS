@@ -26,6 +26,7 @@ router.get("/", requireAuth(), async (req, res) => {
     status: (q.status as string) ?? undefined,
     branchId: (q.branchId as string) ?? undefined,
     unassigned: q.unassigned === "true",
+    licenseExpiringWithin: q.licenseExpiringWithin !== undefined && q.licenseExpiringWithin !== "" ? Number(q.licenseExpiringWithin) : undefined,
     page: Number(q.page ?? "1"),
     pageSize: q.pageSize ? Number(q.pageSize) : undefined,
   });

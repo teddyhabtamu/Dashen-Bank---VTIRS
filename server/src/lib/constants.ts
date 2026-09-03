@@ -136,6 +136,7 @@ export const LABELS: Record<string, string> = {
   OTHER: "Other",
   REGISTRATION_REMINDER: "Registration Reminder",
   INSURANCE_REMINDER: "Insurance Reminder",
+  DRIVER_LICENSE_REMINDER: "Driver License Reminder",
   EXPIRED_DOCUMENT: "Expired Document",
   SYSTEM: "System",
 };

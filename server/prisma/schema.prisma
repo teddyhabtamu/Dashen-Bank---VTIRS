@@ -102,6 +102,7 @@ model Driver {
   employeeId   String?      @unique
   fullName     String
   licenseNo    String?
+  licenseExpiry DateTime?
   phone        String?
   departmentId String?
   department   Department?  @relation(fields: [departmentId], references: [id])

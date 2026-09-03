@@ -13,16 +13,18 @@ interface SweepContext {
   windowsByType: Record<string, ReminderWindows>;
   enableReg: string;
   enableIns: string;
+  enableLicense: string;
 }
 
 async function loadSweepContext(): Promise<SweepContext> {
-  const [windows, windowsByType, enableReg, enableIns] = await Promise.all([
+  const [windows, windowsByType, enableReg, enableIns, enableLicense] = await Promise.all([
     getReminderWindows(),
     getReminderWindowsByType(),
     getSetting("notify_registration", "true"),
     getSetting("notify_insurance", "true"),
+    getSetting("notify_driver_license", "true"),
   ]);
-  return { windows, windowsByType, enableReg, enableIns };
+  return { windows, windowsByType, enableReg, enableIns, enableLicense };
 }
 
 function windowsFor(ctx: SweepContext, type: string | null | undefined): ReminderWindows {
@@ -105,6 +107,36 @@ async function generateNotificationsWith(userId: string, ctx: SweepContext) {
     }
   }
 
+  if (ctx.enableLicense !== "false") {
+    // Drivers have no vehicle type, so the global windows apply. Inactive
+    // drivers aren't driving, so their licenses don't page anyone.
+    const expiringLicenses = await prisma.driver.findMany({
+      where: {
+        isActive: true,
+        licenseExpiry: { not: null, lte: horizon },
+      },
+      select: { id: true, fullName: true, licenseNo: true, licenseExpiry: true },
+    });
+
+    for (const d of expiringLicenses) {
+      const days = daysUntil(d.licenseExpiry);
+      const expired = days !== null && days < 0;
+      if (!expired && days !== null && days > horizonDays) continue;
+      const stage = getReminderStage(days, windows, horizonDays);
+      const title = expired ? "Driver License Expired" : "Driver License Expiring Soon";
+      const message = expired
+        ? `${d.fullName}${d.licenseNo ? ` (${d.licenseNo})` : ""}'s driving license expired on ${d.licenseExpiry!.toLocaleDateString("en-GB")}. They must not drive until renewed.`
+        : `${d.fullName}${d.licenseNo ? ` (${d.licenseNo})` : ""}'s driving license expires in ${days} day${days === 1 ? "" : "s"}.`;
+      const link = `/drivers/${d.id}`;
+      const meta = JSON.stringify({ driverId: d.id, fullName: d.fullName, stage });
+
+      if (await shouldCreate(userId, "DRIVER_LICENSE_REMINDER", link, title, stage)) {
+        await create(userId, "DRIVER_LICENSE_REMINDER", title, message, link, meta);
+        count++;
+      }
+    }
+  }
+
   return count;
 }
 
@@ -138,6 +170,16 @@ export async function generateNotificationsForAllUsers() {
 //
 //   markRemindersResolvedForVehicle(vehicleId, type) — keep this variant for
 //     cases where history should be preserved.
+export async function resolveRemindersForDriver(driverId: string) {
+  const result = await prisma.notification.deleteMany({
+    where: {
+      type: "DRIVER_LICENSE_REMINDER",
+      link: `/drivers/${driverId}`,
+    },
+  });
+  return { resolved: result.count };
+}
+
 export async function resolveRemindersForVehicle(vehicleId: string, type: "REGISTRATION_REMINDER" | "INSURANCE_REMINDER") {
   const result = await prisma.notification.deleteMany({
     where: {

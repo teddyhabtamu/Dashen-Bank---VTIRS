@@ -97,6 +97,7 @@ export async function seedDefaultSettings() {
     { key: "max_login_attempts", value: "5", label: "Max failed logins before account lockout", group: "Security" },
     { key: "notify_registration", value: "true", label: "Generate registration expiry reminders", group: "Reminders" },
     { key: "notify_insurance", value: "true", label: "Generate insurance expiry reminders", group: "Reminders" },
+    { key: "notify_driver_license", value: "true", label: "Generate driver license expiry reminders", group: "Reminders" },
     { key: "reminder_windows_by_type", value: "{}", label: "Per-type reminder windows (override defaults by vehicle type)", group: "Reminders" },
     { key: "required_document_categories", value: "[\"REGISTRATION_CERT\",\"INSURANCE_CERT\",\"INSPECTION_CERT\"]", label: "Required document categories", group: "Documents" },
   ];

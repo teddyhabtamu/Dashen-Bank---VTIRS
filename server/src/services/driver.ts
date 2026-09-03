@@ -1,6 +1,7 @@
 import { prisma } from "../lib/prisma.js";
 import { writeAudit, type AuditReq } from "../lib/audit.js";
 import { defaultPageSize } from "./setting.js";
+import { resolveRemindersForDriver } from "./notification.js";
 
 export class DuplicateDriverError extends Error {
   field: string;
@@ -18,6 +19,7 @@ interface Context {
 export interface DriverInput {
   employeeId?: string | null;
   fullName?: string;
+  licenseExpiry?: string | null;
   licenseNo?: string | null;
   phone?: string | null;
   departmentId?: string | null;
@@ -41,10 +43,11 @@ export async function listDrivers(opts: {
   status?: string;
   branchId?: string;
   unassigned?: boolean;
+  licenseExpiringWithin?: number;
   page?: number;
   pageSize?: number;
 }) {
-  const { search, departmentId, status, branchId, unassigned, page = 1, pageSize } = opts;
+  const { search, departmentId, status, branchId, unassigned, licenseExpiringWithin, page = 1, pageSize } = opts;
   const ps = pageSize ?? (await defaultPageSize());
   const where: any = {};
   if (departmentId) where.departmentId = departmentId;
@@ -55,6 +58,13 @@ export async function listDrivers(opts: {
   if (branchId) where.vehicles = { some: { branchId } };
   // Quick staffing filter: no current vehicle at all.
   if (unassigned) where.vehicles = { none: {} };
+  if (licenseExpiringWithin !== undefined && Number.isFinite(licenseExpiringWithin)) {
+    const now = new Date();
+    where.licenseExpiry =
+      licenseExpiringWithin < 0
+        ? { lt: now }
+        : { lte: new Date(now.getTime() + licenseExpiringWithin * 24 * 60 * 60 * 1000) };
+  }
   if (search) {
     const q = { contains: search, mode: "insensitive" as const };
     where.OR = [
@@ -125,6 +135,7 @@ export async function createDriver(input: DriverInput, ctx: Context = {}) {
       employeeId: input.employeeId || undefined,
       fullName: input.fullName!,
       licenseNo: input.licenseNo || undefined,
+      licenseExpiry: input.licenseExpiry ? new Date(input.licenseExpiry) : undefined,
       phone: input.phone || undefined,
       departmentId: input.departmentId || undefined,
       isActive: input.isActive ?? true,
@@ -154,6 +165,9 @@ export async function updateDriver(id: string, input: Partial<DriverInput>, ctx:
       ...(input.employeeId !== undefined && { employeeId: input.employeeId || null }),
       ...(input.fullName !== undefined && { fullName: input.fullName }),
       ...(input.licenseNo !== undefined && { licenseNo: input.licenseNo || null }),
+      ...(input.licenseExpiry !== undefined && {
+        licenseExpiry: input.licenseExpiry ? new Date(input.licenseExpiry) : null,
+      }),
       ...(input.phone !== undefined && { phone: input.phone || null }),
       ...(input.departmentId !== undefined && { departmentId: input.departmentId || null }),
       ...(input.isActive !== undefined && { isActive: input.isActive }),
@@ -169,6 +183,12 @@ export async function updateDriver(id: string, input: Partial<DriverInput>, ctx:
     newValue: driver,
     req: ctx.req,
   });
+
+  // A changed license date invalidates any pending license reminder for this
+  // driver. Best-effort: never fail the update because cleanup errored.
+  if (input.licenseExpiry !== undefined) {
+    await resolveRemindersForDriver(id).catch(() => undefined);
+  }
   return driver;
 }
 
@@ -190,5 +210,9 @@ export async function deleteDriver(id: string, ctx: Context = {}) {
     oldValue: existing,
     req: ctx.req,
   });
+
+  // With the driver gone there is nothing left to be reminded about.
+  await resolveRemindersForDriver(id).catch(() => undefined);
+
   return existing;
 }

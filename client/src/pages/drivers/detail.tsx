@@ -5,6 +5,7 @@ import { BrandLoader } from "@/components/ui/brand-loader";
 import { Modal } from "@/components/ui/modal";
 import { Select } from "@/components/ui/select";
 import { PhoneInput } from "@/components/ui/phone-input";
+import { DatePicker } from "@/components/ui/datepicker";
 import { useAuth } from "@/components/auth-context";
 import { useToast } from "@/lib/toast-context";
 import { formatDate } from "@/lib/format";
@@ -34,6 +35,7 @@ interface DriverDetail {
   fullName: string;
   employeeId: string | null;
   licenseNo: string | null;
+  licenseExpiry: string | null;
   phone: string | null;
   isActive: boolean;
   createdAt: string;
@@ -76,6 +78,7 @@ export default function DriverDetailPage() {
     fullName: "",
     employeeId: "",
     licenseNo: "",
+    licenseExpiry: "",
     phone: "",
     departmentId: "",
     isActive: true,
@@ -173,6 +176,7 @@ export default function DriverDetailPage() {
       fullName: driver.fullName,
       employeeId: driver.employeeId ?? "",
       licenseNo: driver.licenseNo ?? "",
+      licenseExpiry: driver.licenseExpiry ? driver.licenseExpiry.slice(0, 10) : "",
       phone: driver.phone ?? "",
       departmentId: driver.departmentId ?? "",
       isActive: driver.isActive,
@@ -193,6 +197,7 @@ export default function DriverDetailPage() {
           fullName: editForm.fullName,
           employeeId: editForm.employeeId || null,
           licenseNo: editForm.licenseNo || null,
+          licenseExpiry: editForm.licenseExpiry || null,
           phone: editForm.phone || null,
           departmentId: editForm.departmentId || null,
           isActive: editForm.isActive,
@@ -309,6 +314,7 @@ export default function DriverDetailPage() {
           <div className="divide-y divide-slate-100">
             <Attr label="Employee ID" value={driver.employeeId ? <span className="font-mono">{driver.employeeId}</span> : null} />
             <Attr label={<span className="inline-flex items-center gap-1"><BadgeCheck className="h-3.5 w-3.5" /> License</span>} value={driver.licenseNo} />
+            <Attr label="License Expiry" value={driver.licenseExpiry ? formatDate(driver.licenseExpiry) : null} />
             <Attr label={<span className="inline-flex items-center gap-1"><Phone className="h-3.5 w-3.5" /> Phone</span>} value={driver.phone} />
             <Attr label={<span className="inline-flex items-center gap-1"><Building2 className="h-3.5 w-3.5" /> Department</span>} value={driver.department?.name} />
           </div>
@@ -433,6 +439,11 @@ export default function DriverDetailPage() {
             License No.
             <input className="input mt-1"
               value={editForm.licenseNo} onChange={(e) => setEditForm({ ...editForm, licenseNo: e.target.value })} disabled={editBusy} />
+          </label>
+          <label className="text-sm">
+            License Expiry
+            <div className="mt-1"><DatePicker value={editForm.licenseExpiry} onChange={(v) => setEditForm({ ...editForm, licenseExpiry: v })} /></div>
+            {editFieldErrors.licenseExpiry && <p className="mt-0.5 text-xs text-red-500">{editFieldErrors.licenseExpiry}</p>}
           </label>
           <label className="text-sm">
             Phone

@@ -4,6 +4,7 @@ import { Users, Search, Plus, MoreVertical, Pencil, Trash2, Download, UserRound,
 import { BrandLoader } from "@/components/ui/brand-loader";
 import { Select } from "@/components/ui/select";
 import { PhoneInput } from "@/components/ui/phone-input";
+import { DatePicker } from "@/components/ui/datepicker";
 import { Modal } from "@/components/ui/modal";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { Dropdown } from "@/components/ui/dropdown";
@@ -19,6 +20,7 @@ interface DriverRow {
   fullName: string;
   employeeId: string | null;
   licenseNo: string | null;
+  licenseExpiry: string | null;
   phone: string | null;
   departmentId: string | null;
   department: { id: string; name: string } | null;
@@ -27,6 +29,22 @@ interface DriverRow {
 }
 
 const PAGE_SIZES = [15, 25, 50, 100];
+
+// License expiry badge shared by the table + mobile cards. Null expiry means
+// "unknown", never "valid" — an unrecorded license date is itself a gap.
+function licenseBadge(expiry: string | null) {
+  if (!expiry) {
+    return <span className="badge bg-slate-100 text-slate-400" title="No expiry date recorded">No date</span>;
+  }
+  const ms = new Date(expiry).getTime() - Date.now();
+  if (Number.isNaN(ms)) return null;
+  if (ms < 0) return <span className="badge bg-red-100 text-red-700">Expired</span>;
+  const days = Math.ceil(ms / (24 * 60 * 60 * 1000));
+  if (days <= 30) {
+    return <span className="badge bg-amber-100 text-amber-700" title={`Expires ${new Date(expiry).toLocaleDateString("en-GB")}`}>{days}d left</span>;
+  }
+  return null;
+}
 
 const STATUS_OPTIONS = [
   { value: "", label: "All Statuses" },
@@ -48,6 +66,7 @@ export default function DriversPage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [branchFilter, setBranchFilter] = useState("");
   const [unassignedOnly, setUnassignedOnly] = useState(false);
+  const [licenseFilter, setLicenseFilter] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [departments, setDepartments] = useState<{ id: string; name: string }[]>([]);
@@ -64,6 +83,7 @@ export default function DriversPage() {
     fullName: "",
     employeeId: "",
     licenseNo: "",
+    licenseExpiry: "",
     phone: "",
     departmentId: "",
     isActive: true,
@@ -90,6 +110,7 @@ export default function DriversPage() {
     if (statusFilter) qs.set("status", statusFilter);
     if (branchFilter) qs.set("branchId", branchFilter);
     if (unassignedOnly) qs.set("unassigned", "true");
+    if (licenseFilter) qs.set("licenseExpiringWithin", licenseFilter);
     try {
       const res = await fetch(`/api/drivers?${qs.toString()}`);
       if (!res.ok) throw new Error(`Request failed (${res.status})`);
@@ -103,7 +124,7 @@ export default function DriversPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, search, deptFilter, statusFilter, branchFilter, unassignedOnly]);
+  }, [page, pageSize, search, deptFilter, statusFilter, branchFilter, unassignedOnly, licenseFilter]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -187,14 +208,20 @@ export default function DriversPage() {
   if (statusFilter) chips.push({ key: "status", label: `Status: ${statusFilter === "ACTIVE" ? "Active" : "Inactive"}`, clear: () => setStatusFilter("") });
   if (branchFilter) chips.push({ key: "branch", label: `Branch: ${branches.find((b) => b.id === branchFilter)?.name ?? "…"}`, clear: () => setBranchFilter("") });
   if (unassignedOnly) chips.push({ key: "unassigned", label: "Unassigned only", clear: () => setUnassignedOnly(false) });
+  if (licenseFilter) chips.push({
+    key: "license",
+    label: licenseFilter === "-1" ? "License expired" : `License ≤ ${licenseFilter}d`,
+    clear: () => setLicenseFilter(""),
+  });
 
   function clearAllFilters() {
     setSearch(""); setDeptFilter(""); setStatusFilter(""); setBranchFilter(""); setUnassignedOnly(false);
+    setLicenseFilter("");
     setPage(1);
   }
 
   function resetForm() {
-    setForm({ fullName: "", employeeId: "", licenseNo: "", phone: "", departmentId: "", isActive: true });
+    setForm({ fullName: "", employeeId: "", licenseNo: "", licenseExpiry: "", phone: "", departmentId: "", isActive: true });
     setFieldErrors({});
     setErr(null);
   }
@@ -212,6 +239,7 @@ export default function DriversPage() {
       fullName: row.fullName,
       employeeId: row.employeeId ?? "",
       licenseNo: row.licenseNo ?? "",
+      licenseExpiry: row.licenseExpiry ? row.licenseExpiry.slice(0, 10) : "",
       phone: row.phone ?? "",
       departmentId: row.departmentId ?? "",
       isActive: row.isActive,
@@ -229,6 +257,7 @@ export default function DriversPage() {
       fullName: form.fullName,
       employeeId: form.employeeId || null,
       licenseNo: form.licenseNo || null,
+      licenseExpiry: form.licenseExpiry || null,
       phone: form.phone || null,
       departmentId: form.departmentId || null,
       isActive: form.isActive,
@@ -344,6 +373,18 @@ export default function DriversPage() {
           ]}
           clearable
         />
+        <Select
+          className="w-full sm:w-44"
+          value={licenseFilter}
+          onChange={(v) => { setLicenseFilter(v); setPage(1); }}
+          placeholder="License: any"
+          options={[
+            { value: "", label: "License: any" },
+            { value: "-1", label: "License expired" },
+            { value: "30", label: "License expiring ≤ 30d" },
+            { value: "90", label: "License expiring ≤ 90d" },
+          ]}
+        />
         <button
           onClick={() => { setUnassignedOnly((u) => !u); setPage(1); }}
           className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${unassignedOnly ? "border-primary bg-primary/10 text-primary" : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"}`}
@@ -416,7 +457,12 @@ export default function DriversPage() {
                         </Link>
                       </td>
                       <td className="px-4 py-3 font-mono text-xs text-slate-600">{row.employeeId || "—"}</td>
-                      <td className="px-4 py-3 text-slate-600">{row.licenseNo || "—"}</td>
+                      <td className="px-4 py-3 text-slate-600">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span>{row.licenseNo || "—"}</span>
+                          {licenseBadge(row.licenseExpiry)}
+                        </div>
+                      </td>
                       <td className="px-4 py-3 text-slate-600">{row.department?.name || "—"}</td>
                       <td className="px-4 py-3 text-slate-600">
                         {row.vehicles[0] ? (
@@ -471,7 +517,10 @@ export default function DriversPage() {
                   </div>
                   <div className="grid grid-cols-2 gap-1 text-xs">
                     <span className="text-slate-500">License:</span>
-                    <span className="text-slate-700">{row.licenseNo || "—"}</span>
+                    <span className="flex flex-wrap items-center gap-1.5 text-slate-700">
+                      {row.licenseNo || "—"}
+                      {licenseBadge(row.licenseExpiry)}
+                    </span>
                     <span className="text-slate-500">Department:</span>
                     <span className="text-slate-700">{row.department?.name || "—"}</span>
                     <span className="text-slate-500">Vehicle:</span>
@@ -553,6 +602,11 @@ export default function DriversPage() {
             License No.
             <input className="input mt-1"
               value={form.licenseNo} onChange={(e) => setForm({ ...form, licenseNo: e.target.value })} disabled={busy} />
+          </label>
+          <label className="text-sm">
+            License Expiry
+            <div className="mt-1"><DatePicker value={form.licenseExpiry} onChange={(v) => setForm({ ...form, licenseExpiry: v })} /></div>
+            {fieldErrors.licenseExpiry && <p className="mt-0.5 text-xs text-red-500">{fieldErrors.licenseExpiry}</p>}
           </label>
           <label className="text-sm">
             Phone

@@ -17,7 +17,7 @@ interface Kpis {
   totalVehicles: number; registeredVehicles: number; activeVehicles: number;
   assignedVehicles: number; vehiclesUnderMaintenance: number; disposedVehicles: number;
   expiredRegistrations: number; pendingRenewal: number; suspendedRegistrations: number;
-  expiredInsurance: number; uninsuredVehicles: number; averageAge: number;
+  expiredInsurance: number; uninsuredVehicles: number; expiredLicenses: number; expiringLicenses: number; averageAge: number;
   newestVehicle: { code: string; year: number } | null;
   oldestVehicle: { code: string; year: number } | null;
   expiringInWindow: { registration: Record<number, number>; insurance: Record<number, number> };
@@ -181,6 +181,14 @@ export default function DashboardPage() {
     k.uninsuredVehicles > 0 && {
       count: k.uninsuredVehicles, text: `${k.uninsuredVehicles} vehicle${k.uninsuredVehicles > 1 ? "s" : ""} without valid insurance`,
       link: "/reports?report=documentCompleteness", linkText: "Check vehicles",
+    },
+    k.expiredLicenses > 0 && {
+      count: k.expiredLicenses, text: `${k.expiredLicenses} expired driver license${k.expiredLicenses > 1 ? "s" : ""}`,
+      link: "/drivers?expiringWithin=-1", linkText: "Review drivers",
+    },
+    k.expiringLicenses > 0 && {
+      count: k.expiringLicenses, text: `${k.expiringLicenses} driver license${k.expiringLicenses > 1 ? "s" : ""} expiring soon`,
+      link: "/drivers?expiringWithin=30", linkText: "Review drivers",
     },
   ].filter(Boolean) as { count: number; text: string; link: string; linkText: string }[];
   const showBanner = bannerItems.length > 0;

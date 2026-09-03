@@ -11,6 +11,8 @@ export interface DashboardKpis {
   disposedVehicles: number;
   expiredRegistrations: number;
   expiredInsurance: number; // effective expired: stored EXPIRED or ACTIVE past-end
+  expiredLicenses: number; // active drivers whose licenseExpiry is past
+  expiringLicenses: number; // active drivers whose license expires within the max window
   pendingRenewal: number;
   suspendedRegistrations: number;
   uninsuredVehicles: number; // vehicles with no in-force ACTIVE policy
@@ -197,6 +199,8 @@ export async function getDashboardKpis(): Promise<DashboardKpis> {
     pendingRenewal,
     suspendedRegistrations,
     expiredInsurance,
+    expiredLicenses,
+    expiringLicenses,
     ageAgg,
     newest,
     oldest,
@@ -212,6 +216,17 @@ export async function getDashboardKpis(): Promise<DashboardKpis> {
     prisma.vehicleRegistration.count({ where: { status: REGISTRATION_STATUS.PENDING_RENEWAL, expiryDate: { gte: now } } }),
     prisma.vehicleRegistration.count({ where: { status: REGISTRATION_STATUS.SUSPENDED } }),
     prisma.vehicleInsurance.count({ where: EFFECTIVE_EXPIRED_INS }),
+    prisma.driver.count({ where: { isActive: true, licenseExpiry: { not: null, lt: now } } }),
+    prisma.driver.count({
+      where: {
+        isActive: true,
+        licenseExpiry: {
+          not: null,
+          gte: now,
+          lte: new Date(Date.now() + Math.max(...windows) * 24 * 60 * 60 * 1000),
+        },
+      },
+    }),
     // Aggregate average age in the database instead of pulling every vehicle
     // row into JS.
     prisma.vehicle.aggregate({ _avg: { year: true }, where: { year: { gt: 1900 } } }),
@@ -261,6 +276,8 @@ export async function getDashboardKpis(): Promise<DashboardKpis> {
     pendingRenewal,
     suspendedRegistrations,
     expiredInsurance,
+    expiredLicenses,
+    expiringLicenses,
     uninsuredVehicles,
     averageAge: avgAge,
     newestVehicle: newest ? { code: newest.vehicleCode, year: newest.year } : null,

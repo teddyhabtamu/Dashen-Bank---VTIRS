@@ -21,6 +21,14 @@ export const driverSchema = z.object({
   employeeId: z.preprocess(emptyToUndef, z.string().max(50).nullable().optional()),
   fullName: z.string().min(1, "Full name is required"),
   licenseNo: z.preprocess(emptyToUndef, z.string().nullable().optional()),
+  licenseExpiry: z.preprocess(
+    emptyToUndef,
+    z
+      .string()
+      .refine((v) => !Number.isNaN(new Date(v as string).getTime()), "Invalid date")
+      .nullable()
+      .optional()
+  ),
   phone: z.preprocess(
     emptyToUndef,
     z
