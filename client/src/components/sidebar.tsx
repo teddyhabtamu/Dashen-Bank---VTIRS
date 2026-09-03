@@ -226,7 +226,7 @@ export function Sidebar({
           })}
         </nav>
 
-        <div ref={userMenuRef} className="relative shrink-0 border-t border-white/10 px-2 pb-3 pt-2">
+        <div ref={userMenuRef} className="pb-safe relative shrink-0 border-t border-white/10 px-2 pb-3 pt-2">
           <button
             onClick={() => setUserMenuOpen((o) => !o)}
             className={cn(

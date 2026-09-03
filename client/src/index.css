@@ -25,7 +25,13 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-*:focus { outline: none; }
+*:focus:not(:focus-visible) { outline: none; }
+
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
 
 *::-webkit-scrollbar {
   width: 10px;
@@ -64,4 +70,29 @@ body {
   .badge {
     @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium;
   }
+}
+
+/* Touch devices: keep dense desktop sizing, but guarantee readable form text
+   (prevents iOS auto-zoom on sub-16px inputs) and reachable tap targets. */
+@media (pointer: coarse) {
+  .input {
+    font-size: 16px;
+  }
+  .btn,
+  .btn-primary,
+  .btn-secondary,
+  .btn-outline {
+    min-height: 44px;
+  }
+  button[class~="p-1"],
+  button[class~="p-1.5"],
+  button[class~="p-2"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
+/* Notch/home-indicator safe area for bottom-anchored mobile surfaces. */
+.pb-safe {
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
 }

@@ -74,7 +74,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       {children}
       {typeof document !== "undefined" &&
         createPortal(
-          <div className="pointer-events-none fixed inset-0 z-[90] flex flex-col items-end justify-end gap-2 p-4">
+          <div className="pb-safe pointer-events-none fixed inset-0 z-[90] flex flex-col items-end justify-end gap-2 p-4">
             {toasts.map((t) => (
               <div key={t.id} className="pointer-events-auto w-full max-w-sm">
                 <ToastItem t={t} onClose={() => remove(t.id)} />
