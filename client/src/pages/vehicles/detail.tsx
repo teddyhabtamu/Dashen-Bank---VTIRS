@@ -366,6 +366,8 @@ export default function VehicleDetailPage() {
             initial={v.registrations}
             canRenew={can(PERMISSIONS.REGISTRATION_RENEW)}
             canSuspend={can(PERMISSIONS.REGISTRATION_SUSPEND)}
+            canManage={can(PERMISSIONS.REGISTRATION_MANAGE)}
+            onChanged={load}
           />
         </section>
 
