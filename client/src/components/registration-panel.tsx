@@ -6,7 +6,7 @@ import { StatusBadge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
 import { Dropdown } from "@/components/ui/dropdown";
 import { Tooltip } from "@/components/ui/tooltip";
-import { DatePicker } from "@/components/ui/datepicker";
+import { RegistrationRenewModal } from "@/components/registration-modals";
 import { MoreVertical } from "lucide-react";
 import { formatDate, daysUntil } from "@/lib/format";
 import { useToast } from "@/lib/toast-context";
@@ -36,7 +36,7 @@ export function RegistrationPanel({ vehicleId, initial, canRenew, canSuspend }: 
 }) {
   const { toast } = useToast();
   const [regs, setRegs] = useState<Reg[]>(initial);
-  const [renewId, setRenewId] = useState<string | null>(null);
+  const [renewId, setRenewId] = useState<{ id: string; expiryDate: string } | null>(null);
   const [suspendId, setSuspendId] = useState<string | null>(null);
   const [resumeId, setResumeId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -61,7 +61,7 @@ export function RegistrationPanel({ vehicleId, initial, canRenew, canSuspend }: 
   async function doRenew(date: string) {
     if (!renewId) return; setBusy(true);
     try {
-      const res = await fetch(`/api/registrations/${renewId}/renew`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ expiryDate: date }) });
+      const res = await fetch(`/api/registrations/${renewId.id}/renew`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ expiryDate: date }) });
       if (!res.ok) { const d = await res.json().catch(() => ({})); toast("error", d?.error ?? "Renewal failed"); return; }
       await refresh();
     } finally { setBusy(false); setRenewId(null); }
@@ -123,7 +123,7 @@ export function RegistrationPanel({ vehicleId, initial, canRenew, canSuspend }: 
                     items={eff === "SUSPENDED" ? [
                       ...(canSuspend ? [{ label: "Resume", icon: <Play className="h-4 w-4" />, onClick: () => setResumeId(r.id) }] : []),
                     ] : [
-                      ...(canRenew ? [{ label: "Renew", icon: <RefreshCw className="h-4 w-4" />, onClick: () => setRenewId(r.id) }] : []),
+                      ...(canRenew ? [{ label: "Renew", icon: <RefreshCw className="h-4 w-4" />, onClick: () => setRenewId({ id: r.id, expiryDate: r.expiryDate as string }) }] : []),
                       ...(canSuspend ? [{ label: "Suspend", icon: <Ban className="h-4 w-4" />, danger: true, onClick: () => setSuspendId(r.id) }] : []),
                     ]}
                   />
@@ -141,33 +141,10 @@ export function RegistrationPanel({ vehicleId, initial, canRenew, canSuspend }: 
         );
       })}
 
-      <RenewModal open={renewId !== null} onClose={() => setRenewId(null)} onConfirm={doRenew} loading={busy} />
+      <RegistrationRenewModal open={renewId !== null} onClose={() => setRenewId(null)} onConfirm={doRenew} loading={busy} currentExpiry={renewId?.expiryDate} />
       <SuspendModal open={suspendId !== null} onClose={() => setSuspendId(null)} onConfirm={doSuspend} loading={busy} />
       <ResumeModal open={resumeId !== null} onClose={() => setResumeId(null)} onConfirm={doResume} loading={busy} />
     </div>
-  );
-}
-
-function RenewModal({ open, onClose, onConfirm, loading }: { open: boolean; onClose: () => void; onConfirm: (date: string) => void; loading: boolean }) {
-  const [date, setDate] = useState("");
-  // Renewals must land in the future (server-enforced); catch it client-side
-  // so the user isn't told only after submitting.
-  const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-  const valid = Boolean(date) && date > tomorrow.slice(0, 10);
-  return (
-    <Modal open={open} onClose={loading ? () => {} : onClose} title="Renew Registration" footer={
-      <><button className="btn-outline" onClick={onClose} disabled={loading}>Cancel</button>
-      <button className="btn-primary" onClick={() => onConfirm(date)} disabled={loading || !valid}>Renew</button></>
-    }>
-      <label className="text-sm">New Expiry Date
-        <div className="mt-1">
-          <DatePicker value={date} onChange={(v) => setDate(v)} />
-        </div>
-      </label>
-      {date && !valid && (
-        <p className="mt-2 text-xs text-red-500">The new expiry must be after tomorrow — the current date can't be extended to today or the past.</p>
-      )}
-    </Modal>
   );
 }
 

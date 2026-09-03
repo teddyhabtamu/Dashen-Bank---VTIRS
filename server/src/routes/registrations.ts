@@ -45,6 +45,8 @@ router.get(
       search: (q.search as string) ?? undefined,
       status: (q.status as string) ?? undefined,
       expiringWithin: q.expiringWithin !== undefined && q.expiringWithin !== "" ? Number(q.expiringWithin) : undefined,
+      branchId: (q.branchId as string) ?? undefined,
+      vehicleId: (q.vehicleId as string) ?? undefined,
       page: Number(q.page ?? "1"),
       pageSize: q.pageSize ? Number(q.pageSize) : undefined,
     });
@@ -125,12 +127,19 @@ router.delete(
   "/:id",
   requireAuth(PERMISSIONS.REGISTRATION_MANAGE),
   async (req, res) => {
-    const deleted = await deleteRegistration(req.params.id, {
-      userId: req.session!.userId,
-      req,
-    });
-    if (!deleted) return res.status(404).json({ error: "Not found" });
-    res.json({ ok: true });
+    try {
+      const deleted = await deleteRegistration(req.params.id, {
+        userId: req.session!.userId,
+        req,
+      });
+      if (!deleted) return res.status(404).json({ error: "Not found" });
+      res.json({ ok: true });
+    } catch (e) {
+      if (e instanceof ValidationError) {
+        return res.status(422).json({ error: e.message, field: e.field });
+      }
+      throw e;
+    }
   }
 );
 

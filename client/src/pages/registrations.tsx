@@ -1,6 +1,6 @@
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useCallback, useEffect, useState } from "react";
-import { Plus, Search, MoreVertical, History, RotateCcw, AlertCircle, Archive, RefreshCw, Download, ClipboardList, Pencil, Play } from "lucide-react";
+import { Plus, Search, MoreVertical, History, RotateCcw, AlertCircle, Archive, RefreshCw, Download, ClipboardList, Pencil, Play, Trash2, X, AlertOctagon } from "lucide-react";
 import { StatusBadge } from "@/components/ui/badge";
 import { BrandLoader } from "@/components/ui/brand-loader";
 import { useBrand } from "@/lib/brand-context";
@@ -16,6 +16,8 @@ import { formatDate } from "@/lib/format";
 import { useToast } from "@/lib/toast-context";
 import { exportCsv, exportXlsx, exportPdf, rowsToHtmlTable } from "@/lib/export";
 import { effectiveRegistrationStatus, type ReminderWindows } from "@/lib/services/reminders";
+import { PERMISSIONS } from "@/lib/rbac";
+import { RegistrationRenewModal } from "@/components/registration-modals";
 
 interface RegRow {
   id: string;
@@ -44,11 +46,17 @@ export default function RegistrationsPage() {
   // Deep-link window from the dashboard (?expiringWithin=30). Persisted so the
   // user's own filter clicks don't fight the incoming link.
   const [expiringWithin, setExpiringWithin] = useState<string | null>(searchParams.get("expiringWithin"));
+  // ?vehicle=<id> deep-links from a vehicle's RegistrationPanel CTA — pre-filters
+  // the list and pre-selects the vehicle when creating.
+  const [vehicleFilter, setVehicleFilter] = useState<string | null>(searchParams.get("vehicle"));
+  const [branchId, setBranchId] = useState<string | null>(searchParams.get("branch"));
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [pageSize, setPageSize] = useState(15);
+  const [branches, setBranches] = useState<{ value: string; label: string }[]>([]);
 
   const [createOpen, setCreateOpen] = useState(false);
-  const [renewId, setRenewId] = useState<string | null>(null);
+  const [renewId, setRenewId] = useState<{ id: string; expiryDate: string } | null>(null);
   const [suspendId, setSuspendId] = useState<string | null>(null);
   const [resumeId, setResumeId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -70,22 +78,36 @@ export default function RegistrationsPage() {
         if (Array.isArray(w) && w.length === 4) setReminderWindows(w as ReminderWindows);
       })
       .catch(() => {});
+    fetch("/api/reference/lookups")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (d?.branches) setBranches(d.branches); })
+      .catch(() => {});
   }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
+    setError(null);
     const qs = new URLSearchParams();
     qs.set("page", String(page));
     if (search) qs.set("search", search);
     if (status) qs.set("status", status);
     if (expiringWithin) qs.set("expiringWithin", expiringWithin);
-    const res = await fetch(`/api/registrations?${qs.toString()}`);
-    const data = await res.json();
-    setRows(data.items ?? []);
-    setTotal(data.total ?? 0);
-    if (data.pageSize) setPageSize(data.pageSize);
-    setLoading(false);
-  }, [page, search, status, expiringWithin]);
+    if (vehicleFilter) qs.set("vehicleId", vehicleFilter);
+    if (branchId) qs.set("branchId", branchId);
+    try {
+      const res = await fetch(`/api/registrations?${qs.toString()}`);
+      if (!res.ok) throw new Error(`Request failed (${res.status})`);
+      const data = await res.json();
+      setRows(data.items ?? []);
+      setTotal(data.total ?? 0);
+      if (data.pageSize) setPageSize(data.pageSize);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load registrations");
+      setRows([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [page, search, status, expiringWithin, vehicleFilter, branchId]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -94,10 +116,11 @@ export default function RegistrationsPage() {
     await load();
   }
 
-  const [form, setForm] = useState({ vehicleId: "", regNumber: "", regDate: "", expiryDate: "", office: "", status: "ACTIVE" });
+  const [form, setForm] = useState({ vehicleId: "", regNumber: "", regDate: "", expiryDate: "", office: "" });
   const [vehicles, setVehicles] = useState<{ value: string; label: string }[]>([]);
   const [err, setErr] = useState<string | null>(null);
-  const [supersedeRegs, setSupersedeRegs] = useState<string[]>([]);
+  const [fieldErrs, setFieldErrs] = useState<Record<string, string>>({});
+  const [supersedeRegs, setSupersedeRegs] = useState<{ regNumber: string; expiryDate: string; status: string }[]>([]);
   const [confirmSupersede, setConfirmSupersede] = useState(false);
 
   // If the selected vehicle already has a live (non-archived) registration, a
@@ -107,11 +130,14 @@ export default function RegistrationsPage() {
     setConfirmSupersede(false);
     if (!vehicleId) return;
     try {
-      const res = await fetch(`/api/vehicles/${vehicleId}`);
+      // Light fetch: reuse the list endpoint's vehicleId filter instead of
+      // pulling the entire vehicle detail (documents, images, assignments…).
+      const res = await fetch(`/api/registrations?vehicleId=${vehicleId}&status=`);
       const d = await res.json();
-      const regs: { status: string; regNumber: string }[] = d?.vehicle?.registrations ?? [];
-      const live = regs.filter((r) => r.status !== REGISTRATION_STATUS.ARCHIVED);
-      setSupersedeRegs(live.map((r) => r.regNumber));
+      const live = (d?.items ?? [])
+        .filter((r: any) => r.status !== REGISTRATION_STATUS.ARCHIVED)
+        .map((r: any) => ({ regNumber: r.regNumber, expiryDate: r.expiryDate, status: r.status }));
+      setSupersedeRegs(live);
     } catch {
       setSupersedeRegs([]);
     }
@@ -119,22 +145,63 @@ export default function RegistrationsPage() {
 
   async function openCreate() {
     setErr(null);
-    setForm({ vehicleId: "", regNumber: "", regDate: "", expiryDate: "", office: "", status: "ACTIVE" });
+    setFieldErrs({});
+    setForm({
+      vehicleId: vehicleFilter ?? "",
+      regNumber: "",
+      regDate: "",
+      expiryDate: "",
+      office: "",
+    });
     setSupersedeRegs([]);
     setConfirmSupersede(false);
     const res = await fetch("/api/vehicles?pageSize=9999");
     const data = await res.json();
-    setVehicles((data.items ?? []).map((v: any) => ({ value: v.id, label: `${v.plateNumber} (${v.vehicleCode})` })));
+    // Registering a DISPOSED vehicle is never the intent — keep it out of the
+    // picker (a live vehicle that was later disposed still shows via its own
+    // history; this list is for choosing what to register now).
+    setVehicles((data.items ?? [])
+      .filter((v: any) => v.status !== "DISPOSED")
+      .map((v: any) => ({ value: v.id, label: `${v.plateNumber} (${v.vehicleCode})` })));
+    if (vehicleFilter) await checkSupersede(vehicleFilter);
     setCreateOpen(true);
   }
 
+  function validateCreate(): boolean {
+    const fe: Record<string, string> = {};
+    if (!form.vehicleId) fe.vehicleId = "Vehicle is required";
+    if (!form.regNumber.trim()) fe.regNumber = "Registration number is required";
+    if (!form.regDate) fe.regDate = "Registration date is required";
+    if (!form.expiryDate) fe.expiryDate = "Expiry date is required";
+    if (form.regDate && form.expiryDate && form.regDate >= form.expiryDate) {
+      fe.expiryDate = "Expiry date must be after the registration date";
+    }
+    setFieldErrs(fe);
+    return Object.keys(fe).length === 0;
+  }
+
   async function submitCreate() {
-    setBusy(true); setErr(null);
+    if (!validateCreate()) return;
+    setBusy(true); setErr(null); setFieldErrs({});
     try {
       const res = await fetch("/api/registrations", {
         method: "POST" as const, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...form, confirmSupersede }),
       });
-      if (!res.ok) { const d = await res.json(); setErr(d.error ?? "Failed to create"); return; }
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        // Map zod issues / domain field errors onto their fields; fall back
+        // to the form-level banner.
+        if (d?.issues) {
+          const fe: Record<string, string> = {};
+          for (const [k, v] of Object.entries(d.issues)) fe[k] = (v as string[])[0];
+          setFieldErrs(fe);
+        } else if (d?.field) {
+          setFieldErrs({ [d.field]: d.error ?? "Invalid value" });
+        } else {
+          setErr(d?.error ?? "Failed to create");
+        }
+        return;
+      }
       toast("success", "Registration created");
       await afterAction();
     } finally { setBusy(false); }
@@ -143,7 +210,7 @@ export default function RegistrationsPage() {
   async function doRenew(expiryDate: string) {
     if (!renewId) return; setBusy(true);
     try {
-      const res = await fetch(`/api/registrations/${renewId}/renew`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ expiryDate }) });
+      const res = await fetch(`/api/registrations/${renewId.id}/renew`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ expiryDate }) });
       if (!res.ok) { const d = await res.json().catch(() => ({})); toast("error", d?.error ?? "Renewal failed"); return; }
       toast("success", "Registration renewed");
       await afterAction();
@@ -174,7 +241,8 @@ export default function RegistrationsPage() {
     if (!deleteId) return; setBusy(true);
     try {
       const res = await fetch(`/api/registrations/${deleteId}`, { method: "DELETE" });
-      if (!res.ok) { toast("error", "Delete failed"); return; }
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) { toast("error", d?.error ?? "Delete failed"); return; }
       toast("success", "Registration deleted");
       await afterAction();
     } finally { setBusy(false); }
@@ -230,22 +298,66 @@ export default function RegistrationsPage() {
     } finally { setBusy(false); }
   }
 
-  function exportRegistrations(format: "csv" | "excel" | "pdf") {
-    const data = rows.map((r) => ({
-      "Reg Number": r.regNumber,
-      Vehicle: `${r.vehicle.plateNumber} (${r.vehicle.vehicleCode})`,
-      Office: r.office ?? "",
-      "Reg Date": r.regDate,
-      "Expiry Date": r.expiryDate,
-      Status: label(effectiveRegistrationStatus(r.status, r.expiryDate)),
-    }));
+  const exportColumns = (r: RegRow) => ({
+    "Reg Number": r.regNumber,
+    Vehicle: `${r.vehicle.plateNumber} (${r.vehicle.vehicleCode})`,
+    Branch: r.vehicle.branch?.name ?? "",
+    Office: r.office ?? "",
+    "Reg Date": r.regDate.slice(0, 10),
+    "Expiry Date": r.expiryDate.slice(0, 10),
+    Status: label(effectiveRegistrationStatus(r.status, r.expiryDate)),
+  });
+
+  function exportPage(format: "csv" | "excel" | "pdf") {
+    const data = rows.map(exportColumns);
     const stamp = new Date().toISOString().slice(0, 10);
-    if (format === "csv") exportCsv(`registrations_${stamp}.csv`, data);
-    else if (format === "excel") exportXlsx(`registrations_${stamp}.xlsx`, data);
-    else exportPdf(rowsToHtmlTable("Registrations", data), "Registrations", companyName);
+    if (format === "csv") exportCsv(`registrations_page${page}_${stamp}.csv`, data);
+    else if (format === "excel") exportXlsx(`registrations_page${page}_${stamp}.xlsx`, data);
+    else exportPdf(rowsToHtmlTable(`Registrations (page ${page})`, data), `Registrations (page ${page})`, companyName);
+  }
+
+  async function exportAll(format: "csv" | "excel" | "pdf") {
+    const allRows: RegRow[] = [];
+    const qs = new URLSearchParams();
+    qs.set("pageSize", "1000");
+    if (search) qs.set("search", search);
+    if (status) qs.set("status", status);
+    if (expiringWithin) qs.set("expiringWithin", expiringWithin);
+    if (vehicleFilter) qs.set("vehicleId", vehicleFilter);
+    if (branchId) qs.set("branchId", branchId);
+    try {
+      for (let p = 1; p <= 50; p++) {
+        qs.set("page", String(p));
+        const res = await fetch(`/api/registrations?${qs.toString()}`);
+        if (!res.ok) throw new Error("Export fetch failed");
+        const data = await res.json();
+        const items = data.items ?? [];
+        allRows.push(...items);
+        if (allRows.length >= (data.total ?? 0) || items.length === 0) break;
+      }
+    } catch {
+      toast("error", "Could not collect rows for export");
+      return;
+    }
+    if (allRows.length === 0) { toast("error", "Nothing to export"); return; }
+    const scope = hasFilters ? "filtered" : "all";
+    const stamp = new Date().toISOString().slice(0, 10);
+    const data = allRows.map(exportColumns);
+    if (format === "csv") exportCsv(`registrations_${scope}_${stamp}.csv`, data);
+    else if (format === "excel") exportXlsx(`registrations_${scope}_${stamp}.xlsx`, data);
+    else exportPdf(rowsToHtmlTable(`Registrations (${scope})`, data), `Registrations (${scope})`, companyName);
+    toast("success", `Exported ${allRows.length} registration(s)`);
   }
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const hasFilters = Boolean(search || status || expiringWithin || vehicleFilter || branchId);
+
+  // Due-within options derived from the admin-configured windows so the page's
+  // quick filter speaks the same language as reminders.
+  const dueWithinOptions = (reminderWindows ?? [90, 60, 30, 7])
+    .slice()
+    .sort((a, b) => b - a)
+    .map((w) => ({ value: String(w), label: `Due within ${w} days` }));
 
   const chips: { key: string; label: string; clear: () => void }[] = [];
   if (search) chips.push({ key: "q", label: `“${search}”`, clear: () => setSearch("") });
@@ -255,6 +367,26 @@ export default function RegistrationsPage() {
     label: Number(expiringWithin) < 0 ? "Expired only" : `Expiring ≤ ${expiringWithin}d`,
     clear: () => { setExpiringWithin(null); setPage(1); navigate("/registrations", { replace: true }); },
   });
+  if (branchId) chips.push({
+    key: "branch",
+    label: `Branch: ${branches.find((b) => b.value === branchId)?.label ?? "…"}`,
+    clear: () => { setBranchId(null); setPage(1); },
+  });
+  if (vehicleFilter) chips.push({
+    key: "vehicle",
+    label: "One vehicle's registrations",
+    clear: () => { setVehicleFilter(null); setPage(1); navigate("/registrations", { replace: true }); },
+  });
+
+  function clearAllFilters() {
+    setSearch("");
+    setStatus("");
+    setExpiringWithin(null);
+    setBranchId(null);
+    setVehicleFilter(null);
+    setPage(1);
+    navigate("/registrations", { replace: true });
+  }
 
   return (
     <div className="space-y-4">
@@ -264,17 +396,22 @@ export default function RegistrationsPage() {
           <p className="text-sm text-slate-500">Manage vehicle registrations, renewals &amp; suspensions</p>
         </div>
         <div className="flex items-center gap-2">
-          {rows.length > 0 && (
+          {rows.length > 0 && !loading && (
             <Dropdown align="right"
               trigger={({ toggle }) => (<Tooltip content="Export"><button onClick={toggle} className="btn-outline text-xs"><Download className="h-3.5 w-3.5" /> Export</button></Tooltip>)}
               items={[
-                { label: "CSV", onClick: () => exportRegistrations("csv") },
-                { label: "Excel", onClick: () => exportRegistrations("excel") },
-                { label: "PDF", onClick: () => exportRegistrations("pdf") },
+                { label: "Current view — all pages", header: true },
+                { label: "CSV", onClick: () => exportAll("csv") },
+                { label: "Excel", onClick: () => exportAll("excel") },
+                { label: "PDF", onClick: () => exportAll("pdf") },
+                { label: `This page only (${rows.length} rows)`, header: true },
+                { label: "CSV", onClick: () => exportPage("csv") },
+                { label: "Excel", onClick: () => exportPage("excel") },
+                { label: "PDF", onClick: () => exportPage("pdf") },
               ]}
             />
           )}
-          {can("registration:manage") && (
+          {can(PERMISSIONS.REGISTRATION_MANAGE) && (
             <button className="btn-primary" onClick={openCreate}><Plus className="h-4 w-4" /> New Registration</button>
           )}
         </div>
@@ -298,6 +435,20 @@ export default function RegistrationsPage() {
               ...REGISTRATION_STATUS_OPTIONS.map((s) => ({ value: s, label: label(s) })),
             ]}
           />
+          <Select
+            className="w-auto"
+            value={branchId ?? ""}
+            onChange={(v) => { setBranchId(v || null); setPage(1); }}
+            placeholder="All branches"
+            options={[{ value: "", label: "All branches" }, ...branches]}
+          />
+          <Select
+            className="w-auto"
+            value=""
+            onChange={(v) => { if (v) { setExpiringWithin(v); setPage(1); } }}
+            placeholder="Due within…"
+            options={[{ value: "", label: "Due within…" }, ...dueWithinOptions]}
+          />
         </div>
         {chips.length > 0 && (
           <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3">
@@ -305,23 +456,33 @@ export default function RegistrationsPage() {
             {chips.map((c) => (
               <button key={c.key} onClick={c.clear}
                 className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/20">
-                {c.label} <span className="text-primary/60">✕</span>
+                {c.label} <X className="h-3 w-3" />
               </button>
             ))}
-            <button onClick={() => { setSearch(""); setStatus(""); }} className="text-xs text-slate-400 underline hover:text-slate-600">Clear all</button>
+            <button onClick={clearAllFilters} className="text-xs text-slate-400 underline hover:text-slate-600">Clear all</button>
           </div>
         )}
       </div>
 
-      {loading ? (
+      {error ? (
+        <div className="card flex flex-col items-center justify-center gap-3 py-12 text-center">
+          <AlertOctagon className="h-10 w-10 text-red-300" />
+          <h3 className="text-base font-semibold text-slate-700">Couldn't load registrations</h3>
+          <p className="text-sm text-slate-400">{error}</p>
+          <button className="btn-outline mt-1" onClick={() => load()}>Try again</button>
+        </div>
+      ) : loading ? (
         <BrandLoader />
       ) : rows.length === 0 ? (
         <div className="card flex flex-col items-center justify-center py-16 text-center">
           <Search className="mb-3 h-10 w-10 text-slate-300" />
           <h3 className="text-base font-semibold text-slate-700">No registrations found</h3>
           <p className="mt-1 max-w-sm text-sm text-slate-400">
-            {search || status ? "No registrations match the current filters." : "Register your first vehicle registration to get started."}
+            {hasFilters ? "No registrations match the current filters." : "Register your first vehicle registration to get started."}
           </p>
+          {hasFilters && (
+            <button className="btn-outline mt-3" onClick={clearAllFilters}>Clear filters</button>
+          )}
         </div>
       ) : (
         <div className="card overflow-hidden">
@@ -339,7 +500,9 @@ export default function RegistrationsPage() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                      <span className="truncate text-sm font-semibold text-slate-800">{r.regNumber}</span>
+                      <Link to={`/registrations/${r.id}/history`} className="truncate text-sm font-semibold text-slate-800 hover:text-primary" title="Registration history">
+                        {r.regNumber}
+                      </Link>
                       <StatusBadge status={eff} />
                     </div>
                     <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-400">
@@ -364,19 +527,20 @@ export default function RegistrationsPage() {
                         </button>
                       )}
                       items={eff === "ARCHIVED" ? [
-                        ...(can("registration:manage") ? [{ label: "Restore", icon: <RotateCcw className="h-4 w-4" />, onClick: () => setRestoreId(r.id) }] : []),
+                        ...(can(PERMISSIONS.REGISTRATION_MANAGE) ? [{ label: "Restore", icon: <RotateCcw className="h-4 w-4" />, onClick: () => setRestoreId(r.id) }] : []),
                         { label: "History", icon: <History className="h-4 w-4" />, onClick: () => navigate(`/registrations/${r.id}/history`) },
+                        ...(can(PERMISSIONS.REGISTRATION_MANAGE) ? [{ label: "Delete", icon: <Trash2 className="h-4 w-4" />, danger: true, onClick: () => setDeleteId(r.id) }] : []),
                       ] : eff === "SUSPENDED" ? [
-                        ...(can("registration:manage") ? [{ label: "Edit", icon: <Pencil className="h-4 w-4" />, onClick: () => openEdit(r) }] : []),
-                        ...(can("registration:suspend") ? [{ label: "Resume", icon: <Play className="h-4 w-4" />, onClick: () => setResumeId(r.id) }] : []),
+                        ...(can(PERMISSIONS.REGISTRATION_MANAGE) ? [{ label: "Edit", icon: <Pencil className="h-4 w-4" />, onClick: () => openEdit(r) }] : []),
+                        ...(can(PERMISSIONS.REGISTRATION_SUSPEND) ? [{ label: "Resume", icon: <Play className="h-4 w-4" />, onClick: () => setResumeId(r.id) }] : []),
                         { label: "History", icon: <History className="h-4 w-4" />, onClick: () => navigate(`/registrations/${r.id}/history`) },
-                        ...(can("registration:manage") ? [{ label: "Archive", icon: <Archive className="h-4 w-4" />, onClick: () => setArchiveId(r.id) }] : []),
+                        ...(can(PERMISSIONS.REGISTRATION_MANAGE) ? [{ label: "Archive", icon: <Archive className="h-4 w-4" />, onClick: () => setArchiveId(r.id) }] : []),
                       ] : [
-                        ...(can("registration:manage") ? [{ label: "Edit", icon: <Pencil className="h-4 w-4" />, onClick: () => openEdit(r) }] : []),
-                        ...(can("registration:renew") ? [{ label: "Renew", icon: <RefreshCw className="h-4 w-4" />, onClick: () => setRenewId(r.id) }] : []),
-                        ...(can("registration:suspend") ? [{ label: "Suspend", icon: <AlertCircle className="h-4 w-4" />, onClick: () => setSuspendId(r.id) }] : []),
+                        ...(can(PERMISSIONS.REGISTRATION_MANAGE) ? [{ label: "Edit", icon: <Pencil className="h-4 w-4" />, onClick: () => openEdit(r) }] : []),
+                        ...(can(PERMISSIONS.REGISTRATION_RENEW) ? [{ label: "Renew", icon: <RefreshCw className="h-4 w-4" />, onClick: () => setRenewId({ id: r.id, expiryDate: r.expiryDate }) }] : []),
+                        ...(can(PERMISSIONS.REGISTRATION_SUSPEND) ? [{ label: "Suspend", icon: <AlertCircle className="h-4 w-4" />, onClick: () => setSuspendId(r.id) }] : []),
                         { label: "History", icon: <History className="h-4 w-4" />, onClick: () => navigate(`/registrations/${r.id}/history`) },
-                        ...(can("registration:manage") ? [{ label: "Archive", icon: <Archive className="h-4 w-4" />, onClick: () => setArchiveId(r.id) }] : []),
+                        ...(can(PERMISSIONS.REGISTRATION_MANAGE) ? [{ label: "Archive", icon: <Archive className="h-4 w-4" />, onClick: () => setArchiveId(r.id) }] : []),
                       ]}
                     />
                   </div>
@@ -391,15 +555,23 @@ export default function RegistrationsPage() {
         </div>
       )}
 
-      {/* Modals (unchanged) */}
+      {/* Modals */}
       <Modal open={createOpen} onClose={() => !busy && setCreateOpen(false)} title="New Registration" footer={
-        <><button className="btn-outline" onClick={() => setCreateOpen(false)} disabled={busy}>Cancel</button>
-        <button className="btn-primary" onClick={submitCreate} disabled={busy || (supersedeRegs.length > 0 && !confirmSupersede)}>Create</button></>
+        <div className="flex justify-end gap-2">
+          <button className="btn-outline" onClick={() => setCreateOpen(false)} disabled={busy}>Cancel</button>
+          <button className="btn-primary" onClick={submitCreate} disabled={busy || (supersedeRegs.length > 0 && !confirmSupersede)}>Create</button>
+        </div>
       }>
         {err && <div className="mb-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-600">{err}</div>}
         {supersedeRegs.length > 0 && (
-          <div className="mb-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
-            This vehicle already has a live registration ({supersedeRegs.join(", ")}). Creating a new one will automatically archive it.
+          <div className="mb-3 space-y-1 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
+            <p className="font-medium">This vehicle already has a live registration:</p>
+            {supersedeRegs.map((s) => (
+              <p key={s.regNumber}>
+                {s.regNumber} · expires {formatDate(s.expiryDate)} ({label(effectiveRegistrationStatus(s.status, s.expiryDate))})
+              </p>
+            ))}
+            <p>Creating a new one will automatically archive it. Its history is kept.</p>
           </div>
         )}
         {supersedeRegs.length > 0 && (
@@ -411,21 +583,25 @@ export default function RegistrationsPage() {
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <label className="text-sm sm:col-span-2">Vehicle <span className="text-red-400">*</span>
             <div className="mt-1">
-              <Select className="w-full" value={form.vehicleId} onChange={(v) => { setForm({ ...form, vehicleId: v }); checkSupersede(v); }}
+              <Select className="w-full" value={form.vehicleId} onChange={(v) => { setForm({ ...form, vehicleId: v }); setFieldErrs((p) => ({ ...p, vehicleId: "" })); checkSupersede(v); }}
                 placeholder="Select vehicle…" options={vehicles} searchable />
             </div>
+            {fieldErrs.vehicleId && <p className="mt-1 text-xs text-red-500">{fieldErrs.vehicleId}</p>}
           </label>
           <label className="text-sm">Reg Number <span className="text-red-400">*</span>
-            <input className="input mt-1" value={form.regNumber} onChange={(e) => setForm({ ...form, regNumber: e.target.value })} />
+            <input className="input mt-1" value={form.regNumber} onChange={(e) => { setForm({ ...form, regNumber: e.target.value }); setFieldErrs((p) => ({ ...p, regNumber: "" })); }} />
+            {fieldErrs.regNumber && <p className="mt-1 text-xs text-red-500">{fieldErrs.regNumber}</p>}
           </label>
           <label className="text-sm">Office
             <input className="input mt-1" value={form.office} onChange={(e) => setForm({ ...form, office: e.target.value })} />
           </label>
           <label className="text-sm">Reg Date <span className="text-red-400">*</span>
-            <div className="mt-1"><DatePicker value={form.regDate} onChange={(v) => setForm({ ...form, regDate: v })} /></div>
+            <div className="mt-1"><DatePicker value={form.regDate} onChange={(v) => { setForm({ ...form, regDate: v }); setFieldErrs((p) => ({ ...p, regDate: "" })); }} /></div>
+            {fieldErrs.regDate && <p className="mt-1 text-xs text-red-500">{fieldErrs.regDate}</p>}
           </label>
           <label className="text-sm">Expiry Date <span className="text-red-400">*</span>
-            <div className="mt-1"><DatePicker value={form.expiryDate} onChange={(v) => setForm({ ...form, expiryDate: v })} /></div>
+            <div className="mt-1"><DatePicker value={form.expiryDate} onChange={(v) => { setForm({ ...form, expiryDate: v }); setFieldErrs((p) => ({ ...p, expiryDate: "" })); }} /></div>
+            {fieldErrs.expiryDate && <p className="mt-1 text-xs text-red-500">{fieldErrs.expiryDate}</p>}
           </label>
         </div>
       </Modal>
@@ -433,7 +609,7 @@ export default function RegistrationsPage() {
       <EditRegModal open={editRow !== null} row={editRow} form={editForm} onChange={setEditForm}
         error={editErr} onClose={() => !busy && setEditRow(null)} onSave={doEdit} loading={busy} />
 
-      <RenewModal open={renewId !== null} onClose={() => setRenewId(null)} onConfirm={doRenew} loading={busy} />
+      <RegistrationRenewModal open={renewId !== null} onClose={() => setRenewId(null)} onConfirm={doRenew} loading={busy} currentExpiry={renewId?.expiryDate} />
       <SuspendModal open={suspendId !== null} onClose={() => setSuspendId(null)} onConfirm={doSuspend} loading={busy} />
       <ArchiveModal open={archiveId !== null} onClose={() => setArchiveId(null)} onConfirm={doArchive} loading={busy} />
       <ConfirmModal open={restoreId !== null} onClose={() => setRestoreId(null)} onConfirm={doRestore} loading={busy}
@@ -441,7 +617,7 @@ export default function RegistrationsPage() {
       <ConfirmModal open={resumeId !== null} onClose={() => setResumeId(null)} onConfirm={doResume} loading={busy}
         title="Resume Registration" message="This brings the suspended registration back into service. Its status is re-derived from the expiry date." confirmLabel="Resume" />
       <ConfirmModal open={deleteId !== null} onClose={() => setDeleteId(null)} onConfirm={doDelete} loading={busy}
-        title="Delete Registration" message="This permanently removes the registration and its history." confirmLabel="Delete" />
+        title="Delete Archived Registration" message="This permanently removes the archived registration and its history. Live registrations must be archived first — that keeps history and is reversible." confirmLabel="Delete" />
     </div>
   );
 }
@@ -485,21 +661,6 @@ function EditRegModal({ open, row, form, onChange, error, onClose, onSave, loadi
   );
 }
 
-function RenewModal({ open, onClose, onConfirm, loading }: { open: boolean; onClose: () => void; onConfirm: (date: string) => void; loading: boolean }) {
-  const [date, setDate] = useState("");
-  useEffect(() => { if (open) setDate(""); }, [open]);
-  return (
-    <Modal open={open} onClose={loading ? () => {} : onClose} title="Renew Registration" footer={
-      <><button className="btn-outline" onClick={onClose} disabled={loading}>Cancel</button>
-      <button className="btn-primary" onClick={() => onConfirm(date)} disabled={loading || !date}>Renew</button></>
-    }>
-      <label className="text-sm">New Expiry Date <span className="text-red-400">*</span>
-        <div className="mt-1"><DatePicker value={date} onChange={(v) => setDate(v)} /></div>
-      </label>
-    </Modal>
-  );
-}
-
 function SuspendModal({ open, onClose, onConfirm, loading }: { open: boolean; onClose: () => void; onConfirm: (note: string) => void; loading: boolean }) {
   const [note, setNote] = useState("");
   useEffect(() => { if (open) setNote(""); }, [open]);
@@ -508,6 +669,9 @@ function SuspendModal({ open, onClose, onConfirm, loading }: { open: boolean; on
       <><button className="btn-outline" onClick={onClose} disabled={loading}>Cancel</button>
       <button className="btn bg-red-600 text-white hover:bg-red-700" onClick={() => onConfirm(note)} disabled={loading}>Suspend</button></>
     }>
+      <p className="mb-3 text-sm text-slate-500">
+        A suspended registration stops appearing in "Current" views and is excluded from expiry monitoring until resumed. The vehicle is then treated as unregistered.
+      </p>
       <label className="text-sm">Reason (optional)
         <textarea className="input mt-1" rows={3} value={note} onChange={(e) => setNote(e.target.value)} />
       </label>
@@ -523,7 +687,9 @@ function ArchiveModal({ open, onClose, onConfirm, loading }: { open: boolean; on
       <><button className="btn-outline" onClick={onClose} disabled={loading}>Cancel</button>
       <button className="btn-primary" onClick={() => onConfirm(note)} disabled={loading}>Archive</button></>
     }>
-      <p className="mb-3 text-sm text-slate-500">The registration will be archived and moved out of active views. It can be restored later.</p>
+      <p className="mb-3 text-sm text-slate-500">
+        The registration is moved out of active views and stops being monitored for expiry. It can be restored later with its history intact.
+      </p>
       <label className="text-sm">Reason (optional)
         <textarea className="input mt-1" rows={3} value={note} onChange={(e) => setNote(e.target.value)} />
       </label>

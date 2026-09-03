@@ -306,6 +306,17 @@ export async function deleteRegistration(id: string, ctx: Context = {}) {
   const existing = await prisma.vehicleRegistration.findUnique({ where: { id } });
   if (!existing) return null;
 
+  // Hard-deleting a vehicle's live registration would silently leave it
+  // unregistered (the vehicle delete flow blocks on live records for the
+  // same reason). Deleting is cleanup for stale ARCHIVED entries only —
+  // live ones must be archived (reversible) instead.
+  if (existing.status !== REGISTRATION_STATUS.ARCHIVED) {
+    throw new ValidationError(
+      "Only archived registrations can be permanently deleted. Archive it first — that keeps the history and is reversible.",
+      "status"
+    );
+  }
+
   await prisma.vehicleRegistration.delete({ where: { id } });
 
   await writeAudit({
@@ -608,15 +619,23 @@ export async function listRegistrations(opts: {
   search?: string;
   status?: string;
   expiringWithin?: number;
+  branchId?: string;
+  vehicleId?: string;
   page?: number;
   pageSize?: number;
 }) {
-  const { search, status, expiringWithin, page = 1, pageSize } = opts;
+  const { search, status, expiringWithin, branchId, vehicleId, page = 1, pageSize } = opts;
   const ps = pageSize ?? await defaultPageSize();
 
   const conditions: any[] = [];
   if (status) {
     conditions.push(regStatusCondition(status, new Date()));
+  }
+  if (branchId) {
+    conditions.push({ vehicle: { branchId } });
+  }
+  if (vehicleId) {
+    conditions.push({ vehicleId });
   }
   if (expiringWithin !== undefined && Number.isFinite(expiringWithin)) {
     const now = new Date();
