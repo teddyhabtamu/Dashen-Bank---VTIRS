@@ -1,12 +1,12 @@
 
-import { useCallback, useEffect, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Search as SearchIcon, Car, ClipboardList, ShieldCheck, FileText, X, ArrowRight } from "lucide-react";
 import { Select } from "@/components/ui/select";
 import { StatusBadge } from "@/components/ui/badge";
 import { BrandLoader } from "@/components/ui/brand-loader";
 import { VEHICLE_STATUS_OPTIONS, REGISTRATION_STATUS_OPTIONS, label } from "@/lib/constants";
-import { daysUntil, expiryState } from "@/lib/services/reminders";
+import { daysUntil, expiryState, type ReminderWindows } from "@/lib/services/reminders";
 
 interface Opt { value: string; label: string }
 interface Result {
@@ -15,20 +15,26 @@ interface Result {
   insurances: any[];
   documents: any[];
   total: number;
+  truncated?: {
+    vehicles: boolean;
+    registrations: boolean;
+    insurances: boolean;
+    documents: boolean;
+  };
 }
 
-const KIND_META: Record<string, { label: string; icon: any; pill: string }> = {
-  vehicle: { label: "Vehicles", icon: Car, pill: "bg-primary/10 text-primary" },
-  registration: { label: "Registrations", icon: ClipboardList, pill: "bg-blue-100 text-blue-700" },
-  insurance: { label: "Insurance", icon: ShieldCheck, pill: "bg-emerald-100 text-emerald-700" },
-  document: { label: "Documents", icon: FileText, pill: "bg-purple-100 text-purple-700" },
+const KIND_META: Record<string, { label: string; icon: any }> = {
+  vehicle: { label: "Vehicles", icon: Car },
+  registration: { label: "Registrations", icon: ClipboardList },
+  insurance: { label: "Insurance", icon: ShieldCheck },
+  document: { label: "Documents", icon: FileText },
 };
 
 const KIND_ORDER = ["vehicle", "registration", "insurance", "document"];
 
-function ExpiryPill({ date, label: lbl }: { date: string; label: string }) {
+function ExpiryPill({ date, label: lbl, windows }: { date: string; label: string; windows?: ReminderWindows }) {
   const days = daysUntil(date);
-  const state = expiryState(date);
+  const state = expiryState(date, windows);
   const cls =
     state === "EXPIRED" ? "bg-red-100 text-red-700"
       : state === "CRITICAL" ? "bg-orange-100 text-orange-700"
@@ -37,13 +43,14 @@ function ExpiryPill({ date, label: lbl }: { date: string; label: string }) {
   const text = days !== null && days >= 0 ? `${days}d left` : "expired";
   return (
     <span className="text-xs text-slate-400">
-      {lbl}: <span className={`badge ${cls}`}>{text}</span>
+      <span className="hidden min-[400px]:inline">{lbl}: </span><span className={`badge ${cls}`}>{text}</span>
     </span>
   );
 }
 
 export default function SearchPage() {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const [q, setQ] = useState(searchParams.get("q") ?? "");
   const [status, setStatus] = useState("");
   const [year, setYear] = useState("");
@@ -55,15 +62,27 @@ export default function SearchPage() {
   const [result, setResult] = useState<Result | null>(null);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
+  const [reminderWindows, setReminderWindows] = useState<ReminderWindows | undefined>(undefined);
+  // Guards against out-of-order responses: a slow earlier request must never
+  // overwrite newer results.
+  const requestId = useRef(0);
 
   useEffect(() => {
     fetch("/api/reference/lookups").then((r) => r.json()).then((d) => {
       setBranches(d.branches ?? []);
       setTypes(d.vehicleTypes ?? []);
     });
+    fetch("/api/settings/public")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        const w = d?.reminderWindows?.registration;
+        if (Array.isArray(w) && w.length === 4) setReminderWindows(w as ReminderWindows);
+      })
+      .catch(() => {});
   }, []);
 
   const runSearch = useCallback(async () => {
+    const id = ++requestId.current;
     setLoading(true);
     const qs = new URLSearchParams();
     if (q) qs.set("q", q);
@@ -72,11 +91,17 @@ export default function SearchPage() {
     if (branchId) qs.set("branchId", branchId);
     if (vehicleType) qs.set("vehicleType", vehicleType);
     if (regStatus) qs.set("registrationStatus", regStatus);
-    const res = await fetch(`/api/search?${qs.toString()}`);
-    const data = await res.json();
-    setResult(data);
-    setSearched(true);
-    setLoading(false);
+    try {
+      const res = await fetch(`/api/search?${qs.toString()}`);
+      const data = await res.json();
+      if (requestId.current !== id) return;
+      setResult(data);
+      setSearched(true);
+    } catch {
+      if (requestId.current !== id) return;
+    } finally {
+      if (requestId.current === id) setLoading(false);
+    }
   }, [q, status, year, branchId, vehicleType, regStatus]);
 
   useEffect(() => {
@@ -116,14 +141,28 @@ export default function SearchPage() {
       </div>
 
       <div className="card p-4">
+        <label htmlFor="global-search" className="mb-2 block text-xs font-medium uppercase tracking-wide text-slate-400">
+          Search the fleet
+        </label>
         <div className="relative">
           <SearchIcon className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
           <input
-            className="h-12 w-full rounded-xl border border-slate-300 bg-white pl-12 pr-4 text-base outline-none transition focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
+            id="global-search"
+            className="h-12 w-full rounded-xl border border-slate-300 bg-white pl-12 pr-10 text-base outline-none transition focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
             placeholder="Search plate, driver, branch, policy no, filename…"
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
+          {q && (
+            <button
+              onClick={() => setQ("")}
+              className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
+              title="Clear search"
+              aria-label="Clear search"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
         </div>
 
         <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
@@ -137,6 +176,9 @@ export default function SearchPage() {
             options={[{ value: "", label: "Vehicle Type" }, ...types]} />
           <input className="input" type="number" min={1900} max={2100} placeholder="Year" value={year} onChange={(e) => setYear(e.target.value)} />
         </div>
+        <p className="mt-2 text-xs text-slate-400">
+          Branch filters everything below. Status, Year and Type filter vehicles only; Reg Status filters registrations only.
+        </p>
 
         {chips.length > 0 && (
           <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3">
@@ -197,6 +239,11 @@ export default function SearchPage() {
                   <Icon className="h-4 w-4 text-slate-500" />
                   <span className="text-sm font-semibold text-slate-700">{meta.label}</span>
                   <span className="badge bg-slate-100 text-slate-500">{grouped[kind].length}</span>
+                  {result.truncated?.[kind as keyof NonNullable<Result["truncated"]>] && (
+                    <span className="text-xs text-slate-400" title="More matches exist — refine your search to narrow it down">
+                      showing first {grouped[kind].length}
+                    </span>
+                  )}
                 </div>
                 <ul className="divide-y divide-slate-100">
                   {kind === "vehicle" && grouped.vehicle.map((v: any) => (
@@ -214,11 +261,21 @@ export default function SearchPage() {
                           <div className="truncate text-xs text-slate-400">
                             {v.vehicleCode} · {v.make} {v.model} · {v.year}
                             {v.branchName && <> · {v.branchName}</>}
-                            {v.driverName && <> · Driver: <Link to={`/drivers/${v.driverId ?? ""}`} className="text-blue-600 hover:underline">{v.driverName}</Link></>}
+                            {v.driverName && v.driverId && (
+                              <> · Driver:{" "}
+                                <button
+                                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); navigate(`/drivers/${v.driverId}`); }}
+                                  className="text-blue-600 hover:underline"
+                                >
+                                  {v.driverName}
+                                </button>
+                              </>
+                            )}
+                            {v.driverName && !v.driverId && <> · Driver: {v.driverName}</>}
                           </div>
                         </div>
                         <div className="flex flex-shrink-0 items-center gap-2 sm:gap-3">
-                          {v.registrationStatus === "ACTIVE" && <ExpiryPill date={v.insuranceEnd ?? ""} label="Ins" />}
+                          {v.registrationStatus === "ACTIVE" && <ExpiryPill date={v.insuranceEnd ?? ""} label="Ins" windows={reminderWindows} />}
                           <ArrowRight className="h-4 w-4 flex-shrink-0 text-slate-300" />
                         </div>
                       </Link>
@@ -242,7 +299,7 @@ export default function SearchPage() {
                           </div>
                         </div>
                         <div className="flex flex-shrink-0 items-center gap-2 sm:gap-3">
-                          <ExpiryPill date={r.expiryDate} label="Expiry" />
+                          <ExpiryPill date={r.expiryDate} label="Expiry" windows={reminderWindows} />
                           <ArrowRight className="h-4 w-4 flex-shrink-0 text-slate-300" />
                         </div>
                       </Link>
@@ -266,7 +323,7 @@ export default function SearchPage() {
                           </div>
                         </div>
                         <div className="flex flex-shrink-0 items-center gap-2 sm:gap-3">
-                          <ExpiryPill date={i.endDate} label="Expiry" />
+                          <ExpiryPill date={i.endDate} label="Expiry" windows={reminderWindows} />
                           <ArrowRight className="h-4 w-4 flex-shrink-0 text-slate-300" />
                         </div>
                       </Link>

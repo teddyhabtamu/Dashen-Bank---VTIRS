@@ -22,6 +22,7 @@ export interface SearchResult {
     branchName: string | null;
     departmentName: string | null;
     driverName: string | null;
+    driverId: string | null;
     ownerName: string;
     registrationStatus: string | null;
     insuranceEnd: string | null;
@@ -55,7 +56,20 @@ export interface SearchResult {
     category: string;
   }>;
   total: number;
+  // True per kind when that table hit its take-limit — the client uses this
+  // to say "showing first N" instead of reporting a confident wrong total.
+  truncated: {
+    vehicles: boolean;
+    registrations: boolean;
+    insurances: boolean;
+    documents: boolean;
+  };
 }
+
+const VEHICLE_TAKE = 50;
+const ROW_TAKE = 25;
+
+const ci = (v: string) => ({ contains: v, mode: "insensitive" as const });
 
 export async function globalSearch(filters: SearchFilters): Promise<SearchResult> {
   const q = (filters.q ?? "").trim();
@@ -65,14 +79,14 @@ export async function globalSearch(filters: SearchFilters): Promise<SearchResult
   const vehicleQ = q
     ? {
         OR: [
-          { plateNumber: { contains: q } },
-          { engineNo: { contains: q } },
-          { chassisNo: { contains: q } },
-          { vehicleCode: { contains: q } },
-          { ownerName: { contains: q } },
-          { currentDriver: { fullName: { contains: q } } },
-          { branch: { name: { contains: q } } },
-          { department: { name: { contains: q } } },
+          { plateNumber: ci(q) },
+          { engineNo: ci(q) },
+          { chassisNo: ci(q) },
+          { vehicleCode: ci(q) },
+          { ownerName: ci(q) },
+          { currentDriver: { fullName: ci(q) } },
+          { branch: { name: ci(q) } },
+          { department: { name: ci(q) } },
         ],
       }
     : {};
@@ -87,40 +101,50 @@ export async function globalSearch(filters: SearchFilters): Promise<SearchResult
   const regQ = q
     ? {
         OR: [
-          { regNumber: { contains: q } },
-          { office: { contains: q } },
-          { vehicle: { plateNumber: { contains: q } } },
-          { vehicle: { vehicleCode: { contains: q } } },
+          { regNumber: ci(q) },
+          { office: ci(q) },
+          { vehicle: { plateNumber: ci(q) } },
+          { vehicle: { vehicleCode: ci(q) } },
         ],
         ...(filters.registrationStatus ? { status: filters.registrationStatus } : {}),
+        ...(filters.branchId ? { vehicle: { branchId: filters.branchId } } : {}),
       }
-    : filters.registrationStatus
-      ? { status: filters.registrationStatus }
+    : filters.registrationStatus || filters.branchId
+      ? {
+          ...(filters.registrationStatus ? { status: filters.registrationStatus } : {}),
+          ...(filters.branchId ? { vehicle: { branchId: filters.branchId } } : {}),
+        }
       : { id: "none" };
 
   // Insurance search: policy number, company, plate, vehicle code.
   const insQ = q
     ? {
         OR: [
-          { policyNo: { contains: q } },
-          { company: { contains: q } },
-          { vehicle: { plateNumber: { contains: q } } },
-          { vehicle: { vehicleCode: { contains: q } } },
+          { policyNo: ci(q) },
+          { company: ci(q) },
+          { vehicle: { plateNumber: ci(q) } },
+          { vehicle: { vehicleCode: ci(q) } },
         ],
+        ...(filters.branchId ? { vehicle: { branchId: filters.branchId } } : {}),
       }
-    : { id: "none" };
+    : filters.branchId
+      ? { vehicle: { branchId: filters.branchId } }
+      : { id: "none" };
 
   // Document search: title, original name, plate, vehicle code.
   const docQ = q
     ? {
         OR: [
-          { title: { contains: q } },
-          { originalName: { contains: q } },
-          { vehicle: { plateNumber: { contains: q } } },
-          { vehicle: { vehicleCode: { contains: q } } },
+          { title: ci(q) },
+          { originalName: ci(q) },
+          { vehicle: { plateNumber: ci(q) } },
+          { vehicle: { vehicleCode: ci(q) } },
         ],
+        ...(filters.branchId ? { vehicle: { branchId: filters.branchId } } : {}),
       }
-    : { id: "none" };
+    : filters.branchId
+      ? { vehicle: { branchId: filters.branchId } }
+      : { id: "none" };
 
   const [vehicles, registrations, insurances, documents] = await Promise.all([
     prisma.vehicle.findMany({
@@ -129,25 +153,35 @@ export async function globalSearch(filters: SearchFilters): Promise<SearchResult
         branch: { select: { name: true } },
         department: { select: { name: true } },
         currentDriver: { select: { id: true, fullName: true } },
-        registrations: { orderBy: { createdAt: "desc" }, take: 1 },
+        // The live (non-archived) registration best represents current
+        // compliance — a superseded record created later must not win.
+        registrations: {
+          where: { status: { not: "ARCHIVED" } },
+          orderBy: { expiryDate: "desc" },
+          take: 1,
+        },
         insurances: { orderBy: { endDate: "desc" }, take: 1 },
       },
-      take: 50,
+      orderBy: { plateNumber: "asc" },
+      take: VEHICLE_TAKE,
     }),
     prisma.vehicleRegistration.findMany({
       where: regQ,
       include: { vehicle: { select: { id: true, plateNumber: true } } },
-      take: 25,
+      orderBy: { expiryDate: "asc" },
+      take: ROW_TAKE,
     }),
     prisma.vehicleInsurance.findMany({
       where: insQ,
       include: { vehicle: { select: { id: true, plateNumber: true } } },
-      take: 25,
+      orderBy: { endDate: "asc" },
+      take: ROW_TAKE,
     }),
     prisma.vehicleDocument.findMany({
       where: { deletedAt: null, ...docQ },
       include: { vehicle: { select: { id: true, plateNumber: true } } },
-      take: 25,
+      orderBy: { createdAt: "desc" },
+      take: ROW_TAKE,
     }),
   ]);
 
@@ -209,5 +243,11 @@ const mappedVehicles = vehicles.map((v) => ({
     documents: mappedDocs,
     total:
       mappedVehicles.length + mappedRegs.length + mappedIns.length + mappedDocs.length,
+    truncated: {
+      vehicles: mappedVehicles.length >= VEHICLE_TAKE,
+      registrations: mappedRegs.length >= ROW_TAKE,
+      insurances: mappedIns.length >= ROW_TAKE,
+      documents: mappedDocs.length >= ROW_TAKE,
+    },
   };
 }
