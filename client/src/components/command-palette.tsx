@@ -22,7 +22,7 @@ const NAV_ITEMS: NavItem[] = [
   { id: "registrations", label: "Registrations", href: "/registrations", icon: ClipboardList, perm: [PERMISSIONS.REGISTRATION_MANAGE, PERMISSIONS.REGISTRATION_RENEW, PERMISSIONS.REGISTRATION_SUSPEND] },
   { id: "insurance", label: "Insurance", href: "/insurances", icon: ShieldCheck, perm: PERMISSIONS.INSURANCE_MANAGE },
   { id: "documents", label: "Documents", href: "/documents", icon: FileText, perm: PERMISSIONS.DOCUMENT_VIEW },
-  { id: "drivers", label: "Drivers", href: "/drivers", icon: UserRound, perm: PERMISSIONS.BRANCH_MANAGE },
+  { id: "drivers", label: "Drivers", href: "/drivers", icon: UserRound, perm: null },
   { id: "reports", label: "Reports", href: "/reports", icon: BarChart3, perm: PERMISSIONS.REPORT_VIEW },
   { id: "notifications", label: "Notifications", href: "/notifications", icon: Bell, perm: null },
   { id: "audit", label: "Audit Logs", href: "/audit", icon: History, perm: PERMISSIONS.AUDIT_VIEW },
@@ -36,6 +36,8 @@ const KIND_ICONS: Record<string, any> = {
   registration: ClipboardList,
   insurance: ShieldCheck,
   document: FileText,
+  driver: UserRound,
+  more: Search,
 };
 
 const KIND_LABELS: Record<string, string> = {
@@ -43,6 +45,8 @@ const KIND_LABELS: Record<string, string> = {
   registration: "Registration",
   insurance: "Insurance",
   document: "Document",
+  driver: "Driver",
+  more: "",
 };
 
 export function CommandPalette() {
@@ -55,37 +59,58 @@ export function CommandPalette() {
   const navigate = useNavigate();
   const { can } = useAuth();
   const debounceRef = useRef<any>(null);
+  // Same race guard as the Search page: a slow earlier request must never
+  // overwrite newer results.
+  const requestId = useRef(0);
 
-  const procResults = useCallback((data: any) => {
+  const procResults = useCallback((data: any, query: string) => {
     const items: any[] = [];
-    (data.vehicles ?? []).forEach((v: any) =>
+    const ql = query.trim().toLowerCase();
+    (data.vehicles ?? []).forEach((v: any) => {
       items.push({
         ...v, _kind: "vehicle", _label: v.plateNumber,
         _sub: `${v.make ?? ""} ${v.model ?? ""} · ${v.vehicleCode}`,
         _href: `/vehicles/${v.id}`,
-      })
-    );
+      });
+      // Direct driver hit when the query matches the driver's name — the
+      // vehicle row alone would bury it.
+      if (v.driverName && v.driverId && v.driverName.toLowerCase().includes(ql)) {
+        items.push({
+          ...v, _kind: "driver", _label: v.driverName,
+          _sub: `Drives ${v.plateNumber} · ${v.vehicleCode}`,
+          _href: `/drivers/${v.driverId}`,
+        });
+      }
+    });
     (data.registrations ?? []).forEach((r: any) =>
       items.push({
         ...r, _kind: "registration", _label: r.regNumber,
-        _sub: r.vehicle?.plateNumber ?? "",
+        _sub: r.plateNumber ?? "",
         _href: `/vehicles/${r.vehicleId}`,
       })
     );
     (data.insurances ?? []).forEach((i: any) =>
       items.push({
         ...i, _kind: "insurance", _label: i.policyNo,
-        _sub: `${i.company} · ${i.vehicle?.plateNumber ?? ""}`,
+        _sub: `${i.company} · ${i.plateNumber ?? ""}`,
         _href: `/vehicles/${i.vehicleId}`,
       })
     );
     (data.documents ?? []).forEach((d: any) =>
       items.push({
-        ...d, _kind: "document", _label: d.name,
-        _sub: `${d.category} · ${d.vehicle?.plateNumber ?? ""}`,
-        _href: `/documents`,
+        ...d, _kind: "document", _label: d.title,
+        _sub: `${d.category} · ${d.plateNumber ?? ""}`,
+        _href: `/vehicles/${d.vehicleId}`,
       })
     );
+    const t = data.truncated ?? {};
+    if (t.vehicles || t.registrations || t.insurances || t.documents) {
+      items.push({
+        _kind: "more", _label: "See all results in Search",
+        _sub: "Some matches were cut off",
+        _href: `/search?q=${encodeURIComponent(query)}`,
+      });
+    }
     return items;
   }, []);
 
@@ -121,15 +146,18 @@ export function CommandPalette() {
       return;
     }
     setLoading(true);
+    const id = ++requestId.current;
     debounceRef.current = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/search?q=${encodeURIComponent(query)}&pageSize=5`);
+        const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
         const data = await res.json();
-        setResults(procResults(data));
+        if (requestId.current !== id) return;
+        setResults(procResults(data, query));
       } catch {
+        if (requestId.current !== id) return;
         setResults([]);
       } finally {
-        setLoading(false);
+        if (requestId.current === id) setLoading(false);
       }
     }, 300);
   }, [query, procResults]);
@@ -162,7 +190,7 @@ export function CommandPalette() {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center pt-[12dvh]"
+      className="fixed inset-0 z-50 flex items-start justify-center px-4 pt-[12dvh]"
       onClick={() => setOpen(false)}
     >
       <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" />
