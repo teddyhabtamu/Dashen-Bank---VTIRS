@@ -110,3 +110,60 @@ export async function purgeDocument(id: string, ctx: Ctx = {}) {
   });
   return found.row;
 }
+
+// ---------------------------------------------------------------------------
+// Bulk trash operations for the Documents page's multi-select UI.
+// Both are scoped to soft-deleted rows only (bulk actions never touch the
+// live repository), and per-item failures are collected rather than failing
+// the whole batch.
+// ---------------------------------------------------------------------------
+export async function bulkRestoreTrash(ids: string[], ctx: Ctx = {}) {
+  let restored = 0;
+  const errors: string[] = [];
+  for (const id of ids) {
+    try {
+      const row = await restoreDocument(id, ctx);
+      if (row) restored++;
+      else errors.push(`${id}: not found`);
+    } catch (e: any) {
+      errors.push(`${id}: ${e.message}`);
+    }
+  }
+  return { restored, failed: errors.length, errors };
+}
+
+export async function bulkPurgeTrash(ids: string[], ctx: Ctx = {}) {
+  let purged = 0;
+  const errors: string[] = [];
+  for (const id of ids) {
+    try {
+      const row = await purgeDocument(id, ctx);
+      if (row) purged++;
+      else errors.push(`${id}: not found`);
+    } catch (e: any) {
+      errors.push(`${id}: ${e.message}`);
+    }
+  }
+  return { purged, failed: errors.length, errors };
+}
+
+// Empties the trash entirely: every soft-deleted file is purged. Returns the
+// number purged; storage failures are collected per row.
+export async function emptyTrash(ctx: Ctx = {}) {
+  const [docs, images] = await Promise.all([
+    prisma.vehicleDocument.findMany({ where: { deletedAt: { not: null } }, select: { id: true } }),
+    prisma.vehicleImage.findMany({ where: { deletedAt: { not: null } }, select: { id: true } }),
+  ]);
+  const ids = [...docs.map((d) => d.id), ...images.map((i) => i.id)];
+  let purged = 0;
+  const errors: string[] = [];
+  for (const id of ids) {
+    try {
+      const row = await purgeDocument(id, ctx);
+      if (row) purged++;
+    } catch (e: any) {
+      errors.push(`${id}: ${e.message}`);
+    }
+  }
+  return { purged, failed: errors.length, errors, remaining: ids.length - purged };
+}

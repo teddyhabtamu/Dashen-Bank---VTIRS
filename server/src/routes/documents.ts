@@ -5,7 +5,8 @@ import { randomUUID } from "node:crypto";
 import { requireAuth } from "../lib/guard.js";
 import { PERMISSIONS } from "../lib/rbac.js";
 import { prisma } from "../lib/prisma.js";
-import { deleteDocument, purgeDocument, restoreDocument, updateDocument } from "../services/document.js";
+import { deleteDocument, purgeDocument, restoreDocument, updateDocument, bulkRestoreTrash, bulkPurgeTrash, emptyTrash } from "../services/document.js";
+import { listFiles } from "../services/document-list.js";
 import { writeAudit } from "../lib/audit.js";
 import { copyFile, openFileStream, putFile } from "../lib/storage.js";
 import { sha256, sniffMimeType } from "../lib/file-check.js";
@@ -21,126 +22,21 @@ const upload = multer({
 });
 
 router.get("/", requireAuth(PERMISSIONS.DOCUMENT_VIEW), async (req, res) => {
-  const q = (req.query.search as string) ?? "";
-  const page = Number(req.query.page ?? "1");
-  const pageSize = Number(req.query.pageSize ?? "25");
-  const skip = (page - 1) * pageSize;
-  const docWhere: any = q
-    ? {
-        deletedAt: null,
-        OR: [
-          { title: { contains: q, mode: "insensitive" } },
-          { originalName: { contains: q, mode: "insensitive" } },
-          { vehicle: { plateNumber: { contains: q, mode: "insensitive" } } },
-          { vehicle: { vehicleCode: { contains: q, mode: "insensitive" } } },
-        ],
-      }
-    : { deletedAt: null };
-  const imgWhere: any = q
-    ? {
-        deletedAt: null,
-        OR: [
-          { originalName: { contains: q, mode: "insensitive" } },
-          { vehicle: { plateNumber: { contains: q, mode: "insensitive" } } },
-          { vehicle: { vehicleCode: { contains: q, mode: "insensitive" } } },
-        ],
-      }
-    : { deletedAt: null };
-
-  const vehicleSelect = {
-    select: { id: true, plateNumber: true, vehicleCode: true },
-  };
-  const fileInclude = {
-    vehicle: vehicleSelect,
-    uploadedBy: { select: { fullName: true } },
-  };
-
-  const [docs, images, docTotal, imgTotal] = await Promise.all([
-    prisma.vehicleDocument.findMany({
-      where: docWhere,
-      include: fileInclude,
-      orderBy: { createdAt: "desc" },
-      skip,
-      take: pageSize,
-    }),
-    prisma.vehicleImage.findMany({
-      where: imgWhere,
-      include: fileInclude,
-      orderBy: { createdAt: "desc" },
-      skip,
-      take: pageSize,
-    }),
-    prisma.vehicleDocument.count({ where: docWhere }),
-    prisma.vehicleImage.count({ where: imgWhere }),
-  ]);
-
-  // Normalize images into the same shape the client uses for documents so
-  // both appear together in the repository list.
-  const normalizedImages = images.map((img) => ({
-    id: img.id,
-    uploadedBy: img.uploadedBy,
-    title: img.originalName,
-    category: img.category,
-    fileName: img.fileName,
-    originalName: img.originalName,
-    mimeType: img.mimeType,
-    sizeBytes: img.sizeBytes,
-    version: img.version,
-    createdAt: img.createdAt,
-    vehicle: img.vehicle,
-  }));
-
-  const allDocs = [...docs, ...normalizedImages].sort(
-    (a, b) =>
-      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-  );
-
-  // Determine which documents are the latest version in their group.
-  const docPairs = docs.map((d) => ({ title: d.title, category: d.category }));
-  const imgPairs = normalizedImages.map((i) => ({ title: i.title, category: i.category }));
-  const allPairs = [...docPairs, ...imgPairs];
-  const uniquePairs = allPairs.filter(
-    (p, i) => allPairs.findIndex((q) => q.title === p.title && q.category === p.category) === i
-  );
-
-  const maxVersions = new Map<string, number>();
-  if (uniquePairs.length > 0) {
-    const conditions = uniquePairs.map(
-      (p) => `("title" = '${p.title.replace(/'/g, "''")}' AND "category" = '${p.category.replace(/'/g, "''")}')`
-    );
-    const rows = await prisma.$queryRawUnsafe<Array<{ title: string; category: string; maxversion: number }>>(
-      `SELECT "title", "category", MAX("version") as "maxversion" FROM "VehicleDocument" WHERE ${conditions.join(" OR ")} GROUP BY "title", "category"`
-    );
-    for (const r of rows) {
-      maxVersions.set(`${r.title}|||${r.category}`, Number(r.maxversion));
-    }
-  }
-  // Images also need max version check.
-  if (uniquePairs.length > 0) {
-    const conditions = uniquePairs.map(
-      (p) => `("originalName" = '${p.title.replace(/'/g, "''")}' AND "category" = '${p.category.replace(/'/g, "''")}')`
-    );
-    const imgRows = await prisma.$queryRawUnsafe<Array<{ originalname: string; category: string; maxversion: number }>>(
-      `SELECT "originalName", "category", MAX("version") as "maxversion" FROM "VehicleImage" WHERE ${conditions.join(" OR ")} GROUP BY "originalName", "category"`
-    );
-    for (const r of imgRows) {
-      const key = `${r.originalname}|||${r.category}`;
-      // Store separately to avoid cross-contamination with document keys.
-      maxVersions.set(`img|||${key}`, Number(r.maxversion));
-    }
-  }
-
-  const enriched = allDocs.map((d) => {
-    const isImage = d.mimeType?.startsWith("image/");
-    const key = `${d.title}|||${d.category}`;
-    const maxVer = isImage ? maxVersions.get(`img|||${key}`) : maxVersions.get(key);
-    return { ...d, isLatest: maxVer === undefined || d.version >= maxVer };
+  const q = req.query;
+  const kindParam = q.kind as string | undefined;
+  const expiryParam = q.expiry as string | undefined;
+  const result = await listFiles({
+    scope: "active",
+    search: q.search ? String(q.search) : undefined,
+    category: q.category ? String(q.category) : undefined,
+    kind: kindParam === "document" || kindParam === "image" ? kindParam : undefined,
+    expiryState: expiryParam === "expired" || expiryParam === "expiring" || expiryParam === "valid" ? expiryParam : undefined,
+    branchId: q.branchId ? String(q.branchId) : undefined,
+    vehicleId: q.vehicleId ? String(q.vehicleId) : undefined,
+    page: Number(q.page ?? "1"),
+    pageSize: Number(q.pageSize ?? "25"),
   });
-
-  const total = docTotal + imgTotal;
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
-
-  res.json({ documents: enriched, total, page, pageSize, totalPages });
+  res.json(result);
 });
 
 router.post(
@@ -274,81 +170,15 @@ router.post(
 );
 
 router.get("/trash", requireAuth(PERMISSIONS.DOCUMENT_VIEW), async (req, res) => {
-  const q = (req.query.search as string) ?? "";
-  const page = Number(req.query.page ?? "1");
-  const pageSize = Number(req.query.pageSize ?? "25");
-  const skip = (page - 1) * pageSize;
-  const docWhere: any = q
-    ? {
-        deletedAt: { not: null },
-        OR: [
-          { title: { contains: q, mode: "insensitive" } },
-          { originalName: { contains: q, mode: "insensitive" } },
-          { vehicle: { plateNumber: { contains: q, mode: "insensitive" } } },
-          { vehicle: { vehicleCode: { contains: q, mode: "insensitive" } } },
-        ],
-      }
-    : { deletedAt: { not: null } };
-  const imgWhere: any = q
-    ? {
-        deletedAt: { not: null },
-        OR: [
-          { originalName: { contains: q, mode: "insensitive" } },
-          { vehicle: { plateNumber: { contains: q, mode: "insensitive" } } },
-          { vehicle: { vehicleCode: { contains: q, mode: "insensitive" } } },
-        ],
-      }
-    : { deletedAt: { not: null } };
-
-  const vehicleSelect = {
-    select: { id: true, plateNumber: true, vehicleCode: true },
-  };
-  const fileInclude = {
-    vehicle: vehicleSelect,
-    uploadedBy: { select: { fullName: true } },
-  };
-
-  const [docs, images, docTotal, imgTotal] = await Promise.all([
-    prisma.vehicleDocument.findMany({
-      where: docWhere,
-      include: fileInclude,
-      orderBy: { deletedAt: "desc" },
-      skip,
-      take: pageSize,
-    }),
-    prisma.vehicleImage.findMany({
-      where: imgWhere,
-      include: fileInclude,
-      orderBy: { deletedAt: "desc" },
-      skip,
-      take: pageSize,
-    }),
-    prisma.vehicleDocument.count({ where: docWhere }),
-    prisma.vehicleImage.count({ where: imgWhere }),
-  ]);
-
-  const normalizedImages = images.map((img) => ({
-    id: img.id,
-    uploadedBy: img.uploadedBy,
-    title: img.originalName,
-    category: img.category,
-    fileName: img.fileName,
-    originalName: img.originalName,
-    mimeType: img.mimeType,
-    sizeBytes: img.sizeBytes,
-    version: img.version,
-    createdAt: img.createdAt,
-    deletedAt: img.deletedAt,
-    vehicle: img.vehicle,
-  }));
-
-  const allDocs = [...docs, ...normalizedImages].sort(
-    (a, b) =>
-      new Date(b.deletedAt ?? 0).getTime() - new Date(a.deletedAt ?? 0).getTime()
-  );
-
-  const total = docTotal + imgTotal;
-  res.json({ documents: allDocs, total, page, pageSize, totalPages: Math.max(1, Math.ceil(total / pageSize)) });
+  const q = req.query;
+  const result = await listFiles({
+    scope: "trash",
+    search: q.search ? String(q.search) : undefined,
+    category: q.category ? String(q.category) : undefined,
+    page: Number(q.page ?? "1"),
+    pageSize: Number(q.pageSize ?? "25"),
+  });
+  res.json(result);
 });
 
 router.post(
@@ -374,6 +204,45 @@ router.delete(
     });
     if (!purged) return res.status(404).json({ error: "Not found" });
     res.json({ ok: true });
+  }
+);
+
+// Bulk trash actions for the multi-select UI: { ids: string[] }.
+router.post(
+  "/trash/bulk-restore",
+  requireAuth(PERMISSIONS.DOCUMENT_DELETE),
+  async (req, res) => {
+    const ids = (req.body ?? {}).ids;
+    if (!Array.isArray(ids) || ids.length === 0 || ids.some((i: unknown) => typeof i !== "string")) {
+      return res.status(422).json({ error: "ids (string[]) is required" });
+    }
+    if (ids.length > 500) return res.status(422).json({ error: "Too many ids at once (max 500)" });
+    const result = await bulkRestoreTrash(ids, { userId: req.session!.userId, req });
+    res.json({ ok: true, ...result });
+  }
+);
+
+router.post(
+  "/trash/bulk-purge",
+  requireAuth(PERMISSIONS.DOCUMENT_DELETE),
+  async (req, res) => {
+    const ids = (req.body ?? {}).ids;
+    if (!Array.isArray(ids) || ids.length === 0 || ids.some((i: unknown) => typeof i !== "string")) {
+      return res.status(422).json({ error: "ids (string[]) is required" });
+    }
+    if (ids.length > 500) return res.status(422).json({ error: "Too many ids at once (max 500)" });
+    const result = await bulkPurgeTrash(ids, { userId: req.session!.userId, req });
+    res.json({ ok: true, ...result });
+  }
+);
+
+// Empty trash: purges every soft-deleted file in one call.
+router.post(
+  "/trash/empty",
+  requireAuth(PERMISSIONS.DOCUMENT_DELETE),
+  async (req, res) => {
+    const result = await emptyTrash({ userId: req.session!.userId, req });
+    res.json({ ok: true, ...result });
   }
 );
 
