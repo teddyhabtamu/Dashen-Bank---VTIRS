@@ -65,6 +65,7 @@ export function DatePicker({ value, onChange, placeholder = "Select date", disab
 
   useEffect(() => {
     if (!open) return;
+    const lastWidth = window.innerWidth;
     const onDocClick = (e: MouseEvent) => {
       if (triggerRef.current?.contains(e.target as Node) || popRef.current?.contains(e.target as Node)) return;
       if ((e.target as HTMLElement).closest('[role="listbox"]')) return;
@@ -76,15 +77,20 @@ export function DatePicker({ value, onChange, placeholder = "Select date", disab
       if ((e.target as HTMLElement).closest('[role="listbox"]')) return;
       setOpen(false);
     };
+    const onResize = () => {
+      // Same rationale as Select: ignore keyboard-induced height changes.
+      if (window.innerWidth === lastWidth) return;
+      setOpen(false);
+    };
     document.addEventListener("mousedown", onDocClick);
     document.addEventListener("keydown", onKey);
     window.addEventListener("scroll", onScroll, true);
-    window.addEventListener("resize", onScroll);
+    window.addEventListener("resize", onResize);
     return () => {
       document.removeEventListener("mousedown", onDocClick);
       document.removeEventListener("keydown", onKey);
       window.removeEventListener("scroll", onScroll, true);
-      window.removeEventListener("resize", onScroll);
+      window.removeEventListener("resize", onResize);
     };
   }, [open]);
 

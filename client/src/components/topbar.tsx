@@ -179,7 +179,7 @@ export function Topbar({
         {panelOpen && (
           <div
             ref={panelRef}
-            className="absolute right-0 top-full z-[80] mt-2 w-80 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl"
+            className="absolute right-0 top-full z-[80] mt-2 w-[min(20rem,calc(100vw-2rem))] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl"
           >
             <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
               <span className="text-sm font-semibold text-slate-800">
@@ -217,8 +217,9 @@ export function Topbar({
                       </Link>
                       <button
                         onClick={() => markOne(n.id)}
-                        className="mt-1 shrink-0 rounded p-1 text-slate-300 opacity-0 transition-opacity hover:text-slate-600 group-hover:opacity-100"
-                        title="Dismiss"
+                        className="touch-visible mt-1 shrink-0 rounded p-1 text-slate-300 opacity-0 transition-opacity hover:text-slate-600 group-hover:opacity-100 focus:opacity-100"
+                        title="Mark read"
+                        aria-label="Mark notification as read"
                       >
                         <Check className="h-3.5 w-3.5" />
                       </button>

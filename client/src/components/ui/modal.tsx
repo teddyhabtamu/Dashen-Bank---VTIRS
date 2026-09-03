@@ -21,6 +21,9 @@ const SIZE: Record<string, string> = {
   xl: "max-w-4xl",
 };
 
+// Tracks concurrently open modals (e.g. a ConfirmModal over a form modal).
+let openModalCount = 0;
+
 export function Modal({
   open,
   onClose,
@@ -38,16 +41,23 @@ export function Modal({
       if (e.key === "Escape") onClose();
     };
     document.addEventListener("keydown", onKey);
+    openModalCount += 1;
     // Lock the actual scroll container (the app <main>), not just <body>,
     // so the underlying content can't shift while the modal is open.
     const scroller = document.querySelector("main");
-    const prev = scroller ? scroller.style.overflow : "";
+    const prevMain = scroller ? scroller.style.overflow : "";
+    const prevBody = document.body.style.overflow;
     if (scroller) scroller.style.overflow = "hidden";
     document.body.style.overflow = "hidden";
     return () => {
       document.removeEventListener("keydown", onKey);
-      if (scroller) scroller.style.overflow = prev;
-      document.body.style.overflow = "";
+      openModalCount = Math.max(0, openModalCount - 1);
+      // Only restore scrolling when the LAST open modal closes — a nested
+      // modal previously re-enabled scrolling behind its still-open parent.
+      if (openModalCount === 0) {
+        if (scroller) scroller.style.overflow = prevMain;
+        document.body.style.overflow = prevBody;
+      }
     };
   }, [open, onClose]);
 

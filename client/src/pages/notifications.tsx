@@ -284,7 +284,7 @@ export default function NotificationsPage() {
                         <li key={row.id} className={`group flex items-start gap-3 px-4 py-3 hover:bg-slate-50 ${!row.isRead ? "bg-primary/[0.03]" : ""}`}>
                           <button
                             onClick={() => toggleSelect(row.id)}
-                            className={`mt-1 flex h-4 w-4 flex-shrink-0 items-center justify-center rounded border transition-colors ${selected.has(row.id) ? "border-primary bg-primary text-white" : "border-slate-300 opacity-0 group-hover:opacity-100 focus:opacity-100"}`}
+                            className={`touch-visible mt-1 flex h-4 w-4 flex-shrink-0 items-center justify-center rounded border transition-colors ${selected.has(row.id) ? "border-primary bg-primary text-white" : "border-slate-300 opacity-0 group-hover:opacity-100 focus:opacity-100"}`}
                             title="Select"
                           >
                             {selected.has(row.id) && <Check className="h-3 w-3" />}
@@ -318,7 +318,7 @@ export default function NotificationsPage() {
                             {!row.isRead && (
                               <button
                                 onClick={() => markOne(row.id)}
-                                className="rounded-md p-1 text-slate-300 opacity-0 transition-opacity hover:bg-slate-100 hover:text-slate-600 group-hover:opacity-100 focus:opacity-100"
+                                className="touch-visible rounded-md p-1 text-slate-300 opacity-0 transition-opacity hover:bg-slate-100 hover:text-slate-600 group-hover:opacity-100 focus:opacity-100"
                                 title="Mark read"
                               >
                                 <Check className="h-4 w-4" />
@@ -326,7 +326,7 @@ export default function NotificationsPage() {
                             )}
                             <button
                               onClick={() => deleteOne(row.id)}
-                              className="rounded-md p-1 text-slate-300 opacity-0 transition-opacity hover:bg-red-50 hover:text-red-500 group-hover:opacity-100 focus:opacity-100"
+                              className="touch-visible rounded-md p-1 text-slate-300 opacity-0 transition-opacity hover:bg-red-50 hover:text-red-500 group-hover:opacity-100 focus:opacity-100"
                               title="Dismiss"
                             >
                               <Trash2 className="h-4 w-4" />

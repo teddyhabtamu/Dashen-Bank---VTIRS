@@ -90,9 +90,25 @@ body {
     min-height: 44px;
     min-width: 44px;
   }
+  /* Hover-revealed row actions (notification rows, topbar panel) have no
+     hover on touch — keep them visible instead of unreachable. */
+  .touch-visible {
+    opacity: 1;
+  }
 }
 
 /* Notch/home-indicator safe area for bottom-anchored mobile surfaces. */
 .pb-safe {
   padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

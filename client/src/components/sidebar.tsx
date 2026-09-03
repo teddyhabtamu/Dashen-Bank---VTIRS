@@ -92,7 +92,7 @@ export function Sidebar({
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
-  const showTooltip = useCallback((label: string, e: React.MouseEvent<HTMLElement>) => {
+  const showTooltip = useCallback((label: string, e: React.SyntheticEvent<HTMLElement>) => {
     if (tooltipTimer.current) clearTimeout(tooltipTimer.current);
     const rect = e.currentTarget.getBoundingClientRect();
     setTooltip({ label, top: rect.top + rect.height / 2 });
@@ -124,6 +124,24 @@ export function Sidebar({
       document.removeEventListener("keydown", onKey);
     };
   }, [userMenuOpen]);
+
+  // Mobile drawer: Escape closes it and focus returns to the menu button that
+  // opened it (mirrors the modal contract).
+  const mobileMenuBtnRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    if (!mobileOpen) return;
+    mobileMenuBtnRef.current = document.activeElement as HTMLElement | null;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onCloseMobile();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      mobileMenuBtnRef.current?.focus?.();
+    };
+  }, [mobileOpen, onCloseMobile]);
+
+  const inUserArea = pathname.startsWith("/profile") || pathname.startsWith("/admin/settings");
 
   return (
     <>
@@ -192,8 +210,10 @@ export function Sidebar({
                       onClick={onCloseMobile}
                       onMouseEnter={(e) => collapsed && showTooltip(item.label, e)}
                       onMouseLeave={hideTooltip}
+                      onFocus={(e) => collapsed && showTooltip(item.label, e)}
+                      onBlur={hideTooltip}
                       className={cn(
-                        "relative flex items-center rounded-lg px-2 py-1.5 text-sm font-medium transition-all duration-150",
+                        "group relative flex items-center rounded-lg px-2 py-1.5 text-sm font-medium transition-all duration-150",
                         collapsed && "lg:justify-center",
                         active
                           ? "bg-white/15 text-white"
@@ -229,9 +249,12 @@ export function Sidebar({
         <div ref={userMenuRef} className="pb-safe relative shrink-0 border-t border-white/10 px-2 pb-3 pt-2">
           <button
             onClick={() => setUserMenuOpen((o) => !o)}
+            aria-expanded={userMenuOpen}
+            aria-label="Account menu"
             className={cn(
               "flex w-full items-center gap-3 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-white/10",
-              collapsed && "lg:justify-center"
+              collapsed && "lg:justify-center",
+              inUserArea && "bg-white/10"
             )}
             onMouseEnter={(e) => collapsed && user?.fullName && showTooltip(user.fullName, e)}
             onMouseLeave={hideTooltip}

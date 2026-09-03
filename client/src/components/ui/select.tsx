@@ -68,6 +68,7 @@ export function Select({
   useEffect(() => {
     if (!open) return;
     if (searchable) setTimeout(() => searchRef.current?.focus(), 10);
+    const lastWidth = window.innerWidth;
     const onDocClick = (e: MouseEvent) => {
       if (triggerRef.current?.contains(e.target as Node) || menuRef.current?.contains(e.target as Node)) return;
       setOpen(false);
@@ -81,15 +82,22 @@ export function Select({
       if (menuRef.current?.contains(e.target as Node)) return;
       setOpen(false);
     };
+    const onResize = () => {
+      // Mobile keyboards shrink viewport height without changing width —
+      // dismissing here would close the menu the moment the user taps the
+      // search box. Only real width changes (rotation, split-screen) close it.
+      if (window.innerWidth === lastWidth) return;
+      setOpen(false);
+    };
     document.addEventListener("mousedown", onDocClick);
     document.addEventListener("keydown", onKey);
     window.addEventListener("scroll", onScroll, true);
-    window.addEventListener("resize", onScroll);
+    window.addEventListener("resize", onResize);
     return () => {
       document.removeEventListener("mousedown", onDocClick);
       document.removeEventListener("keydown", onKey);
       window.removeEventListener("scroll", onScroll, true);
-      window.removeEventListener("resize", onScroll);
+      window.removeEventListener("resize", onResize);
     };
   }, [open, searchable]);
 
