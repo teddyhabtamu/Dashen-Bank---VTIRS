@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { Settings as SettingsIcon, Save, Building2, Bell, Monitor, ShieldCheck } from "lucide-react";
 import { BrandLoader } from "@/components/ui/brand-loader";
+import { useAuth } from "@/components/auth-context";
+import { PERMISSIONS } from "@/lib/rbac";
 import { useToast } from "@/lib/toast-context";
 import { DOCUMENT_CATEGORY_OPTIONS, label } from "@/lib/constants";
 
@@ -57,10 +60,13 @@ function helps(key: string): string {
 }
 
 export default function SettingsPage() {
+  const { can } = useAuth();
+  const canManageSettings = can(PERMISSIONS.SETTING_MANAGE);
   const [grouped, setGrouped] = useState<Grouped>({});
   const [values, setValues] = useState<Record<string, string>>({});
   const [vehicleTypes, setVehicleTypes] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const [forbidden, setForbidden] = useState(false);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -68,8 +74,21 @@ export default function SettingsPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
+    setForbidden(false);
+    if (!canManageSettings) {
+      setLoading(false);
+      setForbidden(true);
+      return;
+    }
     try {
       const res = await fetch("/api/settings");
+      if (res.status === 403) {
+        setGrouped({});
+        setValues({});
+        setForbidden(true);
+        return;
+      }
+      if (!res.ok) throw new Error(`Request failed (${res.status})`);
       const data = await res.json();
       const { _vehicleTypes, ...groups } = data ?? {};
       setGrouped(groups ?? {});
@@ -81,10 +100,13 @@ export default function SettingsPage() {
         }
       }
       setValues(flat);
+    } catch {
+      setGrouped({});
+      setMessage({ type: "error", text: "Could not load settings. Please try again." });
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [canManageSettings]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -179,6 +201,20 @@ export default function SettingsPage() {
           System Settings
         </h2>
         <div className="flex justify-center py-16"><BrandLoader /></div>
+      </div>
+    );
+  }
+
+  if (forbidden) {
+    return (
+      <div className="mx-auto max-w-2xl space-y-3 py-16 text-center">
+        <h2 className="text-lg font-semibold text-slate-800">Settings are restricted</h2>
+        <p className="text-sm text-slate-500">
+          Your account does not have permission to view or change system settings. Contact an administrator if access is required.
+        </p>
+        <Link to="/dashboard" className="text-sm font-medium text-primary hover:underline">
+          Back to dashboard
+        </Link>
       </div>
     );
   }

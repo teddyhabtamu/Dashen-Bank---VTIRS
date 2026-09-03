@@ -19,6 +19,7 @@ interface UserRow {
   fullName: string;
   status: string;
   lastLoginAt: string | null;
+  lockedUntil: string | null;
   createdAt: string;
   roleSlug: string;
   roleName: string;
@@ -198,6 +199,30 @@ export default function UsersPage() {
     }
   }
 
+  function isLocked(row: UserRow): boolean {
+    return !!row.lockedUntil && new Date(row.lockedUntil).getTime() > Date.now();
+  }
+
+  async function doUnlock(id: string) {
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/users/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ resetLock: true }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast("error", data.error ?? "Failed to unlock sign-in");
+        return;
+      }
+      toast("success", "Sign-in unlocked");
+      await load();
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -294,6 +319,9 @@ export default function UsersPage() {
                     <span className={`badge ${row.status === "ACTIVE" ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
                       {row.status}
                     </span>
+                    {isLocked(row) && (
+                      <span className="badge ml-1 bg-amber-100 text-amber-700">Locked</span>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-xs text-slate-400">
                     {row.lastLoginAt ? formatDateTime(row.lastLoginAt) : "—"}
@@ -308,6 +336,7 @@ export default function UsersPage() {
                       )}
                       items={[
                         { label: "Edit", icon: <Pencil className="h-4 w-4" />, onClick: () => openEdit(row) },
+                        ...(isLocked(row) ? [{ label: "Unlock sign-in", onClick: () => doUnlock(row.id) }] : []),
                         { label: "Delete", icon: <Trash2 className="h-4 w-4" />, danger: true, onClick: () => setDeleteId(row.id) },
                       ]}
                     />
@@ -330,6 +359,9 @@ export default function UsersPage() {
                 <span className={`badge whitespace-nowrap ${row.status === "ACTIVE" ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
                   {row.status}
                 </span>
+                {isLocked(row) && (
+                  <span className="badge whitespace-nowrap bg-amber-100 text-amber-700">Locked</span>
+                )}
               </div>
               <div className="grid grid-cols-2 gap-1 text-xs">
                 <span className="text-slate-500">Email:</span>
@@ -348,10 +380,11 @@ export default function UsersPage() {
                       <MoreVertical className="h-4 w-4" />
                     </button>
                   )}
-                  items={[
-                    { label: "Edit", icon: <Pencil className="h-4 w-4" />, onClick: () => openEdit(row) },
-                    { label: "Delete", icon: <Trash2 className="h-4 w-4" />, danger: true, onClick: () => setDeleteId(row.id) },
-                  ]}
+                      items={[
+                        { label: "Edit", icon: <Pencil className="h-4 w-4" />, onClick: () => openEdit(row) },
+                        ...(isLocked(row) ? [{ label: "Unlock sign-in", onClick: () => doUnlock(row.id) }] : []),
+                        { label: "Delete", icon: <Trash2 className="h-4 w-4" />, danger: true, onClick: () => setDeleteId(row.id) },
+                      ]}
                 />
               </div>
             </div>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/components/auth-context";
 import { useBrand } from "@/lib/brand-context";
@@ -6,13 +6,19 @@ import { useToast } from "@/lib/toast-context";
 
 export default function LoginPage() {
   const navigate = useNavigate();
-  const { refresh } = useAuth();
+  const { refresh, user, loading: authLoading } = useAuth();
   const { companyName, systemName } = useBrand();
   const { toast } = useToast();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!authLoading && user) {
+      navigate("/dashboard", { replace: true });
+    }
+  }, [authLoading, user, navigate]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -26,8 +32,9 @@ export default function LoginPage() {
       });
       const data = await res.json();
       if (!res.ok) {
+        // Authentication failures stay inline only; a second toast for the
+        // same error adds noise without helping recovery.
         setError(data.error ?? "Login failed");
-        toast("error", data.error ?? "Login failed");
         return;
       }
       await refresh();

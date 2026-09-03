@@ -54,7 +54,10 @@ model User {
   branchId     String?
   branch       Branch?  @relation(fields: [branchId], references: [id])
   lastLoginAt  DateTime?
-  createdAt    DateTime @default(now())
+  failedLoginAttempts Int @default(0)
+  lastFailedLoginAt DateTime?
+  lockedUntil DateTime?
+  createdAt DateTime @default(now())
   updatedAt    DateTime @updatedAt
   auditLogs    AuditLog[]
   notifications Notification[]

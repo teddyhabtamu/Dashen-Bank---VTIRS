@@ -46,6 +46,7 @@ export async function listUsers({
         fullName: true,
         status: true,
         lastLoginAt: true,
+        lockedUntil: true,
         createdAt: true,
         role: { select: { slug: true, name: true } },
         branch: { select: { id: true, name: true } },
@@ -81,6 +82,7 @@ export async function getUser(id: string) {
       fullName: true,
       status: true,
       lastLoginAt: true,
+      lockedUntil: true,
       createdAt: true,
       role: { select: { slug: true, name: true } },
       branch: { select: { id: true, name: true } },
@@ -155,6 +157,7 @@ export async function updateUser(
     branchId?: string | null;
     status?: string;
     password?: string;
+    resetLock?: boolean;
   },
   ctx: { userId?: string | null; req?: AuditReq }
 ) {
@@ -164,6 +167,11 @@ export async function updateUser(
   if (data.roleId !== undefined) patch.role = { connect: { id: data.roleId } };
   if (data.branchId !== undefined) patch.branch = data.branchId ? { connect: { id: data.branchId } } : { disconnect: true };
   if (data.status !== undefined) patch.status = data.status;
+  if (data.resetLock) {
+    patch.failedLoginAttempts = 0;
+    patch.lastFailedLoginAt = null;
+    patch.lockedUntil = null;
+  }
   if (data.password) {
     await validatePassword(data.password);
     patch.passwordHash = await hashPassword(data.password);

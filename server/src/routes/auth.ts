@@ -7,41 +7,132 @@ import { ROLE_PERMISSIONS } from "../lib/rbac.js";
 import { requireAuth, resolveSession } from "../lib/guard.js";
 import { getSetting } from "../services/setting.js";
 
-const failedAttempts = new Map<string, { count: number; last: number }>();
+const dummyPasswordHash = hashPassword(`vtirs-invalid-login-${Math.random().toString(36).slice(2)}`);
+
+// Best-effort per-network throttle for the login endpoint. Persistent account
+// locks below are the primary defense and survive restarts/scale-out; this
+// in-memory window only slows broad username/password spraying from one
+// egress IP. Failed sign-ins increment it; successful sign-ins reset it.
+const ipFailures = new Map<string, { count: number; resetAt: number }>();
+const IP_FAILURE_LIMIT = 30;
+const IP_FAILURE_WINDOW_MS = 10 * 60 * 1000;
+const BASE_LOCK_MINUTES = 15;
+const MAX_LOCK_MINUTES = 24 * 60;
+const FAILURE_DECAY_MS = 24 * 60 * 60 * 1000;
+
+function clientIp(req: { headers?: Record<string, unknown>; ip?: string; socket?: { remoteAddress?: string } }): string {
+  const forwarded = req.headers?.["x-forwarded-for"];
+  const first = Array.isArray(forwarded)
+    ? forwarded[0]
+    : typeof forwarded === "string"
+      ? forwarded.split(",")[0]?.trim()
+      : undefined;
+  return first || req.ip || req.socket?.remoteAddress || "unknown";
+}
+
+function ipFailureState(ip: string): { count: number; resetAt: number } {
+  const now = Date.now();
+  const current = ipFailures.get(ip);
+  if (!current || now >= current.resetAt) {
+    const next = { count: 0, resetAt: now + IP_FAILURE_WINDOW_MS };
+    ipFailures.set(ip, next);
+    // Avoid unbounded growth from internet-wide scanning.
+    if (ipFailures.size > 5000) {
+      for (const [key, value] of ipFailures) {
+        if (value.resetAt <= now) ipFailures.delete(key);
+      }
+    }
+    return next;
+  }
+  return current;
+}
+
+function recordIpFailure(ip: string): number {
+  const state = ipFailureState(ip);
+  state.count += 1;
+  return state.count > IP_FAILURE_LIMIT
+    ? Math.max(1, Math.ceil((state.resetAt - Date.now()) / 1000))
+    : 0;
+}
+
 const router = Router();
 
 router.post("/login", async (req, res) => {
   const body = (req.body ?? {}) as { username?: string; password?: string };
-  const username = body.username?.trim();
+  // Usernames are stored lowercase on creation; normalize here so "Abebe"
+  // and "abebe" resolve to the same account.
+  const username = body.username?.trim().toLowerCase();
   const password = body.password;
 
   if (!username || !password) {
     return res.status(400).json({ error: "Username and password are required" });
   }
 
-  const maxAttempts = Number(await getSetting("max_login_attempts", "5")) || 5;
-  const record = failedAttempts.get(username);
-  if (record && record.count >= maxAttempts && Date.now() - record.last < 15 * 60 * 1000) {
-    const minutes = Math.ceil(15 - (Date.now() - record.last) / 60000);
-    return res.status(429).json({ error: `Account temporarily locked. Try again in ${minutes} minute(s).` });
+  const ip = clientIp(req);
+  const ipState = ipFailureState(ip);
+  if (ipState.count >= IP_FAILURE_LIMIT) {
+    const retryAfter = Math.max(1, Math.ceil((ipState.resetAt - Date.now()) / 1000));
+    res.set("Retry-After", String(retryAfter));
+    return res.status(429).json({ error: `Too many sign-in attempts. Try again in ${retryAfter} second(s).` });
   }
 
+  const maxAttempts = Number(await getSetting("max_login_attempts", "5")) || 5;
   const user = await prisma.user.findUnique({
     where: { username },
     include: { role: { include: { permissions: true } } },
   });
-
-  if (!user || !(await verifyPassword(password, user.passwordHash))) {
-    const prev = failedAttempts.get(username) ?? { count: 0, last: 0 };
-    failedAttempts.set(username, { count: prev.count + 1, last: Date.now() });
-    const remaining = maxAttempts - (prev.count + 1);
-    const msg = remaining > 0
-      ? `Invalid username or password. ${remaining} attempt(s) remaining.`
-      : "Account locked due to too many failed attempts. Try again later.";
-    return res.status(401).json({ error: msg });
+  const now = Date.now();
+  if (user?.lockedUntil && user.lockedUntil.getTime() > now) {
+    recordIpFailure(ip);
+    const retryAfter = Math.max(1, Math.ceil((user.lockedUntil.getTime() - now) / 1000));
+    res.set("Retry-After", String(retryAfter));
+    return res.status(429).json({
+      error: `Account temporarily locked. Try again in ${Math.max(1, Math.ceil(retryAfter / 60))} minute(s).`,
+    });
   }
 
-  failedAttempts.delete(username);
+  // For unknown usernames, still do password-hash work before rejecting so a
+  // timing probe cannot reliably distinguish valid from invalid usernames.
+  const passwordOk = user
+    ? await verifyPassword(password, user.passwordHash)
+    : await verifyPassword(password, await dummyPasswordHash);
+
+  if (!user || !passwordOk) {
+    recordIpFailure(ip);
+    if (user) {
+      // Stale typo counters decay instead of accumulating forever.
+      const lastFailedAt = user.lastFailedLoginAt?.getTime() ?? 0;
+      const attempts = (now - lastFailedAt > FAILURE_DECAY_MS ? 0 : user.failedLoginAttempts ?? 0) + 1;
+      let lockedUntil: Date | null = null;
+      if (attempts >= maxAttempts) {
+        const minutes = Math.min(BASE_LOCK_MINUTES * 2 ** (attempts - maxAttempts), MAX_LOCK_MINUTES);
+        lockedUntil = new Date(now + minutes * 60 * 1000);
+        await writeAudit({
+          action: "ACCOUNT_LOCKED",
+          entity: "User",
+          entityId: user.id,
+          userId: user.id,
+          newValue: { failedLoginAttempts: attempts, lockedUntil },
+          req,
+        });
+      }
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { failedLoginAttempts: attempts, lastFailedLoginAt: new Date(), lockedUntil },
+      });
+      if (lockedUntil) {
+        const retryAfter = Math.max(1, Math.ceil((lockedUntil.getTime() - now) / 1000));
+        res.set("Retry-After", String(retryAfter));
+        return res.status(429).json({
+          error: `Account temporarily locked. Try again in ${Math.max(1, Math.ceil(retryAfter / 60))} minute(s).`,
+        });
+      }
+    }
+    // Neutral message for both unknown users and wrong passwords.
+    return res.status(401).json({ error: "Invalid username or password." });
+  }
+
+  ipFailures.delete(ip);
 
   if (user.status !== "ACTIVE") {
     return res.status(403).json({
@@ -58,7 +149,7 @@ router.post("/login", async (req, res) => {
 
   await prisma.user.update({
     where: { id: user.id },
-    data: { lastLoginAt: new Date() },
+    data: { lastLoginAt: new Date(), failedLoginAttempts: 0, lastFailedLoginAt: null, lockedUntil: null },
   });
 
   await writeAudit({

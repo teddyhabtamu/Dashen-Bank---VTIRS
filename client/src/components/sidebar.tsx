@@ -49,7 +49,10 @@ const SECTIONS: NavSection[] = [
     items: [
       { href: "/insurances", label: "Insurance", icon: Shield, perm: PERMISSIONS.INSURANCE_MANAGE },
       { href: "/documents", label: "Documents", icon: FileText, perm: PERMISSIONS.DOCUMENT_VIEW },
-      { href: "/drivers", label: "Drivers", icon: UserRound, perm: PERMISSIONS.BRANCH_MANAGE },
+      // Driver records already appear across the registry, vehicle detail,
+      // search and dashboards, and the API allows authenticated reads. Keep
+      // the page discoverable; mutations remain permission-gated in the UI.
+      { href: "/drivers", label: "Drivers", icon: UserRound },
       { href: "/search", label: "Search", icon: Search, perm: PERMISSIONS.VEHICLE_VIEW },
       { href: "/reports", label: "Reports", icon: BarChart3, perm: PERMISSIONS.REPORT_VIEW },
     ],
@@ -66,6 +69,7 @@ const SECTIONS: NavSection[] = [
     items: [
       { href: "/admin/users", label: "Users", icon: Users, perm: PERMISSIONS.USER_MANAGE },
       { href: "/admin/roles", label: "Roles & Permissions", icon: Shield, perm: PERMISSIONS.ROLE_MANAGE },
+      { href: "/admin/settings", label: "Settings", icon: Settings, perm: PERMISSIONS.SETTING_MANAGE },
     ],
   },
 ];
@@ -271,14 +275,6 @@ export function Sidebar({
               >
                 <User className="h-4 w-4 shrink-0" />
                 My Profile
-              </Link>
-              <Link
-                to="/admin/settings"
-                onClick={() => { setUserMenuOpen(false); onCloseMobile(); }}
-                className="flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-white/80 transition-colors hover:bg-white/10 hover:text-white"
-              >
-                <Settings className="h-4 w-4 shrink-0" />
-                Settings
               </Link>
               <button
                 onClick={() => { setUserMenuOpen(false); setConfirmSignOut(true); }}

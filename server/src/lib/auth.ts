@@ -3,7 +3,8 @@ import type { Response } from "express";
 import { getSetting } from "../services/setting.js";
 
 export const SESSION_COOKIE = "vtirs_session";
-const MAX_JWT_AGE = 60 * 60 * 24 * 30; // 30 days (safety bound — actual timeout is dynamic)
+const MAX_JWT_AGE = 60 * 60 * 24 * 30; // 30 days (absolute safety bound)
+const DEFAULT_SESSION_TIMEOUT_MINUTES = 60 * 8; // matches the 480-minute setting default
 
 function getSecret(): Uint8Array {
   const secret = process.env.JWT_SECRET;
@@ -20,11 +21,12 @@ export interface SessionPayload {
   permissions: string[];
 }
 
-export async function signSession(payload: SessionPayload): Promise<string> {
+export async function signSession(payload: SessionPayload, lifetimeSeconds: number = MAX_JWT_AGE): Promise<string> {
+  const lifetime = Math.max(60, Math.min(Math.floor(lifetimeSeconds), MAX_JWT_AGE));
   return new SignJWT({ ...payload })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
-    .setExpirationTime(`${MAX_JWT_AGE}s`)
+    .setExpirationTime(`${lifetime}s`)
     .sign(getSecret());
 }
 
@@ -54,20 +56,35 @@ export async function verifySession(
   }
 }
 
+export async function sessionLifetimeSeconds(): Promise<number> {
+  // Align the JWT and cookie with the administrator-configured session
+  // timeout. "0" means never expire; cap that at the absolute JWT safety bound.
+  const raw = await getSetting("session_timeout_minutes", String(DEFAULT_SESSION_TIMEOUT_MINUTES));
+  if (raw === "0") return MAX_JWT_AGE;
+  const minutes = Number(raw);
+  if (!Number.isFinite(minutes) || minutes <= 0) return DEFAULT_SESSION_TIMEOUT_MINUTES * 60;
+  return Math.min(minutes * 60, MAX_JWT_AGE);
+}
+
 export async function setSessionCookie(
   res: Response,
   payload: SessionPayload,
 ): Promise<void> {
-  const token = await signSession(payload);
+  const lifetimeSeconds = await sessionLifetimeSeconds();
+  const token = await signSession(payload, lifetimeSeconds);
+  const isProduction = process.env.NODE_ENV === "production";
   res.cookie(SESSION_COOKIE, token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: isProduction,
     sameSite: "lax",
     path: "/",
-    maxAge: MAX_JWT_AGE * 1000,
+    maxAge: lifetimeSeconds * 1000,
   });
 }
 
 export function clearSessionCookie(res: Response): void {
-  res.clearCookie(SESSION_COOKIE, { path: "/" });
+  // Match the attributes used when the cookie was created so production
+  // browsers reliably delete the secure session cookie.
+  const isProduction = process.env.NODE_ENV === "production";
+  res.clearCookie(SESSION_COOKIE, { path: "/", secure: isProduction, sameSite: "lax" });
 }
