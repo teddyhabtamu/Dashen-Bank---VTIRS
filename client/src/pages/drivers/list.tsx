@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Users, Search, Plus, MoreVertical, Pencil, Trash2, Download, UserRound } from "lucide-react";
+import { Users, Search, Plus, MoreVertical, Pencil, Trash2, Download, UserRound, X, AlertOctagon } from "lucide-react";
 import { BrandLoader } from "@/components/ui/brand-loader";
 import { Select } from "@/components/ui/select";
 import { PhoneInput } from "@/components/ui/phone-input";
@@ -26,6 +26,8 @@ interface DriverRow {
   vehicles: { id: string; plateNumber: string; vehicleCode: string; make?: string | null; model?: string | null }[];
 }
 
+const PAGE_SIZES = [15, 25, 50, 100];
+
 const STATUS_OPTIONS = [
   { value: "", label: "All Statuses" },
   { value: "ACTIVE", label: "Active" },
@@ -44,8 +46,12 @@ export default function DriversPage() {
   const [search, setSearch] = useState("");
   const [deptFilter, setDeptFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [branchFilter, setBranchFilter] = useState("");
+  const [unassignedOnly, setUnassignedOnly] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [departments, setDepartments] = useState<{ id: string; name: string }[]>([]);
+  const [branches, setBranches] = useState<{ id: string; name: string }[]>([]);
 
   const [formOpen, setFormOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
@@ -65,47 +71,107 @@ export default function DriversPage() {
 
   useEffect(() => {
     fetch("/api/reference/lookups")
-      .then((r) => r.json())
-      .then((d) =>
-        setDepartments((d.departments ?? []).map((dep: { value: string; label: string }) => ({ id: dep.value, name: dep.label })))
-      )
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        setDepartments((d.departments ?? []).map((dep: { value: string; label: string }) => ({ id: dep.value, name: dep.label })));
+        setBranches((d.branches ?? []).map((b: { value: string; label: string }) => ({ id: b.value, name: b.label })));
+      })
       .catch(() => setDepartments([]));
   }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
+    setError(null);
     const qs = new URLSearchParams();
     qs.set("page", String(page));
+    qs.set("pageSize", String(pageSize));
     if (search) qs.set("search", search);
     if (deptFilter) qs.set("departmentId", deptFilter);
     if (statusFilter) qs.set("status", statusFilter);
-    const res = await fetch(`/api/drivers?${qs.toString()}`);
-    const data = await res.json();
-    setRows(data.rows ?? []);
-    setTotal(data.total ?? 0);
-    if (data.pageSize) setPageSize(data.pageSize);
-    setLoading(false);
-  }, [page, search, deptFilter, statusFilter]);
+    if (branchFilter) qs.set("branchId", branchFilter);
+    if (unassignedOnly) qs.set("unassigned", "true");
+    try {
+      const res = await fetch(`/api/drivers?${qs.toString()}`);
+      if (!res.ok) throw new Error(`Request failed (${res.status})`);
+      const data = await res.json();
+      setRows(data.rows ?? []);
+      setTotal(data.total ?? 0);
+      if (data.pageSize) setPageSize(data.pageSize);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load drivers");
+      setRows([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [page, pageSize, search, deptFilter, statusFilter, branchFilter, unassignedOnly]);
 
   useEffect(() => { load(); }, [load]);
 
-  function exportDrivers(format: "csv" | "excel" | "pdf") {
-    const data = rows.map((d) => ({
-      Name: d.fullName,
-      "Employee ID": d.employeeId ?? "",
-      "License No": d.licenseNo ?? "",
-      Phone: d.phone ?? "",
-      Department: d.department?.name ?? "",
-      "Current Vehicle": d.vehicles[0] ? `${d.vehicles[0].plateNumber} (${d.vehicles[0].vehicleCode})` : "",
-      Status: d.isActive ? "Active" : "Inactive",
-    }));
+  const exportColumns = (d: DriverRow) => ({
+    Name: d.fullName,
+    "Employee ID": d.employeeId ?? "",
+    "License No": d.licenseNo ?? "",
+    Phone: d.phone ?? "",
+    Department: d.department?.name ?? "",
+    "Current Vehicle": d.vehicles[0] ? `${d.vehicles[0].plateNumber} (${d.vehicles[0].vehicleCode})` : "",
+    Status: d.isActive ? "Active" : "Inactive",
+  });
+
+  function exportPage(format: "csv" | "excel" | "pdf") {
+    const data = rows.map(exportColumns);
     const stamp = new Date().toISOString().slice(0, 10);
-    if (format === "csv") exportCsv(`drivers_${stamp}.csv`, data);
-    else if (format === "excel") exportXlsx(`drivers_${stamp}.xlsx`, data);
-    else exportPdf(rowsToHtmlTable("Drivers", data), "Drivers", companyName);
+    if (format === "csv") exportCsv(`drivers_page${page}_${stamp}.csv`, data);
+    else if (format === "excel") exportXlsx(`drivers_page${page}_${stamp}.xlsx`, data);
+    else exportPdf(rowsToHtmlTable(`Drivers (page ${page})`, data), `Drivers (page ${page})`, companyName);
+  }
+
+  async function exportAll(format: "csv" | "excel" | "pdf") {
+    const allRows: DriverRow[] = [];
+    const qs = new URLSearchParams();
+    qs.set("pageSize", "1000");
+    if (search) qs.set("search", search);
+    if (deptFilter) qs.set("departmentId", deptFilter);
+    if (statusFilter) qs.set("status", statusFilter);
+    if (branchFilter) qs.set("branchId", branchFilter);
+    if (unassignedOnly) qs.set("unassigned", "true");
+    try {
+      for (let p = 1; p <= 50; p++) {
+        qs.set("page", String(p));
+        const res = await fetch(`/api/drivers?${qs.toString()}`);
+        if (!res.ok) throw new Error("Export fetch failed");
+        const data = await res.json();
+        const items = data.rows ?? [];
+        allRows.push(...items);
+        if (allRows.length >= (data.total ?? 0) || items.length === 0) break;
+      }
+    } catch {
+      toast("error", "Could not collect rows for export");
+      return;
+    }
+    if (allRows.length === 0) { toast("error", "Nothing to export"); return; }
+    const scope = hasFilters ? "filtered" : "all";
+    const stamp = new Date().toISOString().slice(0, 10);
+    const data = allRows.map(exportColumns);
+    if (format === "csv") exportCsv(`drivers_${scope}_${stamp}.csv`, data);
+    else if (format === "excel") exportXlsx(`drivers_${scope}_${stamp}.xlsx`, data);
+    else exportPdf(rowsToHtmlTable(`Drivers (${scope})`, data), `Drivers (${scope})`, companyName);
+    toast("success", `Exported ${allRows.length} driver(s)`);
   }
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const hasFilters = Boolean(search || deptFilter || statusFilter || branchFilter || unassignedOnly);
+
+  const chips: { key: string; label: string; clear: () => void }[] = [];
+  if (search) chips.push({ key: "q", label: `"${search}"`, clear: () => setSearch("") });
+  if (deptFilter) chips.push({ key: "dept", label: `Dept: ${departments.find((d) => d.id === deptFilter)?.name ?? "…"}`, clear: () => setDeptFilter("") });
+  if (statusFilter) chips.push({ key: "status", label: `Status: ${statusFilter === "ACTIVE" ? "Active" : "Inactive"}`, clear: () => setStatusFilter("") });
+  if (branchFilter) chips.push({ key: "branch", label: `Branch: ${branches.find((b) => b.id === branchFilter)?.name ?? "…"}`, clear: () => setBranchFilter("") });
+  if (unassignedOnly) chips.push({ key: "unassigned", label: "Unassigned only", clear: () => setUnassignedOnly(false) });
+
+  function clearAllFilters() {
+    setSearch(""); setDeptFilter(""); setStatusFilter(""); setBranchFilter(""); setUnassignedOnly(false);
+    setPage(1);
+  }
 
   function resetForm() {
     setForm({ fullName: "", employeeId: "", licenseNo: "", phone: "", departmentId: "", isActive: true });
@@ -176,7 +242,7 @@ export default function DriversPage() {
       const res = await fetch(`/api/drivers/${deleteId}`, { method: "DELETE" });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setErr(data.error ?? "Failed to delete driver");
+        toast("error", data.error ?? "Failed to delete driver");
         return;
       }
       setDeleteId(null);
@@ -187,7 +253,7 @@ export default function DriversPage() {
     }
   }
 
-  const canManage = can(PERMISSIONS.BRANCH_MANAGE);
+  const canManage = can(PERMISSIONS.DRIVER_MANAGE);
 
   return (
     <div className="space-y-4">
@@ -197,13 +263,18 @@ export default function DriversPage() {
           <p className="text-sm text-slate-500">Manage drivers, their vehicles &amp; assignments</p>
         </div>
         <div className="flex items-center gap-2">
-          {rows.length > 0 && (
+          {rows.length > 0 && !loading && (
             <Dropdown align="right"
               trigger={({ toggle }) => (<Tooltip content="Export"><button onClick={toggle} className="btn-outline text-xs"><Download className="h-3.5 w-3.5" /> Export</button></Tooltip>)}
               items={[
-                { label: "CSV", onClick: () => exportDrivers("csv") },
-                { label: "Excel", onClick: () => exportDrivers("excel") },
-                { label: "PDF", onClick: () => exportDrivers("pdf") },
+                { label: "Current view — all pages", header: true },
+                { label: "CSV", onClick: () => exportAll("csv") },
+                { label: "Excel", onClick: () => exportAll("excel") },
+                { label: "PDF", onClick: () => exportAll("pdf") },
+                { label: `This page only (${rows.length} rows)`, header: true },
+                { label: "CSV", onClick: () => exportPage("csv") },
+                { label: "Excel", onClick: () => exportPage("excel") },
+                { label: "PDF", onClick: () => exportPage("pdf") },
               ]}
             />
           )}
@@ -222,8 +293,7 @@ export default function DriversPage() {
             className="input w-full pl-9"
             placeholder="Search name, employee ID, license…"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") { setPage(1); load(); } }}
+            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
           />
         </div>
         <Select
@@ -243,16 +313,56 @@ export default function DriversPage() {
           onChange={(v) => { setStatusFilter(v); setPage(1); }}
           options={STATUS_OPTIONS}
         />
+        <Select
+          className="w-full sm:w-44"
+          value={branchFilter}
+          onChange={(v) => { setBranchFilter(v); setPage(1); }}
+          placeholder="All Branches"
+          options={[
+            { value: "", label: "All Branches" },
+            ...branches.map((b) => ({ value: b.id, label: b.name })),
+          ]}
+          clearable
+        />
+        <button
+          onClick={() => { setUnassignedOnly((u) => !u); setPage(1); }}
+          className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${unassignedOnly ? "border-primary bg-primary/10 text-primary" : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"}`}
+        >
+          <Users className="h-3.5 w-3.5" /> Unassigned only
+        </button>
       </div>
 
+      {chips.length > 0 && (
+        <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3">
+          <span className="text-xs font-medium uppercase tracking-wide text-slate-400">Active:</span>
+          {chips.map((c) => (
+            <button key={c.key} onClick={c.clear}
+              className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/20">
+              {c.label} <X className="h-3 w-3" />
+            </button>
+          ))}
+          <button onClick={clearAllFilters} className="text-xs text-slate-400 underline hover:text-slate-600">Clear all</button>
+        </div>
+      )}
+
       <div className="card overflow-hidden">
-        {loading ? (
+        {error ? (
+          <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">
+            <AlertOctagon className="h-10 w-10 text-red-300" />
+            <h3 className="text-base font-semibold text-slate-700">Couldn't load drivers</h3>
+            <p className="text-sm text-slate-400">{error}</p>
+            <button className="btn-outline mt-1" onClick={() => load()}>Try again</button>
+          </div>
+        ) : loading ? (
           <BrandLoader />
         ) : rows.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <Users className="mb-3 h-10 w-10 text-slate-300" />
             <h3 className="text-base font-semibold text-slate-700">No drivers found</h3>
-            <p className="mt-1 max-w-sm text-sm text-slate-400">No drivers match the current filters.</p>
+            <p className="mt-1 max-w-sm text-sm text-slate-400">
+              {hasFilters ? "No drivers match the current filters." : "Add a driver to get started."}
+            </p>
+            {hasFilters && <button className="btn-outline mt-3" onClick={clearAllFilters}>Clear filters</button>}
           </div>
         ) : (
           <>
@@ -276,7 +386,7 @@ export default function DriversPage() {
                   </thead>
                 <tbody className="divide-y divide-slate-100">
                   {rows.map((row) => (
-                    <tr key={row.id} className="text-sm hover:bg-slate-50">
+                    <tr key={row.id} className="cursor-pointer text-sm hover:bg-slate-50" onClick={() => navigate(`/drivers/${row.id}`)} title="Open driver profile">
                       <td className="px-4 py-3">
                         <Link to={`/drivers/${row.id}`} className="inline-flex items-center gap-2 font-medium text-slate-800 hover:text-primary">
                           <span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-slate-500">
@@ -300,7 +410,7 @@ export default function DriversPage() {
                           {row.isActive ? "Active" : "Inactive"}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-right">
+                      <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                         <Dropdown
                           align="right"
                           trigger={({ toggle }) => (
@@ -368,11 +478,23 @@ export default function DriversPage() {
               ))}
             </div>
 
-            <div className="flex items-center justify-between border-t border-slate-100 px-5 py-3 text-sm text-slate-500">
-              <span className="text-sm font-medium text-slate-600">{total} driver(s)</span>
-              <span className="text-xs text-slate-400">Page {page} / {totalPages}</span>
-              <div className="flex gap-2">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-5 py-3 text-sm text-slate-500">
+              <div className="flex items-center gap-3">
+                <span>{total} driver(s)</span>
+                <span className="hidden items-center gap-1.5 sm:flex">
+                  Rows per page
+                  <Select
+                    className="w-20"
+                    value={String(pageSize)}
+                    onChange={(v) => { setPageSize(Number(v)); setPage(1); }}
+                    options={PAGE_SIZES.map((s) => ({ value: String(s), label: String(s) }))}
+                    searchable={false}
+                  />
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
                 <button className="btn-outline px-3 py-1" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Prev</button>
+                <span>Page {page} / {totalPages}</span>
                 <button className="btn-outline px-3 py-1" disabled={page >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>Next</button>
               </div>
             </div>
@@ -457,7 +579,7 @@ export default function DriversPage() {
         onConfirm={doDelete}
         loading={busy}
         title="Delete Driver"
-        message="This permanently removes the driver record. Drivers with active vehicle assignments cannot be deleted."
+        message="This permanently removes the driver and their entire assignment history. Drivers with active vehicle assignments cannot be deleted — return the vehicle first."
         confirmLabel="Delete"
       />
     </div>

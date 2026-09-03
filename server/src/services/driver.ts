@@ -39,20 +39,28 @@ export async function listDrivers(opts: {
   search?: string;
   departmentId?: string;
   status?: string;
+  branchId?: string;
+  unassigned?: boolean;
   page?: number;
   pageSize?: number;
 }) {
-  const { search, departmentId, status, page = 1, pageSize } = opts;
+  const { search, departmentId, status, branchId, unassigned, page = 1, pageSize } = opts;
   const ps = pageSize ?? (await defaultPageSize());
   const where: any = {};
   if (departmentId) where.departmentId = departmentId;
   if (status === "ACTIVE") where.isActive = true;
   else if (status === "INACTIVE") where.isActive = false;
+  // Drivers whose current vehicle sits at the given branch (drivers belong to
+  // departments but drive branch vehicles — this filters by where they drive).
+  if (branchId) where.vehicles = { some: { branchId } };
+  // Quick staffing filter: no current vehicle at all.
+  if (unassigned) where.vehicles = { none: {} };
   if (search) {
+    const q = { contains: search, mode: "insensitive" as const };
     where.OR = [
-      { fullName: { contains: search } },
-      { employeeId: { contains: search } },
-      { licenseNo: { contains: search } },
+      { fullName: q },
+      { employeeId: q },
+      { licenseNo: q },
     ];
   }
 

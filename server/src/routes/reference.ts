@@ -11,7 +11,7 @@ const router = Router();
 
 router.get(
   "/branches",
-  requireAuth(PERMISSIONS.BRANCH_MANAGE),
+  requireAuth(),
   async (req, res) => {
     const page = Math.max(1, Number(req.query.page) || 1);
     const pageSize = Math.min(100, Number(req.query.pageSize) || 50);
@@ -26,7 +26,10 @@ router.get(
 
 router.post(
   "/branches",
-  requireAuth(PERMISSIONS.BRANCH_MANAGE),
+  // Inline branch creation is part of vehicle registration (the vehicle
+  // form's Add-new flow), so anyone who can create a vehicle can add a
+  // branch there. Deleting branches remains BRANCH_MANAGE.
+  requireAuth([PERMISSIONS.VEHICLE_CREATE, PERMISSIONS.BRANCH_MANAGE]),
   async (req, res) => {
     const { code, name, region, address } = req.body as {
       code?: string; name?: string; region?: string; address?: string;
@@ -86,7 +89,7 @@ router.delete(
 
 router.get(
   "/departments",
-  requireAuth(PERMISSIONS.BRANCH_MANAGE),
+  requireAuth(),
   async (req, res) => {
     const page = Math.max(1, Number(req.query.page) || 1);
     const pageSize = Math.min(100, Number(req.query.pageSize) || 50);
@@ -101,7 +104,9 @@ router.get(
 
 router.post(
   "/departments",
-  requireAuth(PERMISSIONS.BRANCH_MANAGE),
+  // Same rationale as POST /branches: inline creation during vehicle
+  // registration. Deletion remains BRANCH_MANAGE.
+  requireAuth([PERMISSIONS.VEHICLE_CREATE, PERMISSIONS.BRANCH_MANAGE]),
   async (req, res) => {
     const { code, name } = req.body as { code?: string; name?: string };
     if (!code?.trim() || !name?.trim()) {
@@ -156,7 +161,7 @@ router.delete(
 
 router.get(
   "/drivers",
-  requireAuth(PERMISSIONS.BRANCH_MANAGE),
+  requireAuth(),
   async (req, res) => {
     const page = Math.max(1, Number(req.query.page) || 1);
     const pageSize = Math.min(100, Number(req.query.pageSize) || 50);
@@ -176,7 +181,7 @@ router.get(
 
 router.post(
   "/drivers",
-  requireAuth(PERMISSIONS.BRANCH_MANAGE),
+  requireAuth(PERMISSIONS.DRIVER_MANAGE),
   async (req, res) => {
     const { employeeId, fullName, licenseNo, phone, departmentId } = req.body as {
       employeeId?: string; fullName?: string; licenseNo?: string; phone?: string; departmentId?: string;
@@ -225,7 +230,7 @@ router.put(
 
 router.delete(
   "/drivers/:id",
-  requireAuth(PERMISSIONS.BRANCH_MANAGE),
+  requireAuth(PERMISSIONS.DRIVER_MANAGE),
   async (_req, res) => {
     const old = await prisma.driver.findUnique({ where: { id: _req.params.id } });
     if (!old) return res.status(404).json({ error: "Not found" });

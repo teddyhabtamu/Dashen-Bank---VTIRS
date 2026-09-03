@@ -14,21 +14,25 @@ import { driverSchema } from "../validation/driver.js";
 
 const router = Router();
 
-router.use(requireAuth(PERMISSIONS.BRANCH_MANAGE));
-
-router.get("/", async (req, res) => {
+// Driver READS are open to every authenticated user: driver names already
+// appear across the registry, vehicle detail, search and dashboards, and
+// those surfaces link here — a read wall only produced 403 dead-ends.
+// All mutations (create/edit/delete/transfer) require DRIVER_MANAGE.
+router.get("/", requireAuth(), async (req, res) => {
   const q = req.query;
   const result = await listDrivers({
     search: (q.search as string) ?? undefined,
     departmentId: (q.departmentId as string) ?? undefined,
     status: (q.status as string) ?? undefined,
+    branchId: (q.branchId as string) ?? undefined,
+    unassigned: q.unassigned === "true",
     page: Number(q.page ?? "1"),
     pageSize: q.pageSize ? Number(q.pageSize) : undefined,
   });
   res.json(result);
 });
 
-router.post("/", async (req, res) => {
+router.post("/", requireAuth(PERMISSIONS.DRIVER_MANAGE), async (req, res) => {
   const parsed = driverSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(422).json({
@@ -50,13 +54,13 @@ router.post("/", async (req, res) => {
   }
 });
 
-router.get("/:id", async (req, res) => {
+router.get("/:id", requireAuth(), async (req, res) => {
   const driver = await getDriver(req.params.id);
   if (!driver) return res.status(404).json({ error: "Not found" });
   res.json({ driver });
 });
 
-router.patch("/:id", async (req, res) => {
+router.patch("/:id", requireAuth(PERMISSIONS.DRIVER_MANAGE), async (req, res) => {
   const parsed = driverSchema.partial().safeParse(req.body);
   if (!parsed.success) {
     return res.status(422).json({
@@ -79,7 +83,7 @@ router.patch("/:id", async (req, res) => {
   }
 });
 
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", requireAuth(PERMISSIONS.DRIVER_MANAGE), async (req, res) => {
   try {
     const driver = await deleteDriver(req.params.id, {
       userId: req.session!.userId,
@@ -96,7 +100,7 @@ router.delete("/:id", async (req, res) => {
 });
 
 // Transfer a vehicle to this driver (reassign between drivers).
-router.post("/:id/transfer", async (req, res) => {
+router.post("/:id/transfer", requireAuth(PERMISSIONS.DRIVER_MANAGE), async (req, res) => {
   const { vehicleId } = req.body as { vehicleId?: string };
   if (!vehicleId) return res.status(400).json({ error: "vehicleId is required" });
   try {

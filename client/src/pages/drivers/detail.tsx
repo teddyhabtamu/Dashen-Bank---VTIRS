@@ -11,7 +11,7 @@ import { formatDate } from "@/lib/format";
 import { PERMISSIONS } from "@/lib/rbac";
 import { label } from "@/lib/constants";
 
-interface VehicleOption { id: string; plateNumber: string; vehicleCode: string; make?: string | null; model?: string | null; status: string; branch?: { name: string } | null; }
+interface VehicleOption { id: string; plateNumber: string; vehicleCode: string; make?: string | null; model?: string | null; status: string; branch?: { name: string } | null; currentDriver?: { id: string; fullName: string } | null; }
 
 const VEHICLE_STATUS_VARIANT: Record<string, "warning" | "success" | "danger"> = {
   ACTIVE: "success",
@@ -59,6 +59,7 @@ export default function DriverDetailPage() {
   const [driver, setDriver] = useState<DriverDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const [shiftOpen, setShiftOpen] = useState(false);
   const [vehicles, setVehicles] = useState<VehicleOption[]>([]);
@@ -92,12 +93,15 @@ export default function DriverDetailPage() {
   const load = useCallback(async () => {
     if (!id) return;
     setLoading(true);
+    setLoadError(null);
     fetch(`/api/drivers/${id}`)
       .then((r) => {
         if (r.status === 404) { setNotFound(true); return null; }
+        if (!r.ok) throw new Error(`Request failed (${r.status})`);
         return r.json();
       })
       .then((d) => { if (d?.driver) setDriver(d.driver); })
+      .catch((e) => setLoadError(e instanceof Error ? e.message : "Failed to load driver"))
       .finally(() => setLoading(false));
   }, [id]);
 
@@ -107,18 +111,33 @@ export default function DriverDetailPage() {
     setErr(null);
     setSelectedVehicle("");
     setShiftOpen(true);
-    fetch("/api/vehicles?pageSize=100")
-      .then((r) => r.json())
-      .then((d) => setVehicles((d.items ?? []).map((v: any) => ({
-        id: v.id,
-        plateNumber: v.plateNumber,
-        vehicleCode: v.vehicleCode,
-        make: v.make,
-        model: v.model,
-        status: v.status,
-        branch: v.branch,
-      }))))
-      .catch(() => setVehicles([]));
+    // Fetch the full fleet (paged loop) — a pageSize=100 call silently
+    // truncated the picker on larger fleets. DISPOSED vehicles and the
+    // driver's current vehicle are filtered out: assigning to either is
+    // never a legitimate transfer.
+    (async () => {
+      const all: VehicleOption[] = [];
+      try {
+        for (let p = 1; p <= 50; p++) {
+          const res = await fetch(`/api/vehicles?page=${p}&pageSize=500`);
+          if (!res.ok) break;
+          const d = await res.json();
+          const items = d.items ?? [];
+          all.push(...items.map((v: any) => ({
+            id: v.id,
+            plateNumber: v.plateNumber,
+            vehicleCode: v.vehicleCode,
+            make: v.make,
+            model: v.model,
+            status: v.status,
+            branch: v.branch,
+            currentDriver: v.currentDriver ?? null,
+          })));
+          if (all.length >= (d.total ?? 0) || items.length === 0) break;
+        }
+      } catch { /* keep whatever we got */ }
+      setVehicles(all.filter((v) => v.status !== "DISPOSED" && v.id !== driver?.vehicles[0]?.id));
+    })();
   }
 
   async function doTransfer() {
@@ -201,6 +220,16 @@ export default function DriverDetailPage() {
 
   if (loading) return <BrandLoader />;
 
+  if (loadError) {
+    return (
+      <div className="flex flex-col items-center gap-3 py-20 text-center">
+        <span className="text-sm font-medium text-slate-600">{loadError}</span>
+        <button className="btn-outline" onClick={() => load()}>Try again</button>
+        <Link to="/drivers" className="text-xs text-primary hover:underline">Back to drivers</Link>
+      </div>
+    );
+  }
+
   if (notFound || !driver) {
     return (
       <div className="flex flex-col items-center gap-2 py-20 text-center text-slate-400">
@@ -210,7 +239,7 @@ export default function DriverDetailPage() {
     );
   }
 
-  const canManage = can(PERMISSIONS.BRANCH_MANAGE);
+  const canManage = can(PERMISSIONS.DRIVER_MANAGE);
   const currentVehicle = driver.vehicles[0];
   const hasVehicle = !!currentVehicle;
 
@@ -289,7 +318,8 @@ export default function DriverDetailPage() {
           <h2 className="mb-3 text-sm font-semibold text-slate-700">Summary</h2>
           <div className="divide-y divide-slate-100">
             <Attr label="Active Assignment" value={driver.assignments.some((a) => a.returnedAt === null) ? "Yes" : "No"} />
-            <Attr label="Assignment Count" value={String(driver.assignments.length)} />
+            <Attr label="Vehicles Driven" value={String(new Set(driver.assignments.map((a) => a.vehicle.id)).size)} />
+            <Attr label="Total Assignments" value={String(driver.assignments.length)} />
             <Attr label="Joined" value={formatDate(driver.createdAt)} />
           </div>
         </div>
@@ -360,7 +390,9 @@ export default function DriverDetailPage() {
                 options={vehicles.map((v) => ({
                   value: v.id,
                   label: `${v.plateNumber} (${v.vehicleCode})${v.make && v.model ? ` · ${v.make} ${v.model}` : ""}`,
-                  description: v.branch?.name ?? undefined,
+                  description: v.currentDriver
+                    ? `Currently driven by ${v.currentDriver.fullName} — they will be returned${v.branch?.name ? ` · ${v.branch.name}` : ""}`
+                    : v.branch?.name ?? undefined,
                   indicator: { label: label(v.status), variant: VEHICLE_STATUS_VARIANT[v.status] ?? "warning" },
                 }))}
               />
