@@ -97,20 +97,61 @@ export default function UsersPage() {
   useEffect(() => { load(); }, [load]);
 
   function exportUsers(format: "csv" | "excel" | "pdf") {
-    const data = rows.map((u) => ({
-      Username: u.username,
-      "Full Name": u.fullName,
-      Email: u.email,
-      Role: u.roleName,
-      Branch: u.branchName ?? "",
-      Status: u.status,
-      "Last Login": u.lastLoginAt ?? "",
-      "Created At": u.createdAt,
-    }));
+    const data = rows.map(exportColumns);
     const stamp = new Date().toISOString().slice(0, 10);
-    if (format === "csv") exportCsv(`users_${stamp}.csv`, data);
-    else if (format === "excel") exportXlsx(`users_${stamp}.xlsx`, data);
-    else exportPdf(rowsToHtmlTable("Users", data), "Users", companyName);
+    if (format === "csv") exportCsv(`users_page${page}_${stamp}.csv`, data);
+    else if (format === "excel") exportXlsx(`users_page${page}_${stamp}.xlsx`, data);
+    else exportPdf(rowsToHtmlTable(`Users (page ${page})`, data), `Users (page ${page})`, companyName);
+  }
+
+  const exportColumns = (u: {
+    username: string;
+    fullName: string;
+    email: string;
+    roleName: string;
+    branchName: string | null;
+    status: string;
+    lastLoginAt: string | null;
+    createdAt: string;
+  }) => ({
+    Username: u.username,
+    "Full Name": u.fullName,
+    Email: u.email,
+    Role: u.roleName,
+    Branch: u.branchName ?? "",
+    Status: u.status,
+    "Last Login": u.lastLoginAt ? formatDateTime(u.lastLoginAt) : "",
+    "Created At": formatDateTime(u.createdAt),
+  });
+
+  async function exportAllUsers(format: "csv" | "excel" | "pdf") {
+    const allRows: typeof rows = [];
+    const qs = new URLSearchParams();
+    qs.set("pageSize", "1000");
+    if (search) qs.set("search", search);
+    if (roleFilter) qs.set("role", roleFilter);
+    if (statusFilter) qs.set("status", statusFilter);
+    try {
+      for (let p = 1; p <= 50; p++) {
+        qs.set("page", String(p));
+        const res = await fetch(`/api/users?${qs.toString()}`);
+        if (!res.ok) throw new Error("Export fetch failed");
+        const data = await res.json();
+        const items = data.items ?? [];
+        allRows.push(...items);
+        if (allRows.length >= (data.total ?? 0) || items.length === 0) break;
+      }
+    } catch {
+      toast("error", "Could not collect rows for export");
+      return;
+    }
+    if (allRows.length === 0) { toast("error", "Nothing to export"); return; }
+    const stamp = new Date().toISOString().slice(0, 10);
+    const data = allRows.map(exportColumns);
+    if (format === "csv") exportCsv(`users_all_${stamp}.csv`, data);
+    else if (format === "excel") exportXlsx(`users_all_${stamp}.xlsx`, data);
+    else exportPdf(rowsToHtmlTable("Users (all)", data), "Users (all)", companyName);
+    toast("success", `Exported ${allRows.length} user(s)`);
   }
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
@@ -235,6 +276,11 @@ export default function UsersPage() {
             <Dropdown align="right"
               trigger={({ toggle }) => (<Tooltip content="Export"><button onClick={toggle} className="btn-outline text-xs"><Download className="h-3.5 w-3.5" /> Export</button></Tooltip>)}
               items={[
+                { label: "Current view — all pages", header: true },
+                { label: "CSV", onClick: () => exportAllUsers("csv") },
+                { label: "Excel", onClick: () => exportAllUsers("excel") },
+                { label: "PDF", onClick: () => exportAllUsers("pdf") },
+                { label: `This page only (${rows.length} rows)`, header: true },
                 { label: "CSV", onClick: () => exportUsers("csv") },
                 { label: "Excel", onClick: () => exportUsers("excel") },
                 { label: "PDF", onClick: () => exportUsers("pdf") },

@@ -260,8 +260,8 @@ export default function InsurancesPage() {
     Status: label(effectiveInsuranceStatus(r.status, r.startDate, r.endDate)),
     Vehicle: `${r.vehicle.plateNumber} (${r.vehicle.vehicleCode})`,
     Branch: r.vehicle.branch?.name ?? "",
-    "Start Date": r.startDate.slice(0, 10),
-    "End Date": r.endDate.slice(0, 10),
+    "Start Date": formatDate(r.startDate),
+    "End Date": formatDate(r.endDate),
   });
 
   function exportPage(format: "csv" | "excel" | "pdf") {

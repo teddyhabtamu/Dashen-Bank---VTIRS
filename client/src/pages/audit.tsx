@@ -8,6 +8,7 @@ import { formatDateTime } from "@/lib/format";
 import { exportCsv, exportXlsx, exportPdf, rowsToHtmlTable } from "@/lib/export";
 import { Dropdown } from "@/components/ui/dropdown";
 import { Tooltip } from "@/components/ui/tooltip";
+import { useToast } from "@/lib/toast-context";
 
 interface AuditRow {
   id: string;
@@ -36,6 +37,7 @@ const ACTION_COLORS: Record<string, string> = {
 
 export default function AuditLogsPage() {
   const { companyName } = useBrand();
+  const { toast } = useToast();
   const [rows, setRows] = useState<AuditRow[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -76,22 +78,56 @@ export default function AuditLogsPage() {
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
+  const exportColumns = (r: AuditRow) => ({
+    Action: r.action,
+    Entity: r.entity,
+    "Entity ID": r.entityId ?? "",
+    "Vehicle Code": r.vehicleCode ?? "",
+    "Plate Number": r.plateNumber ?? "",
+    User: r.user,
+    "IP Address": r.ipAddress ?? "",
+    "User Agent": r.userAgent ?? "",
+    "Created At": formatDateTime(r.createdAt),
+  });
+
   function exportAudit(format: "csv" | "excel" | "pdf") {
-    const data = rows.map((r) => ({
-      Action: r.action,
-      Entity: r.entity,
-      "Entity ID": r.entityId ?? "",
-      "Vehicle Code": r.vehicleCode ?? "",
-      "Plate Number": r.plateNumber ?? "",
-      User: r.user,
-      "IP Address": r.ipAddress ?? "",
-      "User Agent": r.userAgent ?? "",
-      "Created At": r.createdAt,
-    }));
+    const data = rows.map(exportColumns);
     const stamp = new Date().toISOString().slice(0, 10);
-    if (format === "csv") exportCsv(`audit_${stamp}.csv`, data);
-    else if (format === "excel") exportXlsx(`audit_${stamp}.xlsx`, data);
-    else exportPdf(rowsToHtmlTable("Audit Logs", data), "Audit Logs", companyName);
+    if (format === "csv") exportCsv(`audit_page${page}_${stamp}.csv`, data);
+    else if (format === "excel") exportXlsx(`audit_page${page}_${stamp}.xlsx`, data);
+    else exportPdf(rowsToHtmlTable(`Audit Logs (page ${page})`, data), `Audit Logs (page ${page})`, companyName);
+  }
+
+  async function exportAllAudit(format: "csv" | "excel" | "pdf") {
+    const allRows: AuditRow[] = [];
+    const qs = new URLSearchParams();
+    qs.set("pageSize", "1000");
+    if (action) qs.set("action", action);
+    if (entity) qs.set("entity", entity);
+    if (search) qs.set("search", search);
+    if (from) qs.set("from", from);
+    if (to) qs.set("to", to);
+    try {
+      for (let p = 1; p <= 50; p++) {
+        qs.set("page", String(p));
+        const res = await fetch(`/api/audit?${qs.toString()}`);
+        if (!res.ok) throw new Error("Export fetch failed");
+        const data = await res.json();
+        const items = data.items ?? [];
+        allRows.push(...items);
+        if (allRows.length >= (data.total ?? 0) || items.length === 0) break;
+      }
+    } catch {
+      toast("error", "Could not collect rows for export");
+      return;
+    }
+    if (allRows.length === 0) { toast("error", "Nothing to export"); return; }
+    const stamp = new Date().toISOString().slice(0, 10);
+    const data = allRows.map(exportColumns);
+    if (format === "csv") exportCsv(`audit_all_${stamp}.csv`, data);
+    else if (format === "excel") exportXlsx(`audit_all_${stamp}.xlsx`, data);
+    else exportPdf(rowsToHtmlTable("Audit Logs (all)", data), "Audit Logs (all)", companyName);
+    toast("success", `Exported ${allRows.length} audit entr${allRows.length === 1 ? "y" : "ies"}`);
   }
 
   function toggle(id: string) {
@@ -109,16 +145,21 @@ export default function AuditLogsPage() {
           <h2 className="text-xl font-semibold text-slate-800">Audit Trail</h2>
           <p className="text-sm text-slate-500">System-wide activity &amp; change history</p>
         </div>
-        {rows.length > 0 && (
-          <Dropdown align="right"
-            trigger={({ toggle }) => (<Tooltip content="Export"><button onClick={toggle} className="btn-outline text-xs"><Download className="h-3.5 w-3.5" /> Export</button></Tooltip>)}
-            items={[
-              { label: "CSV", onClick: () => exportAudit("csv") },
-              { label: "Excel", onClick: () => exportAudit("excel") },
-              { label: "PDF", onClick: () => exportAudit("pdf") },
-            ]}
-          />
-        )}
+          {rows.length > 0 && (
+            <Dropdown align="right"
+              trigger={({ toggle }) => (<Tooltip content="Export"><button onClick={toggle} className="btn-outline text-xs"><Download className="h-3.5 w-3.5" /> Export</button></Tooltip>)}
+              items={[
+                { label: "Current view — all pages", header: true },
+                { label: "CSV", onClick: () => exportAllAudit("csv") },
+                { label: "Excel", onClick: () => exportAllAudit("excel") },
+                { label: "PDF", onClick: () => exportAllAudit("pdf") },
+                { label: `This page only (${rows.length} rows)`, header: true },
+                { label: "CSV", onClick: () => exportAudit("csv") },
+                { label: "Excel", onClick: () => exportAudit("excel") },
+                { label: "PDF", onClick: () => exportAudit("pdf") },
+              ]}
+            />
+          )}
       </div>
 
       <div className="card flex flex-wrap items-end gap-3 p-4">

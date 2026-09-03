@@ -303,8 +303,8 @@ export default function RegistrationsPage() {
     Vehicle: `${r.vehicle.plateNumber} (${r.vehicle.vehicleCode})`,
     Branch: r.vehicle.branch?.name ?? "",
     Office: r.office ?? "",
-    "Reg Date": r.regDate.slice(0, 10),
-    "Expiry Date": r.expiryDate.slice(0, 10),
+    "Reg Date": formatDate(r.regDate),
+    "Expiry Date": formatDate(r.expiryDate),
     Status: label(effectiveRegistrationStatus(r.status, r.expiryDate)),
   });
 

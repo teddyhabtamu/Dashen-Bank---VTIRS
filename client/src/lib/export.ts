@@ -17,7 +17,13 @@ function triggerDownload(blob: Blob, filename: string) {
 }
 
 function csvCell(v: unknown): string {
-  const s = v == null ? "" : String(v);
+  let s = v == null ? "" : String(v);
+  // Formula-injection guard (OWASP): a cell starting with = + - @ (or tab/CR)
+  // becomes a live formula when the CSV is opened in Excel. Prefixing with a
+  // single quote forces text treatment — Excel hides the marker. The XLSX
+  // path needs no guard (inlineStr cells are always strings) and neither
+  // does the PDF path (HTML-escaped).
+  if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
   if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
   return s;
 }
@@ -27,7 +33,8 @@ export function exportCsv(filename: string, rows: Record<string, unknown>[]) {
   const headers = Object.keys(rows[0]);
   const lines = [headers.join(",")];
   for (const r of rows) lines.push(headers.map((h) => csvCell(r[h])).join(","));
-  triggerDownload(new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" }), filename);
+  // BOM so Windows Excel detects UTF-8 (Amharic names etc. mojibake otherwise).
+  triggerDownload(new Blob(["\uFEFF" + lines.join("\n")], { type: "text/csv;charset=utf-8;" }), filename);
 }
 
 /* ----------------------------- XLSX (OOXML) ----------------------------- */
@@ -176,7 +183,7 @@ export function exportPdf(html: string, title: string, orgName?: string) {
     </div>
     <div class="report-title">${escapeHtml(title)}</div>
     ${html}
-    <div class="foot"><span>&copy; ${new Date().getFullYear()} ${company} — ${BRAND.short}</span><span>Page 1</span></div>
+    <div class="foot"><span>&copy; ${new Date().getFullYear()} ${company} — ${BRAND.short}</span></div>
   </body></html>`;
 
   // Use a hidden iframe instead of window.open so we don't open a new tab.
@@ -184,11 +191,20 @@ export function exportPdf(html: string, title: string, orgName?: string) {
   iframe.className = "noprint";
   iframe.style.cssText = "position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;opacity:0";
   document.body.appendChild(iframe);
+  const cleanup = () => {
+    if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
+  };
   const fDoc = iframe.contentWindow?.document;
-  if (!fDoc) { document.body.removeChild(iframe); return; }
+  if (!fDoc) { cleanup(); return; }
   fDoc.open();
   fDoc.write(doc);
   fDoc.close();
+  try {
+    // afterprint fires when the print dialog closes — the normal cleanup path.
+    iframe.contentWindow?.addEventListener("afterprint", cleanup);
+  } catch { /* cross-browser safety */ }
+  // Fallback: never leak the node if afterprint doesn't fire.
+  setTimeout(cleanup, 60000);
   setTimeout(() => {
     iframe.contentWindow?.focus();
     iframe.contentWindow?.print();
