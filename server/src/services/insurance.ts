@@ -393,14 +393,22 @@ export async function listInsurances(opts: {
   from?: string;
   to?: string;
   expiringWithin?: number;
+  branchId?: string;
+  vehicleId?: string;
   page?: number;
   pageSize?: number;
 }) {
-  const { search, coverage, status, from, to, expiringWithin, page = 1, pageSize } = opts;
+  const { search, coverage, status, from, to, expiringWithin, branchId, vehicleId, page = 1, pageSize } = opts;
   const ps = pageSize ?? await defaultPageSize();
   const where: any = {};
   const statusCondition = status ? insuranceStatusCondition(status, new Date()) : null;
   if (statusCondition) where.AND = statusCondition;
+  if (branchId) {
+    // Compose with any status condition already in AND.
+    const cond = { vehicle: { branchId } };
+    where.AND = where.AND ? [...(Array.isArray(where.AND) ? where.AND : [where.AND]), cond] : cond;
+  }
+  if (vehicleId) where.vehicleId = vehicleId;
   if (search) {
     where.OR = [
       { policyNo: { contains: search, mode: "insensitive" } },

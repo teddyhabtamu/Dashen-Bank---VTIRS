@@ -53,3 +53,30 @@ export function effectiveRegistrationStatus(
   if (days !== null && days < 0) return REGISTRATION_STATUS.EXPIRED;
   return status;
 }
+
+// Derive an insurance policy's effective status. Mirrors the server's
+// classifier (services/reminders.ts) so the list shows what's actually in
+// force today instead of the stored status lagging behind the cron:
+//   - CANCELLED always passes through (manual, terminal);
+//   - past end date = EXPIRED even if stored ACTIVE (cron may lag);
+//   - start date in the future = PENDING (not yet in force);
+//   - otherwise ACTIVE (in force).
+export function effectiveInsuranceStatus(
+  status: string,
+  startDate: Date | string | null | undefined,
+  endDate: Date | string | null | undefined,
+  now: Date = new Date()
+): string {
+  if (status === "CANCELLED") return status;
+  const end = toSafeDate(endDate);
+  const start = toSafeDate(startDate);
+  if (end && end.getTime() < now.getTime()) return "EXPIRED";
+  if (start && start.getTime() > now.getTime()) return "PENDING";
+  return "ACTIVE";
+}
+
+function toSafeDate(v: Date | string | null | undefined): Date | null {
+  if (!v) return null;
+  const d = v instanceof Date ? v : new Date(v);
+  return Number.isNaN(d.getTime()) ? null : d;
+}

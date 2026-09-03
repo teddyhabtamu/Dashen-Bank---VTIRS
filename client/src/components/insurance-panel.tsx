@@ -1,12 +1,13 @@
 import { useCallback, useState } from "react";
 import { Link } from "react-router-dom";
-import { Plus, MoreVertical, Pencil, Trash2, History } from "lucide-react";
+import { Plus, MoreVertical, Pencil, Trash2, History, RefreshCw } from "lucide-react";
 import { Modal } from "@/components/ui/modal";
 import { Select } from "@/components/ui/select";
 import { DatePicker } from "@/components/ui/datepicker";
 import { Tooltip } from "@/components/ui/tooltip";
 import { Dropdown } from "@/components/ui/dropdown";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
+import { InsuranceRenewModal } from "@/components/insurance-modals";
 import { formatDate, daysUntil } from "@/lib/format";
 import { COVERAGE_OPTIONS } from "@/lib/constants";
 
@@ -17,6 +18,7 @@ interface Ins {
   coverage: string;
   startDate: Date | string;
   endDate: Date | string;
+  status?: string;
 }
 
 const EXPIRY_BADGE: Record<string, string> = {
@@ -37,6 +39,7 @@ export function InsurancePanel({ vehicleId, initial, canManage }: {
   const [formOpen, setFormOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [renewIns, setRenewIns] = useState<Ins | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -110,6 +113,26 @@ export function InsurancePanel({ vehicleId, initial, canManage }: {
     }
   }
 
+  async function doRenew(endDate: string) {
+    if (!renewIns) return;
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/insurances/${renewIns.id}/renew`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ endDate }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        setErr(d?.error ?? "Renewal failed");
+        return;
+      }
+      setErr(null);
+      await refresh();
+    } finally {
+      setBusy(false);
+      setRenewIns(null);
+    }
+  }
+
   if (items.length === 0 && !canManage) {
     return <p className="text-sm text-slate-400">No insurance policy recorded yet.</p>;
   }
@@ -153,6 +176,9 @@ export function InsurancePanel({ vehicleId, initial, canManage }: {
                         trigger={({ toggle }) => (<Tooltip content="Actions"><button onClick={toggle} className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100"><MoreVertical className="h-4 w-4" /></button></Tooltip>)}
                         items={[
                           { label: "Edit", icon: <Pencil className="h-4 w-4" />, onClick: () => openEdit(ins) },
+                          ...(ins.status === "ACTIVE" || ins.status === "EXPIRED" ? [
+                            { label: "Renew", icon: <RefreshCw className="h-4 w-4" />, onClick: () => setRenewIns(ins) },
+                          ] : []),
                           { label: "Delete", icon: <Trash2 className="h-4 w-4" />, danger: true, onClick: () => setDeleteId(ins.id) },
                         ]}
                       />
@@ -211,6 +237,14 @@ export function InsurancePanel({ vehicleId, initial, canManage }: {
         title="Delete Insurance"
         message="This permanently removes this insurance policy."
         confirmLabel="Delete"
+      />
+
+      <InsuranceRenewModal
+        open={renewIns !== null}
+        onClose={() => setRenewIns(null)}
+        onConfirm={doRenew}
+        loading={busy}
+        currentEndDate={renewIns?.endDate as string | undefined}
       />
     </div>
   );

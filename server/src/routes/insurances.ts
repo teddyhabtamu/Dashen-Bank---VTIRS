@@ -39,6 +39,8 @@ router.get("/", requireAuth(READ_PERMS), async (req, res) => {
     from: (q.from as string) ?? undefined,
     to: (q.to as string) ?? undefined,
     expiringWithin: q.expiringWithin !== undefined && q.expiringWithin !== "" ? Number(q.expiringWithin) : undefined,
+    branchId: (q.branchId as string) ?? undefined,
+    vehicleId: (q.vehicleId as string) ?? undefined,
     page: Number(q.page ?? "1"),
     pageSize: q.pageSize ? Number(q.pageSize) : undefined,
   });
