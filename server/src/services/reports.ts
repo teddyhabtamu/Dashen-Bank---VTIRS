@@ -1,6 +1,6 @@
 import { prisma } from "../lib/prisma.js";
-import { DOCUMENT_CATEGORY_OPTIONS, label } from "../lib/constants.js";
-import { daysUntil, effectiveRegistrationStatus, expiryState } from "./reminders.js";
+import { label } from "../lib/constants.js";
+import { daysUntil, effectiveInsuranceStatus, effectiveRegistrationStatus } from "./reminders.js";
 import { requiredDocumentCategories } from "./setting.js";
 
 export interface ReportFilters {
@@ -32,7 +32,8 @@ export async function vehicleInventory(f: ReportFilters) {
       branch: { select: { name: true } },
       department: { select: { name: true } },
       currentDriver: { select: { id: true, fullName: true } },
-      _count: { select: { registrations: true, insurances: true, documents: true } },
+      // Count only live documents — trashed rows must not inflate the "Docs" column.
+      _count: { select: { registrations: true, insurances: true, documents: { where: { deletedAt: null } } } },
     },
     orderBy: { vehicleCode: "asc" },
   });
@@ -111,7 +112,9 @@ export async function insuranceExpiry(f: ReportFilters) {
     startDate: i.startDate,
     endDate: i.endDate,
     daysLeft: daysUntil(i.endDate),
-    status: label(expiryState(i.endDate)),
+    // Effective status (ACTIVE/EXPIRED/PENDING), consistent with the
+    // registration table — the raw severity label belonged in Days Left only.
+    status: label(effectiveInsuranceStatus(i.status, i.startDate, i.endDate)),
   }));
 }
 
@@ -203,43 +206,6 @@ export async function costByBranch(f: ReportFilters) {
     .sort((a, b) => b.total - a.total);
 }
 
-// 9. Expiry Timeline — registrations & insurances expiring per month for next 12 months
-export async function expiryTimeline(f: ReportFilters) {
-  const start = new Date();
-  const end = new Date();
-  end.setMonth(end.getMonth() + 12);
-  const [regs, ins] = await Promise.all([
-    prisma.vehicleRegistration.findMany({
-      where: { vehicle: baseWhere(f), expiryDate: { gte: start, lte: end } },
-      select: { expiryDate: true },
-    }),
-    prisma.vehicleInsurance.findMany({
-      where: { vehicle: baseWhere(f), endDate: { gte: start, lte: end } },
-      select: { endDate: true },
-    }),
-  ]);
-  const months: string[] = [];
-  const regCounts: number[] = [];
-  const insCounts: number[] = [];
-  for (let i = 0; i < 12; i++) {
-    const d = new Date(start.getFullYear(), start.getMonth() + i, 1);
-    const key = d.toLocaleDateString("en-GB", { month: "short", year: "2-digit" });
-    months.push(key);
-    regCounts.push(0);
-    insCounts.push(0);
-  }
-  const idx = (d: Date) => (d.getFullYear() - start.getFullYear()) * 12 + (d.getMonth() - start.getMonth());
-  for (const r of regs) {
-    const i = idx(new Date(r.expiryDate));
-    if (i >= 0 && i < 12) regCounts[i]++;
-  }
-  for (const r of ins) {
-    const i = idx(new Date(r.endDate));
-    if (i >= 0 && i < 12) insCounts[i]++;
-  }
-  return { months, regCounts, insCounts };
-}
-
 // 10. Document Completeness — per-vehicle checklist against required categories
 export async function documentCompleteness(f: ReportFilters) {
   const required = await requiredDocumentCategories();
@@ -277,7 +243,10 @@ export async function documentCompleteness(f: ReportFilters) {
   });
 
   const completeCount = rows.filter((r) => r.complete).length;
-  const categorySummary = DOCUMENT_CATEGORY_OPTIONS.map((category) => {
+  // Scoped to the admin's required list only — previously every known
+  // category (including OTHER) was shown, so OTHER read "Needs attention"
+  // on essentially every fleet and trained users to ignore the grid.
+  const categorySummary = required.map((category) => {
     const present = vehicles.filter((v) => v.documents.some((d) => d.category === category)).length;
     const expired = vehicles.filter((v) => v.documents.some((d) => (
       d.category === category && d.expiresAt && new Date(d.expiresAt).getTime() < Date.now()
@@ -401,7 +370,6 @@ export const REPORT_BUILDERS: Record<string, (f: ReportFilters) => Promise<any>>
   age: vehicleAge,
   cost: vehicleCost,
   costByBranch: costByBranch,
-  expiryTimeline: expiryTimeline,
   documentCompleteness: documentCompleteness,
   fleetAcquisition: fleetAcquisition,
   renewalForecast: renewalForecast,

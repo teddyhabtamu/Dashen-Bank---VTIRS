@@ -35,7 +35,13 @@ router.get("/", requireAuth(PERMISSIONS.REPORT_VIEW), async (req, res) => {
   ]);
 
   const builder = REPORT_BUILDERS[reportKey] ?? REPORT_BUILDERS.inventory;
-  const result = await builder(filters);
+  // renewalForecast is the only builder with an extra parameter — horizon in
+  // months, allow-listed so arbitrary values can't trigger huge scans.
+  const allowedMonths = [3, 6, 12];
+  const months = allowedMonths.includes(Number(q.months)) ? Number(q.months) : 12;
+  const result = reportKey === "renewalForecast"
+    ? await (builder as (f: ReportFilters, months: number) => Promise<any>)(filters, months)
+    : await builder(filters);
 
   let payload: any = result;
   if (reportKey === "cost") {

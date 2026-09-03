@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import ReactECharts from "echarts-for-react";
 import { Download, CalendarRange, Car, Building2, Users, Clock, TrendingUp, CalendarClock, ShieldCheck, ClipboardList, FileCheck, DollarSign, BarChart3, type LucideIcon } from "lucide-react";
@@ -40,9 +40,10 @@ const DEFAULT_GROUPS: GroupDef[] = [
 export default function ReportsPage() {
   const { can } = useAuth();
   const { companyName } = useBrand();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [data, setData] = useState<ReportResp | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [branchId, setBranchId] = useState("");
   const [departmentId, setDepartmentId] = useState("");
   const [status, setStatus] = useState("");
@@ -50,6 +51,10 @@ export default function ReportsPage() {
   const [to, setTo] = useState("");
   // Deep-link support (?report=…) e.g. from the dashboard's compliance cards.
   const [active, setActive] = useState(searchParams.get("report") ?? "inventory");
+  // Renewal-forecast horizon in months — the only report with an extra param.
+  const [forecastMonths, setForecastMonths] = useState(12);
+  // Bumped by the error-state retry button to re-run the fetch below.
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     const qs = new URLSearchParams();
@@ -59,27 +64,39 @@ export default function ReportsPage() {
     if (from) qs.set("from", from);
     if (to) qs.set("to", to);
     if (active) qs.set("report", active);
+    if (active === "renewalForecast") qs.set("months", String(forecastMonths));
     setLoading(true);
+    setError(null);
     fetch(`/api/reports?${qs.toString()}`)
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error(`Request failed (${r.status})`);
+        return r.json();
+      })
       .then((d) => setData(d))
+      .catch((e) => setError(e instanceof Error ? e.message : "Failed to load reports"))
       .finally(() => setLoading(false));
-  }, [branchId, departmentId, status, from, to, active]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [branchId, departmentId, status, from, to, active, forecastMonths, reloadKey]);
 
   const activeMeta = data?.meta.find((m) => m.key === active);
   const payload = data?.reports?.[active];
-  const rows = useMemo(() => flattenRows(active, payload), [active, payload]);
 
   function exportAll(kind: "csv" | "excel" | "pdf") {
     if (!activeMeta) return;
     const title = activeMeta.title;
     const stamp = new Date().toISOString().slice(0, 10);
+    // Internal row ids (vehicle/driver UUIDs) are navigation aids, not report
+    // data — strip them so exports don't leak meaningless identifiers.
+    const exportRows = flattenRows(active, payload).map((r) => {
+      const { id, driverId, vehicleId, ...rest } = r as Record<string, unknown>;
+      return rest;
+    });
     const totals = active === "cost" && payload?.summary
       ? { vehicleCode: "TOTAL", purchaseCost: formatCurrency(payload.summary.total) }
       : undefined;
-    if (kind === "csv") exportCsv(`${title}_${stamp}.csv`, rows);
-    else if (kind === "excel") exportXlsx(`${title}_${stamp}.xlsx`, rows);
-    else exportPdf(rowsToHtmlTable(title, rows, totals), title, companyName);
+    if (kind === "csv") exportCsv(`${title}_${stamp}.csv`, exportRows);
+    else if (kind === "excel") exportXlsx(`${title}_${stamp}.xlsx`, exportRows);
+    else exportPdf(rowsToHtmlTable(title, exportRows, totals), title, companyName);
   }
 
   const hasFilters = branchId || departmentId || status || from || to;
@@ -102,11 +119,11 @@ export default function ReportsPage() {
             options={[{ value: "", label: "All departments" }, ...(data?.departments ?? []).map((d) => ({ value: d.id, label: d.name }))]} />
           <Select className="w-full sm:w-36" value={status} onChange={setStatus} placeholder="All statuses"
             options={[{ value: "", label: "All statuses" }, ...VEHICLE_STATUS_OPTIONS.map((s) => ({ value: s, label: label(s) }))]} />
-          <div className="inline-flex w-full items-center gap-1 rounded-md border border-slate-200 px-2 py-1 sm:w-auto">
+          <div className="inline-flex w-full items-center gap-1 rounded-md border border-slate-200 px-2 py-1 sm:w-auto" title="Filter by vehicle acquisition date">
             <CalendarRange className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-            <DatePicker value={from} onChange={setFrom} placeholder="From" className="w-24" />
+            <DatePicker value={from} onChange={setFrom} placeholder="Acq. from" className="w-24" />
             <span className="text-slate-300">–</span>
-            <DatePicker value={to} onChange={setTo} placeholder="To" className="w-24" />
+            <DatePicker value={to} onChange={setTo} placeholder="Acq. to" className="w-24" />
           </div>
           {hasFilters && (
             <button className="whitespace-nowrap text-xs font-medium text-primary hover:text-primary/80"
@@ -132,7 +149,12 @@ export default function ReportsPage() {
                   return (
                     <button
                       key={m.key}
-                      onClick={() => setActive(m.key)}
+                      onClick={() => {
+                        setActive(m.key);
+                        // Keep the URL in sync so views are shareable and Back
+                        // moves between reports instead of leaving the page.
+                        setSearchParams({ report: m.key });
+                      }}
                       className={`group flex w-full items-center gap-2.5 rounded-lg border px-2.5 py-2 text-left transition-colors ${
                         isActive
                           ? "border-primary bg-primary text-white"
@@ -156,14 +178,40 @@ export default function ReportsPage() {
 
       {loading ? (
         <BrandLoader />
-      ) : !data ? (
-        <div className="rounded-lg border border-slate-200 bg-white py-12 text-center text-sm text-slate-400">
-          Failed to load reports.
+      ) : error || !data ? (
+        <div className="rounded-lg border border-slate-200 bg-white py-12 text-center">
+          <p className="text-sm font-medium text-slate-700">Failed to load reports.</p>
+          <p className="mt-1 text-xs text-slate-400">{error ?? "Please try again."}</p>
+          <button
+            className="btn-outline mx-auto mt-4 text-xs"
+            onClick={() => setReloadKey((k) => k + 1)}
+          >
+            Try again
+          </button>
         </div>
       ) : (
         <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-          <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
-            <h3 className="text-sm font-semibold text-slate-800">{activeMeta?.title}</h3>
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-4 py-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <h3 className="text-sm font-semibold text-slate-800">{activeMeta?.title}</h3>
+              {active === "renewalForecast" && (
+                <div className="flex items-center gap-1" title="How far ahead to forecast renewals">
+                  {[3, 6, 12].map((m) => (
+                    <button
+                      key={m}
+                      onClick={() => setForecastMonths(m)}
+                      className={`rounded-md px-2 py-1 text-xs font-medium transition-colors ${
+                        forecastMonths === m
+                          ? "bg-primary text-white"
+                          : "text-slate-500 hover:bg-slate-100"
+                      }`}
+                    >
+                      {m}mo
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
             {can("report:export") && (
               <Dropdown align="right"
                 trigger={({ toggle }) => (<Tooltip content="Export"><button onClick={toggle} className="btn-outline text-xs"><Download className="h-3.5 w-3.5" /> Export</button></Tooltip>)}
@@ -216,6 +264,7 @@ function InventoryTable({ rows }: { rows: any[] }) {
   const disp = { vehicleCode: "Code", plateNumber: "Plate", make: "Make", model: "Model", year: "Year", category: "Category", type: "Type", status: "Status", branch: "Branch", department: "Dept", driver: "Driver", registrations: "Regs", documents: "Docs" };
   return (
     <>
+      <p className="mb-3 text-xs text-slate-400">{rows.length} vehicle{rows.length === 1 ? "" : "s"}</p>
       <div className="space-y-3 sm:hidden">
         {rows.map((r, i) => (
           <div key={i} className="rounded-lg border border-slate-100 p-4">
@@ -230,6 +279,7 @@ function InventoryTable({ rows }: { rows: any[] }) {
               <div><span className="font-medium text-slate-600">Make:</span> {r.make} {r.model}</div>
               <div><span className="font-medium text-slate-600">Year:</span> {r.year}</div>
               <div><span className="font-medium text-slate-600">Cat:</span> {r.category}</div>
+              <div><span className="font-medium text-slate-600">Type:</span> {r.type}</div>
               <div className="truncate"><span className="font-medium text-slate-600">Branch:</span> {r.branch}</div>
               <div className="truncate"><span className="font-medium text-slate-600">Dept:</span> {r.department}</div>
             </div>
@@ -249,20 +299,26 @@ function InventoryTable({ rows }: { rows: any[] }) {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {rows.map((r, i) => (
+                // Cells follow the header order exactly: code, plate, make,
+                // model, year, category, type, status, branch, dept, driver,
+                // regs, docs.
                 <tr key={i} className="hover:bg-slate-50">
-                  <td className="px-3 py-2">
-                    <VLink id={r.id} className="font-medium text-slate-800 hover:underline">
-                      {r.plateNumber}
-                    </VLink>
-                  </td>
                   <td className="px-3 py-2">
                     <VLink id={r.id} className="font-medium text-slate-800 hover:underline">
                       {r.vehicleCode}
                     </VLink>
                   </td>
-                  <td className="px-3 py-2">{r.make} {r.model}</td>
+                  <td className="px-3 py-2">
+                    <VLink id={r.id} className="font-medium text-slate-800 hover:underline">
+                      {r.plateNumber}
+                    </VLink>
+                  </td>
+                  <td className="px-3 py-2">{r.make}</td>
+                  <td className="px-3 py-2">{r.model}</td>
                   <td className="px-3 py-2">{r.year}</td>
                   <td className="px-3 py-2">{r.category}</td>
+                  <td className="px-3 py-2">{r.type}</td>
+                  <td className="px-3 py-2"><span className="badge bg-slate-100 text-slate-600">{r.status}</span></td>
                   <td className="px-3 py-2">{r.branch}</td>
                   <td className="px-3 py-2">{r.department}</td>
                   <td className="px-3 py-2">
@@ -295,6 +351,7 @@ function ExpiryTable({ rows, kind }: { rows: any[]; kind: "registration" | "insu
 
   return (
     <>
+      <p className="mb-3 text-xs text-slate-400">{rows.length} due</p>
       <div className="space-y-3 sm:hidden">
         {rows.map((r, i) => {
           const days = r.daysLeft;
@@ -311,7 +368,7 @@ function ExpiryTable({ rows, kind }: { rows: any[]; kind: "registration" | "insu
               </div>
               <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-slate-500">
                 <div><span className="font-medium text-slate-600">Plate:</span> {r.plateNumber}</div>
-                <div className="truncate"><span className="font-medium text-slate-600">Veh:</span> <VLink id={r.vehicleId} className="font-medium text-slate-600">{r.vehicleCode}</VLink></div>
+                <div className="truncate"><span className="font-medium text-slate-600">Veh:</span> <VLink id={r.id} className="font-medium text-slate-600">{r.vehicleCode}</VLink></div>
                 <div className="truncate col-span-2"><span className="font-medium text-slate-600">Branch:</span> {r.branch}</div>
                 <div className="col-span-2">
                   <span className="font-medium text-slate-600">{isReg ? "Expiry" : "End"}:</span> {formatDate(r.expiryDate || r.endDate)}
@@ -338,7 +395,7 @@ function ExpiryTable({ rows, kind }: { rows: any[]; kind: "registration" | "insu
                     </td>
                     <td className="px-3 py-2">{r.plateNumber}</td>
                     <td className="px-3 py-2">
-                      <VLink id={r.vehicleId} className="font-medium text-slate-600 hover:underline">
+                      <VLink id={r.id} className="font-medium text-slate-600 hover:underline">
                         {r.vehicleCode}
                       </VLink>
                     </td>
@@ -410,11 +467,14 @@ function CostReport({ data }: { data: { summary: { total: number; average: numbe
         </div>
       ) : null}
       <h3 className="text-sm font-semibold text-slate-700">Top 20 by Purchase Cost</h3>
+      <p className="-mt-2 text-xs text-slate-400">{data.top.length} vehicles</p>
       <div className="space-y-2 sm:hidden">
         {data.top.map((r, i) => (
           <div key={i} className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2">
             <div className="min-w-0">
-              <div className="truncate text-sm font-medium text-slate-800">{r.plateNumber}</div>
+              <div className="truncate text-sm font-medium text-slate-800">
+                <VLink id={r.id} className="font-medium text-slate-800 hover:underline">{r.plateNumber}</VLink>
+              </div>
               <div className="truncate text-xs text-slate-400">{r.vehicleCode} · {r.make} {r.model}</div>
             </div>
             <div className="flex-shrink-0 text-right text-sm font-medium text-slate-800">{formatCurrency(r.purchaseCost)}</div>
@@ -430,8 +490,12 @@ function CostReport({ data }: { data: { summary: { total: number; average: numbe
             <tbody className="divide-y divide-slate-100">
               {data.top.map((r, i) => (
                 <tr key={i} className="hover:bg-slate-50">
-                  <td className="px-3 py-2 font-medium text-slate-800">{r.vehicleCode}</td>
-                  <td className="px-3 py-2">{r.plateNumber}</td>
+                  <td className="px-3 py-2 font-medium text-slate-800">
+                    <VLink id={r.id} className="font-medium text-slate-800 hover:underline">{r.vehicleCode}</VLink>
+                  </td>
+                  <td className="px-3 py-2">
+                    <VLink id={r.id} className="font-medium text-slate-800 hover:underline">{r.plateNumber}</VLink>
+                  </td>
                   <td className="px-3 py-2">{r.make} {r.model}</td>
                   <td className="px-3 py-2">{r.branch}</td>
                   <td className="px-3 py-2 text-right font-medium">{formatCurrency(r.purchaseCost)}</td>
@@ -496,7 +560,7 @@ function AcquisitionReport({ data }: { data: { summary: { total: number; withAcq
     <div className="space-y-4">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <Stat label="Vehicles" value={String(data.summary.total)} />
-        <Stat label="Avg. Fleet Age" value={`${data.summary.avgFleetAge} yrs`} />
+        <Stat label="Avg. Ownership Tenure" value={`${data.summary.avgFleetAge} yrs`} />
         <Stat label="With Acqu. Date" value={String(data.summary.withAcquisitionDate)} />
       </div>
       {data.trend.length === 0 ? <Empty /> : (
@@ -530,6 +594,7 @@ function RenewalForecast({ data }: { data: { months: number; summary: { registra
         <Stat label="Insurance" value={String(data.summary.insurance)} />
         <Stat label="Total Due" value={String(data.summary.total)} />
       </div>
+      <p className="-mt-1 text-xs text-slate-400">{rows.length} item{rows.length === 1 ? "" : "s"} due in the next {data.months} month{data.months === 1 ? "" : "s"}</p>
       {rows.length === 0 ? <Empty /> : (
         <div className="space-y-3 sm:hidden">
           {rows.map((r, i) => (
@@ -634,7 +699,7 @@ function CompletenessReport({ data }: { data: { required: string[]; summary: { t
                        <span className="truncate text-sm font-semibold text-slate-800">
                          <VLink id={r.id} className="font-medium text-slate-800 hover:underline">{r.plateNumber}</VLink>
                        </span>
-                       <span className="badge bg-slate-100 text-slate-600">{r.vehicleCode}</span>
+                       <VLink id={r.id} className="badge bg-slate-100 text-slate-600 hover:underline">{r.vehicleCode}</VLink>
                     </div>
                     <div className="text-xs text-slate-400">{r.branch}{r.department !== "-" ? ` · ${r.department}` : ""}</div>
                   </div>
