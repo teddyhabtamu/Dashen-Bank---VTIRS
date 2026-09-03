@@ -11,7 +11,7 @@ import { useAuth } from "@/components/auth-context";
 import { useBrand } from "@/lib/brand-context";
 import { VEHICLE_STATUS_OPTIONS, label } from "@/lib/constants";
 import { formatCurrency, formatDate } from "@/lib/format";
-import { exportCsv, exportXlsx, exportPdf, rowsToHtmlTable } from "@/lib/export";
+import { exportCsv, exportXlsx, exportPdf, rowsToHtmlTable, reportFilename, type ExportMeta } from "@/lib/export";
 
 const PALETTE = ["#273274", "#012169", "#e8941a", "#f59e0b", "#698dcf", "#10b981", "#ec4899", "#64748b"];
 
@@ -38,7 +38,7 @@ const DEFAULT_GROUPS: GroupDef[] = [
 ];
 
 export default function ReportsPage() {
-  const { can } = useAuth();
+  const { can, user } = useAuth();
   const { companyName } = useBrand();
   const [searchParams, setSearchParams] = useSearchParams();
   const [data, setData] = useState<ReportResp | null>(null);
@@ -81,22 +81,80 @@ export default function ReportsPage() {
   const activeMeta = data?.meta.find((m) => m.key === active);
   const payload = data?.reports?.[active];
 
+  function exportMeta(): ExportMeta {
+    const parts: string[] = [];
+    if (branchId) parts.push(`Branch: ${data?.branches.find((b) => b.id === branchId)?.name ?? branchId}`);
+    if (departmentId) parts.push(`Department: ${data?.departments.find((d) => d.id === departmentId)?.name ?? departmentId}`);
+    if (status) parts.push(`Status: ${label(status)}`);
+    if (from || to) parts.push(`Acquired: ${from || "…"} to ${to || "…"}`);
+    return {
+      title: activeMeta?.title ?? "Report",
+      subtitle: parts.length ? parts.join(" · ") : undefined,
+      generatedBy: user?.fullName,
+      moneyColumns: active === "cost" ? ["purchaseCost"] : [],
+      // Numeric totals for Excel (true currency cells); the PDF path formats below.
+      totals: active === "cost" && payload?.summary
+        ? { vehicleCode: "TOTAL", purchaseCost: payload.summary.total }
+        : undefined,
+      summary: summaryForReport(),
+    };
+  }
+
+  function summaryForReport(): ExportMeta["summary"] {
+    const s = payload?.summary;
+    if (!s) return undefined;
+    if (active === "cost") {
+      return [
+        { label: "Total Fleet Cost", value: formatCurrency(s.total) },
+        { label: "Average / Vehicle", value: formatCurrency(s.average) },
+        { label: "Valued Vehicles", value: String(s.count) },
+      ];
+    }
+    if (active === "documentCompleteness") {
+      return [
+        { label: "Vehicles", value: String(s.total) },
+        { label: "Complete", value: String(s.complete) },
+        { label: "Incomplete", value: String(s.incomplete) },
+      ];
+    }
+    if (active === "renewalForecast") {
+      return [
+        { label: "Registrations Due", value: String(s.registrations) },
+        { label: "Insurance Due", value: String(s.insurance) },
+        { label: "Total Due", value: String(s.total) },
+      ];
+    }
+    if (active === "fleetAcquisition") {
+      return [
+        { label: "Vehicles", value: String(s.total) },
+        { label: "Avg. Ownership Tenure", value: `${s.avgFleetAge} yrs` },
+      ];
+    }
+    return undefined;
+  }
+
   function exportAll(kind: "csv" | "excel" | "pdf") {
     if (!activeMeta) return;
     const title = activeMeta.title;
-    const stamp = new Date().toISOString().slice(0, 10);
     // Internal row ids (vehicle/driver UUIDs) are navigation aids, not report
     // data — strip them so exports don't leak meaningless identifiers.
     const exportRows = flattenRows(active, payload).map((r) => {
       const { id, driverId, vehicleId, ...rest } = r as Record<string, unknown>;
       return rest;
     });
-    const totals = active === "cost" && payload?.summary
+    const meta = exportMeta();
+    const name = reportFilename(title, hasFilters ? "filtered" : "all");
+    // PDF totals render formatted (Excel gets the numeric ones via meta).
+    const pdfTotals = active === "cost" && payload?.summary
       ? { vehicleCode: "TOTAL", purchaseCost: formatCurrency(payload.summary.total) }
       : undefined;
-    if (kind === "csv") exportCsv(`${title}_${stamp}.csv`, exportRows);
-    else if (kind === "excel") exportXlsx(`${title}_${stamp}.xlsx`, exportRows);
-    else exportPdf(rowsToHtmlTable(title, exportRows, totals), title, companyName);
+    if (kind === "csv") exportCsv(`${name}.csv`, exportRows);
+    else if (kind === "excel") exportXlsx(`${name}.xlsx`, exportRows, meta);
+    else exportPdf(rowsToHtmlTable(title, exportRows, pdfTotals), title, companyName, toPdfMeta(meta, exportRows.length));
+  }
+
+  function toPdfMeta(meta: ExportMeta, rowCount: number) {
+    return { subtitle: meta.subtitle, generatedBy: meta.generatedBy, rowCount, summary: meta.summary };
   }
 
   const hasFilters = branchId || departmentId || status || from || to;

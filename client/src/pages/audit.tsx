@@ -5,10 +5,11 @@ import { useBrand } from "@/lib/brand-context";
 import { Select } from "@/components/ui/select";
 import { DatePicker } from "@/components/ui/datepicker";
 import { formatDateTime } from "@/lib/format";
-import { exportCsv, exportXlsx, exportPdf, rowsToHtmlTable } from "@/lib/export";
+import { exportCsv, exportXlsx, exportPdf, rowsToHtmlTable, reportFilename, type ExportMeta } from "@/lib/export";
 import { Dropdown } from "@/components/ui/dropdown";
 import { Tooltip } from "@/components/ui/tooltip";
 import { useToast } from "@/lib/toast-context";
+import { useAuth } from "@/components/auth-context";
 
 interface AuditRow {
   id: string;
@@ -38,6 +39,7 @@ const ACTION_COLORS: Record<string, string> = {
 export default function AuditLogsPage() {
   const { companyName } = useBrand();
   const { toast } = useToast();
+  const { user } = useAuth();
   const [rows, setRows] = useState<AuditRow[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -90,12 +92,30 @@ export default function AuditLogsPage() {
     "Created At": formatDateTime(r.createdAt),
   });
 
+  function exportMeta(scope: string): ExportMeta {
+    const parts: string[] = [];
+    if (search) parts.push(`Search: "${search}"`);
+    if (action) parts.push(`Action: ${action}`);
+    if (entity) parts.push(`Entity: ${entity}`);
+    if (from || to) parts.push(`From ${from || "…"} to ${to || "…"}`);
+    return {
+      title: "Audit Trail",
+      subtitle: parts.length ? `${scope} · ${parts.join(" · ")}` : scope,
+      generatedBy: user?.fullName,
+    };
+  }
+
+  function toPdfMeta(meta: ExportMeta, rowCount: number) {
+    return { subtitle: meta.subtitle, generatedBy: meta.generatedBy, rowCount, summary: [{ label: "Entries", value: String(rowCount) }] };
+  }
+
   function exportAudit(format: "csv" | "excel" | "pdf") {
     const data = rows.map(exportColumns);
-    const stamp = new Date().toISOString().slice(0, 10);
-    if (format === "csv") exportCsv(`audit_page${page}_${stamp}.csv`, data);
-    else if (format === "excel") exportXlsx(`audit_page${page}_${stamp}.xlsx`, data);
-    else exportPdf(rowsToHtmlTable(`Audit Logs (page ${page})`, data), `Audit Logs (page ${page})`, companyName);
+    const meta = exportMeta(`page ${page} of ${totalPages}`);
+    const name = reportFilename("Audit Trail", `page-${page}-of-${totalPages}`);
+    if (format === "csv") exportCsv(`${name}.csv`, data);
+    else if (format === "excel") exportXlsx(`${name}.xlsx`, data, meta);
+    else exportPdf(rowsToHtmlTable(`Audit Logs (page ${page} of ${totalPages})`, data), `Audit Logs (page ${page} of ${totalPages})`, companyName, toPdfMeta(meta, data.length));
   }
 
   async function exportAllAudit(format: "csv" | "excel" | "pdf") {
@@ -122,11 +142,12 @@ export default function AuditLogsPage() {
       return;
     }
     if (allRows.length === 0) { toast("error", "Nothing to export"); return; }
-    const stamp = new Date().toISOString().slice(0, 10);
+    const meta = exportMeta("Full log");
     const data = allRows.map(exportColumns);
-    if (format === "csv") exportCsv(`audit_all_${stamp}.csv`, data);
-    else if (format === "excel") exportXlsx(`audit_all_${stamp}.xlsx`, data);
-    else exportPdf(rowsToHtmlTable("Audit Logs (all)", data), "Audit Logs (all)", companyName);
+    const name = reportFilename("Audit Trail", "all");
+    if (format === "csv") exportCsv(`${name}.csv`, data);
+    else if (format === "excel") exportXlsx(`${name}.xlsx`, data, meta);
+    else exportPdf(rowsToHtmlTable("Audit Logs (all)", data), "Audit Logs (all)", companyName, toPdfMeta(meta, allRows.length));
     toast("success", `Exported ${allRows.length} audit entr${allRows.length === 1 ? "y" : "ies"}`);
   }
 

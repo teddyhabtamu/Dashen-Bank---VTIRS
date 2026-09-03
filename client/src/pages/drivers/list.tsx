@@ -11,7 +11,7 @@ import { Tooltip } from "@/components/ui/tooltip";
 import { useAuth } from "@/components/auth-context";
 import { useToast } from "@/lib/toast-context";
 import { useBrand } from "@/lib/brand-context";
-import { exportCsv, exportXlsx, exportPdf, rowsToHtmlTable } from "@/lib/export";
+import { exportCsv, exportXlsx, exportPdf, rowsToHtmlTable, reportFilename, type ExportMeta } from "@/lib/export";
 import { PERMISSIONS } from "@/lib/rbac";
 
 interface DriverRow {
@@ -35,7 +35,7 @@ const STATUS_OPTIONS = [
 ];
 
 export default function DriversPage() {
-  const { can } = useAuth();
+  const { can, user } = useAuth();
   const { toast } = useToast();
   const { companyName } = useBrand();
   const navigate = useNavigate();
@@ -117,12 +117,31 @@ export default function DriversPage() {
     Status: d.isActive ? "Active" : "Inactive",
   });
 
+  function exportMeta(scope: string): ExportMeta {
+    const parts: string[] = [];
+    if (search) parts.push(`Search: "${search}"`);
+    if (deptFilter) parts.push(`Department: ${departments.find((d) => d.id === deptFilter)?.name ?? deptFilter}`);
+    if (statusFilter) parts.push(`Status: ${statusFilter === "ACTIVE" ? "Active" : "Inactive"}`);
+    if (branchFilter) parts.push(`Branch: ${branches.find((b) => b.id === branchFilter)?.name ?? branchFilter}`);
+    if (unassignedOnly) parts.push("Unassigned only");
+    return {
+      title: "Driver Registry",
+      subtitle: parts.length ? `${scope} · ${parts.join(" · ")}` : scope,
+      generatedBy: user?.fullName,
+    };
+  }
+
+  function toPdfMeta(meta: ExportMeta, rowCount: number) {
+    return { subtitle: meta.subtitle, generatedBy: meta.generatedBy, rowCount, summary: [{ label: "Drivers", value: String(rowCount) }] };
+  }
+
   function exportPage(format: "csv" | "excel" | "pdf") {
     const data = rows.map(exportColumns);
-    const stamp = new Date().toISOString().slice(0, 10);
-    if (format === "csv") exportCsv(`drivers_page${page}_${stamp}.csv`, data);
-    else if (format === "excel") exportXlsx(`drivers_page${page}_${stamp}.xlsx`, data);
-    else exportPdf(rowsToHtmlTable(`Drivers (page ${page})`, data), `Drivers (page ${page})`, companyName);
+    const meta = exportMeta(`page ${page} of ${totalPages}`);
+    const name = reportFilename("Driver Registry", `page-${page}-of-${totalPages}`);
+    if (format === "csv") exportCsv(`${name}.csv`, data);
+    else if (format === "excel") exportXlsx(`${name}.xlsx`, data, meta);
+    else exportPdf(rowsToHtmlTable(`Drivers (page ${page} of ${totalPages})`, data), `Drivers (page ${page} of ${totalPages})`, companyName, toPdfMeta(meta, data.length));
   }
 
   async function exportAll(format: "csv" | "excel" | "pdf") {
@@ -150,11 +169,12 @@ export default function DriversPage() {
     }
     if (allRows.length === 0) { toast("error", "Nothing to export"); return; }
     const scope = hasFilters ? "filtered" : "all";
-    const stamp = new Date().toISOString().slice(0, 10);
+    const meta = exportMeta(scope === "all" ? "Full registry" : `Filtered view (${allRows.length} of ${total})`);
     const data = allRows.map(exportColumns);
-    if (format === "csv") exportCsv(`drivers_${scope}_${stamp}.csv`, data);
-    else if (format === "excel") exportXlsx(`drivers_${scope}_${stamp}.xlsx`, data);
-    else exportPdf(rowsToHtmlTable(`Drivers (${scope})`, data), `Drivers (${scope})`, companyName);
+    const name = reportFilename("Driver Registry", scope);
+    if (format === "csv") exportCsv(`${name}.csv`, data);
+    else if (format === "excel") exportXlsx(`${name}.xlsx`, data, meta);
+    else exportPdf(rowsToHtmlTable(`Drivers (${scope})`, data), `Drivers (${scope})`, companyName, toPdfMeta(meta, allRows.length));
     toast("success", `Exported ${allRows.length} driver(s)`);
   }
 

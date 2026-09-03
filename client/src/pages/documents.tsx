@@ -9,7 +9,7 @@ import { Dropdown } from "@/components/ui/dropdown";
 import { DOCUMENT_CATEGORY_OPTIONS, IMAGE_CATEGORY_OPTIONS, label } from "@/lib/constants";
 import { formatFileSize, formatDate, formatRelative } from "@/lib/format";
 import { useToast } from "@/lib/toast-context";
-import { exportCsv, exportXlsx, exportPdf, rowsToHtmlTable } from "@/lib/export";
+import { exportCsv, exportXlsx, exportPdf, rowsToHtmlTable, reportFilename, type ExportMeta } from "@/lib/export";
 import { useBrand } from "@/lib/brand-context";
 import { Tooltip } from "@/components/ui/tooltip";
 import { useAuth } from "@/components/auth-context";
@@ -36,7 +36,7 @@ const PAGE_SIZES = [15, 25, 50, 100];
 
 export default function DocumentsPage() {
   const { toast } = useToast();
-  const { can } = useAuth();
+  const { can, user } = useAuth();
   const { companyName } = useBrand();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -229,13 +229,33 @@ export default function DocumentsPage() {
     "Created At": d.createdAt.slice(0, 10),
   });
 
+  function exportMeta(scope: string): ExportMeta {
+    const parts: string[] = [];
+    if (search) parts.push(`Search: "${search}"`);
+    if (cat) parts.push(`Category: ${label(cat)}`);
+    if (kind) parts.push(kind === "image" ? "Images only" : "Documents only");
+    if (expiry) parts.push(expiry === "expired" ? "Expired" : expiry === "expiring" ? "Expiring soon" : "No expiry issues");
+    if (branchId) parts.push(`Branch: ${branches.find((b) => b.value === branchId)?.label ?? branchId}`);
+    if (vehicleFilter) parts.push("One vehicle");
+    if (view === "trash") parts.push("Trash");
+    return {
+      title: view === "trash" ? "Documents — Trash" : "Document Repository",
+      subtitle: parts.length ? `${scope} · ${parts.join(" · ")}` : scope,
+      generatedBy: user?.fullName,
+    };
+  }
+
+  function toPdfMeta(meta: ExportMeta, rowCount: number) {
+    return { subtitle: meta.subtitle, generatedBy: meta.generatedBy, rowCount, summary: [{ label: "Files", value: String(rowCount) }] };
+  }
+
   function exportPage(format: "csv" | "excel" | "pdf") {
     const data = docs.map(exportColumns);
-    const stamp = new Date().toISOString().slice(0, 10);
-    const name = view === "trash" ? "documents_trash" : "documents";
-    if (format === "csv") exportCsv(`${name}_page${page}_${stamp}.csv`, data);
-    else if (format === "excel") exportXlsx(`${name}_page${page}_${stamp}.xlsx`, data);
-    else exportPdf(rowsToHtmlTable(`Documents (page ${page})`, data), `Documents (page ${page})`, companyName);
+    const meta = exportMeta(`page ${page} of ${totalPages}`);
+    const name = reportFilename(view === "trash" ? "Documents Trash" : "Document Repository", `page-${page}-of-${totalPages}`);
+    if (format === "csv") exportCsv(`${name}.csv`, data);
+    else if (format === "excel") exportXlsx(`${name}.xlsx`, data, meta);
+    else exportPdf(rowsToHtmlTable(`Documents (page ${page} of ${totalPages})`, data), `Documents (page ${page} of ${totalPages})`, companyName, toPdfMeta(meta, data.length));
   }
 
   async function exportAll(format: "csv" | "excel" | "pdf") {
@@ -265,12 +285,13 @@ export default function DocumentsPage() {
     }
     if (allRows.length === 0) { toast("error", "Nothing to export"); return; }
     const scope = hasFilters ? "filtered" : "all";
-    const stamp = new Date().toISOString().slice(0, 10);
+    const title = view === "trash" ? "Documents — Trash" : "Document Repository";
+    const meta = exportMeta(scope === "all" ? (view === "trash" ? "Full trash" : "Full repository") : `Filtered view (${allRows.length} of ${total})`);
     const data = allRows.map(exportColumns);
-    const title = view === "trash" ? `Documents — Trash (${scope})` : `Documents (${scope})`;
-    if (format === "csv") exportCsv(`documents_${scope}_${stamp}.csv`, data);
-    else if (format === "excel") exportXlsx(`documents_${scope}_${stamp}.xlsx`, data);
-    else exportPdf(rowsToHtmlTable(title, data), title, companyName);
+    const name = reportFilename(title, scope);
+    if (format === "csv") exportCsv(`${name}.csv`, data);
+    else if (format === "excel") exportXlsx(`${name}.xlsx`, data, meta);
+    else exportPdf(rowsToHtmlTable(`${title} (${scope})`, data), `${title} (${scope})`, companyName, toPdfMeta(meta, allRows.length));
     toast("success", `Exported ${allRows.length} document(s)`);
   }
 

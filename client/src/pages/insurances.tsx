@@ -12,7 +12,7 @@ import { StatusBadge } from "@/components/ui/badge";
 import { useAuth } from "@/components/auth-context";
 import { useBrand } from "@/lib/brand-context";
 import { useToast } from "@/lib/toast-context";
-import { exportCsv, exportXlsx, exportPdf, rowsToHtmlTable } from "@/lib/export";
+import { exportCsv, exportXlsx, exportPdf, rowsToHtmlTable, reportFilename, type ExportMeta } from "@/lib/export";
 import { Tooltip } from "@/components/ui/tooltip";
 import { COVERAGE_OPTIONS, label } from "@/lib/constants";
 import { formatDate } from "@/lib/format";
@@ -37,7 +37,7 @@ interface InsRow {
 const MIN_INSURANCE_DAYS = 30;
 
 export default function InsurancesPage() {
-  const { can } = useAuth();
+  const { can, user } = useAuth();
   const { companyName } = useBrand();
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -264,12 +264,33 @@ export default function InsurancesPage() {
     "End Date": formatDate(r.endDate),
   });
 
+  function exportMeta(scope: string): ExportMeta {
+    const parts: string[] = [];
+    if (search) parts.push(`Search: "${search}"`);
+    if (coverage) parts.push(`Coverage: ${coverage}`);
+    if (status) parts.push(`Status: ${status === "CURRENT" ? "Current" : label(status)}`);
+    if (from || to) parts.push(`Ends: ${from || "…"} to ${to || "…"}`);
+    if (expiringWithin) parts.push(Number(expiringWithin) < 0 ? "Expired only" : `Expiring within ${expiringWithin} days`);
+    if (branchId) parts.push(`Branch: ${branches.find((b) => b.value === branchId)?.label ?? branchId}`);
+    if (vehicleFilter) parts.push("One vehicle");
+    return {
+      title: "Insurance Policies",
+      subtitle: parts.length ? `${scope} · ${parts.join(" · ")}` : scope,
+      generatedBy: user?.fullName,
+    };
+  }
+
+  function toPdfMeta(meta: ExportMeta, rowCount: number) {
+    return { subtitle: meta.subtitle, generatedBy: meta.generatedBy, rowCount, summary: [{ label: "Policies", value: String(rowCount) }] };
+  }
+
   function exportPage(format: "csv" | "excel" | "pdf") {
     const data = rows.map(exportColumns);
-    const stamp = new Date().toISOString().slice(0, 10);
-    if (format === "csv") exportCsv(`insurances_page${page}_${stamp}.csv`, data);
-    else if (format === "excel") exportXlsx(`insurances_page${page}_${stamp}.xlsx`, data);
-    else exportPdf(rowsToHtmlTable(`Insurance Policies (page ${page})`, data), `Insurance Policies (page ${page})`, companyName);
+    const meta = exportMeta(`page ${page} of ${totalPages}`);
+    const name = reportFilename("Insurance Policies", `page-${page}-of-${totalPages}`);
+    if (format === "csv") exportCsv(`${name}.csv`, data);
+    else if (format === "excel") exportXlsx(`${name}.xlsx`, data, meta);
+    else exportPdf(rowsToHtmlTable(`Insurance Policies (page ${page} of ${totalPages})`, data), `Insurance Policies (page ${page} of ${totalPages})`, companyName, toPdfMeta(meta, data.length));
   }
 
   async function exportAll(format: "csv" | "excel" | "pdf") {
@@ -300,11 +321,12 @@ export default function InsurancesPage() {
     }
     if (allRows.length === 0) { toast("error", "Nothing to export"); return; }
     const scope = hasFilters ? "filtered" : "all";
-    const stamp = new Date().toISOString().slice(0, 10);
+    const meta = exportMeta(scope === "all" ? "Full registry" : `Filtered view (${allRows.length} of ${total})`);
     const data = allRows.map(exportColumns);
-    if (format === "csv") exportCsv(`insurances_${scope}_${stamp}.csv`, data);
-    else if (format === "excel") exportXlsx(`insurances_${scope}_${stamp}.xlsx`, data);
-    else exportPdf(rowsToHtmlTable(`Insurance Policies (${scope})`, data), `Insurance Policies (${scope})`, companyName);
+    const name = reportFilename("Insurance Policies", scope);
+    if (format === "csv") exportCsv(`${name}.csv`, data);
+    else if (format === "excel") exportXlsx(`${name}.xlsx`, data, meta);
+    else exportPdf(rowsToHtmlTable(`Insurance Policies (${scope})`, data), `Insurance Policies (${scope})`, companyName, toPdfMeta(meta, allRows.length));
     toast("success", `Exported ${allRows.length} polic${allRows.length === 1 ? "y" : "ies"}`);
   }
 

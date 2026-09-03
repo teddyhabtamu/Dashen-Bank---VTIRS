@@ -14,7 +14,7 @@ import { useAuth } from "@/components/auth-context";
 import { REGISTRATION_STATUS, REGISTRATION_STATUS_OPTIONS, label } from "@/lib/constants";
 import { formatDate } from "@/lib/format";
 import { useToast } from "@/lib/toast-context";
-import { exportCsv, exportXlsx, exportPdf, rowsToHtmlTable } from "@/lib/export";
+import { exportCsv, exportXlsx, exportPdf, rowsToHtmlTable, reportFilename, type ExportMeta } from "@/lib/export";
 import { effectiveRegistrationStatus, type ReminderWindows } from "@/lib/services/reminders";
 import { PERMISSIONS } from "@/lib/rbac";
 import { RegistrationRenewModal } from "@/components/registration-modals";
@@ -32,7 +32,7 @@ interface RegRow {
 import { ExpiryPill } from "@/components/ui/expiry-pill.js";
 
 export default function RegistrationsPage() {
-  const { can } = useAuth();
+  const { can, user } = useAuth();
   const { companyName } = useBrand();
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -308,12 +308,31 @@ export default function RegistrationsPage() {
     Status: label(effectiveRegistrationStatus(r.status, r.expiryDate)),
   });
 
+  function exportMeta(scope: string): ExportMeta {
+    const parts: string[] = [];
+    if (search) parts.push(`Search: "${search}"`);
+    if (status) parts.push(`Status: ${status === CURRENT ? "Current" : label(status)}`);
+    if (expiringWithin) parts.push(Number(expiringWithin) < 0 ? "Expired only" : `Expiring within ${expiringWithin} days`);
+    if (branchId) parts.push(`Branch: ${branches.find((b) => b.value === branchId)?.label ?? branchId}`);
+    if (vehicleFilter) parts.push("One vehicle");
+    return {
+      title: "Vehicle Registrations",
+      subtitle: parts.length ? `${scope} · ${parts.join(" · ")}` : scope,
+      generatedBy: user?.fullName,
+    };
+  }
+
+  function toPdfMeta(meta: ExportMeta, rowCount: number) {
+    return { subtitle: meta.subtitle, generatedBy: meta.generatedBy, rowCount, summary: [{ label: "Registrations", value: String(rowCount) }] };
+  }
+
   function exportPage(format: "csv" | "excel" | "pdf") {
     const data = rows.map(exportColumns);
-    const stamp = new Date().toISOString().slice(0, 10);
-    if (format === "csv") exportCsv(`registrations_page${page}_${stamp}.csv`, data);
-    else if (format === "excel") exportXlsx(`registrations_page${page}_${stamp}.xlsx`, data);
-    else exportPdf(rowsToHtmlTable(`Registrations (page ${page})`, data), `Registrations (page ${page})`, companyName);
+    const meta = exportMeta(`page ${page} of ${totalPages}`);
+    const name = reportFilename("Vehicle Registrations", `page-${page}-of-${totalPages}`);
+    if (format === "csv") exportCsv(`${name}.csv`, data);
+    else if (format === "excel") exportXlsx(`${name}.xlsx`, data, meta);
+    else exportPdf(rowsToHtmlTable(`Registrations (page ${page} of ${totalPages})`, data), `Registrations (page ${page} of ${totalPages})`, companyName, toPdfMeta(meta, data.length));
   }
 
   async function exportAll(format: "csv" | "excel" | "pdf") {
@@ -341,11 +360,12 @@ export default function RegistrationsPage() {
     }
     if (allRows.length === 0) { toast("error", "Nothing to export"); return; }
     const scope = hasFilters ? "filtered" : "all";
-    const stamp = new Date().toISOString().slice(0, 10);
+    const meta = exportMeta(scope === "all" ? "Full registry" : `Filtered view (${allRows.length} of ${total})`);
     const data = allRows.map(exportColumns);
-    if (format === "csv") exportCsv(`registrations_${scope}_${stamp}.csv`, data);
-    else if (format === "excel") exportXlsx(`registrations_${scope}_${stamp}.xlsx`, data);
-    else exportPdf(rowsToHtmlTable(`Registrations (${scope})`, data), `Registrations (${scope})`, companyName);
+    const name = reportFilename("Vehicle Registrations", scope);
+    if (format === "csv") exportCsv(`${name}.csv`, data);
+    else if (format === "excel") exportXlsx(`${name}.xlsx`, data, meta);
+    else exportPdf(rowsToHtmlTable(`Registrations (${scope})`, data), `Registrations (${scope})`, companyName, toPdfMeta(meta, allRows.length));
     toast("success", `Exported ${allRows.length} registration(s)`);
   }
 

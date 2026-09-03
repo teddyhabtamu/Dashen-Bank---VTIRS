@@ -13,7 +13,7 @@ import { formatCurrency } from "@/lib/format";
 import { useAuth } from "@/components/auth-context";
 import { PERMISSIONS } from "@/lib/rbac";
 import { useToast } from "@/lib/toast-context";
-import { exportCsv, exportXlsx, exportPdf, rowsToHtmlTable } from "@/lib/export";
+import { exportCsv, exportXlsx, exportPdf, rowsToHtmlTable, reportFilename, type ExportMeta } from "@/lib/export";
 import { useBrand } from "@/lib/brand-context";
 
 interface DriverRef {
@@ -48,7 +48,7 @@ type SortKey = "vehicleCode" | "plateNumber" | "make" | "year" | "status" | "cre
 const PAGE_SIZES = [15, 30, 50, 100];
 
 export function VehicleTable() {
-  const { can } = useAuth();
+  const { can, user } = useAuth();
   const { toast } = useToast();
   const { companyName } = useBrand();
   const navigate = useNavigate();
@@ -254,10 +254,39 @@ export function VehicleTable() {
 
   function exportPage(format: "csv" | "excel" | "pdf") {
     const data = rows.map(exportColumns);
-    const stamp = new Date().toISOString().slice(0, 10);
-    if (format === "csv") exportCsv(`vehicles_page${page}_${stamp}.csv`, data);
-    else if (format === "excel") exportXlsx(`vehicles_page${page}_${stamp}.xlsx`, data);
-    else exportPdf(rowsToHtmlTable(`Vehicles (page ${page})`, data), `Vehicles (page ${page})`, companyName);
+    const meta = buildExportMeta(`page ${page} of ${totalPages}`);
+    const name = reportFilename("Vehicle Inventory", `page-${page}-of-${totalPages}`);
+    if (format === "csv") exportCsv(`${name}.csv`, data);
+    else if (format === "excel") exportXlsx(`${name}.xlsx`, data, meta);
+    else exportPdf(rowsToHtmlTable(`Vehicles (page ${page} of ${totalPages})`, data), `Vehicles (page ${page} of ${totalPages})`, companyName, toPdfMeta(meta, data.length));
+  }
+
+  // Corporate export context shared by both scopes: filter summary,
+  // generator, money formatting and row counts land in the Excel title
+  // block and the PDF cover strip instead of living only on screen.
+  function buildExportMeta(scope: string): ExportMeta {
+    const parts: string[] = [];
+    if (search) parts.push(`Search: "${search}"`);
+    if (status) parts.push(`Status: ${label(status)}`);
+    if (branchId) parts.push(`Branch: ${branches.find((b) => b.value === branchId)?.label ?? branchId}`);
+    if (type) parts.push(`Type: ${type}`);
+    if (year) parts.push(`Year: ${year}`);
+    if (sortBy) parts.push(`Sorted by ${sortBy} (${sortDir})`);
+    return {
+      title: "Vehicle Inventory",
+      subtitle: parts.length ? `${scope} · ${parts.join(" · ")}` : scope,
+      generatedBy: user?.fullName,
+      moneyColumns: ["Cost"],
+    };
+  }
+
+  function toPdfMeta(meta: ExportMeta, rowCount: number) {
+    return {
+      subtitle: meta.subtitle,
+      generatedBy: meta.generatedBy,
+      rowCount,
+      summary: [{ label: "Vehicles", value: String(rowCount) }],
+    };
   }
 
   // Exports the entire filtered registry (all pages), not just the visible
@@ -293,11 +322,12 @@ export function VehicleTable() {
       return;
     }
     const scope = hasFilters ? "filtered" : "all";
-    const stamp = new Date().toISOString().slice(0, 10);
+    const meta = buildExportMeta(scope === "all" ? "Full registry" : `Filtered view (${allRows.length} of ${total})`);
     const data = allRows.map(exportColumns);
-    if (format === "csv") exportCsv(`vehicles_${scope}_${stamp}.csv`, data);
-    else if (format === "excel") exportXlsx(`vehicles_${scope}_${stamp}.xlsx`, data);
-    else exportPdf(rowsToHtmlTable(`Vehicles (${scope})`, data), `Vehicles (${scope})`, companyName);
+    const name = reportFilename("Vehicle Inventory", scope);
+    if (format === "csv") exportCsv(`${name}.csv`, data);
+    else if (format === "excel") exportXlsx(`${name}.xlsx`, data, meta);
+    else exportPdf(rowsToHtmlTable(`Vehicles (${scope})`, data), `Vehicles (${scope})`, companyName, toPdfMeta(meta, allRows.length));
     toast("success", `Exported ${allRows.length} vehicle(s)`);
   }
 

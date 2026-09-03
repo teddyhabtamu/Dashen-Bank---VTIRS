@@ -8,7 +8,7 @@ import { Dropdown } from "@/components/ui/dropdown";
 import { useAuth } from "@/components/auth-context";
 import { useToast } from "@/lib/toast-context";
 import { formatDateTime } from "@/lib/format";
-import { exportCsv, exportXlsx, exportPdf, rowsToHtmlTable } from "@/lib/export";
+import { exportCsv, exportXlsx, exportPdf, rowsToHtmlTable, reportFilename, type ExportMeta } from "@/lib/export";
 import { useBrand } from "@/lib/brand-context";
 import { Tooltip } from "@/components/ui/tooltip";
 
@@ -40,7 +40,7 @@ const STATUS_OPTIONS = [
 ];
 
 export default function UsersPage() {
-  const { can } = useAuth();
+  const { can, user } = useAuth();
   const { toast } = useToast();
   const { companyName } = useBrand();
   const [rows, setRows] = useState<UserRow[]>([]);
@@ -96,12 +96,29 @@ export default function UsersPage() {
 
   useEffect(() => { load(); }, [load]);
 
+  function exportMeta(scope: string): ExportMeta {
+    const parts: string[] = [];
+    if (search) parts.push(`Search: "${search}"`);
+    if (roleFilter) parts.push(`Role: ${roles.find((r) => r.slug === roleFilter)?.name ?? roleFilter}`);
+    if (statusFilter) parts.push(`Status: ${statusFilter}`);
+    return {
+      title: "User Management",
+      subtitle: parts.length ? `${scope} · ${parts.join(" · ")}` : scope,
+      generatedBy: user?.fullName,
+    };
+  }
+
+  function toPdfMeta(meta: ExportMeta, rowCount: number) {
+    return { subtitle: meta.subtitle, generatedBy: meta.generatedBy, rowCount, summary: [{ label: "Users", value: String(rowCount) }] };
+  }
+
   function exportUsers(format: "csv" | "excel" | "pdf") {
     const data = rows.map(exportColumns);
-    const stamp = new Date().toISOString().slice(0, 10);
-    if (format === "csv") exportCsv(`users_page${page}_${stamp}.csv`, data);
-    else if (format === "excel") exportXlsx(`users_page${page}_${stamp}.xlsx`, data);
-    else exportPdf(rowsToHtmlTable(`Users (page ${page})`, data), `Users (page ${page})`, companyName);
+    const meta = exportMeta(`page ${page} of ${totalPages}`);
+    const name = reportFilename("User Management", `page-${page}-of-${totalPages}`);
+    if (format === "csv") exportCsv(`${name}.csv`, data);
+    else if (format === "excel") exportXlsx(`${name}.xlsx`, data, meta);
+    else exportPdf(rowsToHtmlTable(`Users (page ${page} of ${totalPages})`, data), `Users (page ${page} of ${totalPages})`, companyName, toPdfMeta(meta, data.length));
   }
 
   const exportColumns = (u: {
@@ -146,11 +163,12 @@ export default function UsersPage() {
       return;
     }
     if (allRows.length === 0) { toast("error", "Nothing to export"); return; }
-    const stamp = new Date().toISOString().slice(0, 10);
+    const meta = exportMeta("Full registry");
     const data = allRows.map(exportColumns);
-    if (format === "csv") exportCsv(`users_all_${stamp}.csv`, data);
-    else if (format === "excel") exportXlsx(`users_all_${stamp}.xlsx`, data);
-    else exportPdf(rowsToHtmlTable("Users (all)", data), "Users (all)", companyName);
+    const name = reportFilename("User Management", "all");
+    if (format === "csv") exportCsv(`${name}.csv`, data);
+    else if (format === "excel") exportXlsx(`${name}.xlsx`, data, meta);
+    else exportPdf(rowsToHtmlTable("Users (all)", data), "Users (all)", companyName, toPdfMeta(meta, allRows.length));
     toast("success", `Exported ${allRows.length} user(s)`);
   }
 
