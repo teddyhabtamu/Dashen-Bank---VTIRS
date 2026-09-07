@@ -5,11 +5,12 @@ import { useBrand } from "@/lib/brand-context";
 import { Select } from "@/components/ui/select";
 import { DatePicker } from "@/components/ui/datepicker";
 import { formatDateTime } from "@/lib/format";
-import { exportCsv, exportXlsx, exportPdf, rowsToHtmlTable, reportFilename, type ExportMeta } from "@/lib/export";
+import { exportCsv, exportXlsx, exportPdf, rowsToHtmlTable, downloadServerCsv, reportFilename, type ExportMeta } from "@/lib/export";
 import { Dropdown } from "@/components/ui/dropdown";
 import { Tooltip } from "@/components/ui/tooltip";
 import { useToast } from "@/lib/toast-context";
 import { useAuth } from "@/components/auth-context";
+import { PERMISSIONS } from "@/lib/rbac";
 
 interface AuditRow {
   id: string;
@@ -39,6 +40,7 @@ const ACTION_COLORS: Record<string, string> = {
 export default function AuditLogsPage() {
   const { companyName } = useBrand();
   const { toast } = useToast();
+  const { can } = useAuth();
   const { user } = useAuth();
   const [rows, setRows] = useState<AuditRow[]>([]);
   const [total, setTotal] = useState(0);
@@ -118,6 +120,18 @@ export default function AuditLogsPage() {
     else exportPdf(rowsToHtmlTable(`Audit Logs (page ${page} of ${totalPages})`, data), `Audit Logs (page ${page} of ${totalPages})`, companyName, toPdfMeta(meta, data.length));
   }
 
+  async function exportServerCsv() {
+    const r = await downloadServerCsv("audit", {
+      search: search || undefined,
+      action: action || undefined,
+      entity: entity || undefined,
+      from: from || undefined,
+      to: to || undefined,
+    });
+    if (r.ok) toast("success", `Exported ${r.rows} audit entr${r.rows === 1 ? "y" : "ies"}`);
+    else toast("error", r.error);
+  }
+
   async function exportAllAudit(format: "csv" | "excel" | "pdf") {
     const allRows: AuditRow[] = [];
     const qs = new URLSearchParams();
@@ -166,12 +180,12 @@ export default function AuditLogsPage() {
           <h2 className="text-xl font-semibold text-slate-800">Audit Trail</h2>
           <p className="text-sm text-slate-500">System-wide activity &amp; change history</p>
         </div>
-          {rows.length > 0 && (
+          {rows.length > 0 && can(PERMISSIONS.DATA_EXPORT) && (
             <Dropdown align="right"
               trigger={({ toggle }) => (<Tooltip content="Export"><button onClick={toggle} className="btn-outline text-xs"><Download className="h-3.5 w-3.5" /> Export</button></Tooltip>)}
               items={[
                 { label: "Current view — all pages", header: true },
-                { label: "CSV", onClick: () => exportAllAudit("csv") },
+                { label: "CSV", onClick: () => exportServerCsv() },
                 { label: "Excel", onClick: () => exportAllAudit("excel") },
                 { label: "PDF", onClick: () => exportAllAudit("pdf") },
                 { label: `This page only (${rows.length} rows)`, header: true },

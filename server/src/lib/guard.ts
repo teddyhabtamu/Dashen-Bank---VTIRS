@@ -29,6 +29,7 @@ async function resolveSession(userId: string): Promise<SessionPayload | null> {
     where: { id: userId },
     include: {
       role: { include: { permissions: true } },
+      branch: { select: { id: true, name: true } },
     },
   });
   if (!user) return null;
@@ -45,6 +46,8 @@ async function resolveSession(userId: string): Promise<SessionPayload | null> {
     roleName: user.role.name,
     fullName: user.fullName,
     permissions,
+    branchId: user.branchId,
+    branchName: user.branch?.name ?? null,
   };
 }
 

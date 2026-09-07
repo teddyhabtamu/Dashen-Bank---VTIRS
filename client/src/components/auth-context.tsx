@@ -7,6 +7,8 @@ export interface SessionUser {
   role: string;
   roleName: string;
   permissions: string[];
+  branchId: string | null;
+  branchName: string | null;
 }
 
 interface AuthContextValue {

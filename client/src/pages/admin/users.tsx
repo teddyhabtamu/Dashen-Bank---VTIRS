@@ -6,9 +6,10 @@ import { Modal } from "@/components/ui/modal";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { Dropdown } from "@/components/ui/dropdown";
 import { useAuth } from "@/components/auth-context";
+import { PERMISSIONS } from "@/lib/rbac";
 import { useToast } from "@/lib/toast-context";
 import { formatDateTime } from "@/lib/format";
-import { exportCsv, exportXlsx, exportPdf, rowsToHtmlTable, reportFilename, type ExportMeta } from "@/lib/export";
+import { exportCsv, exportXlsx, exportPdf, rowsToHtmlTable, downloadServerCsv, reportFilename, type ExportMeta } from "@/lib/export";
 import { useBrand } from "@/lib/brand-context";
 import { Tooltip } from "@/components/ui/tooltip";
 
@@ -140,6 +141,16 @@ export default function UsersPage() {
     "Last Login": u.lastLoginAt ? formatDateTime(u.lastLoginAt) : "",
     "Created At": formatDateTime(u.createdAt),
   });
+
+  async function exportServerCsv() {
+    const r = await downloadServerCsv("users", {
+      search: search || undefined,
+      role: roleFilter || undefined,
+      status: statusFilter || undefined,
+    });
+    if (r.ok) toast("success", `Exported ${r.rows} user(s)`);
+    else toast("error", r.error);
+  }
 
   async function exportAllUsers(format: "csv" | "excel" | "pdf") {
     const allRows: typeof rows = [];
@@ -290,12 +301,12 @@ export default function UsersPage() {
           <p className="text-sm text-slate-500">Manage system users, roles &amp; access</p>
         </div>
         <div className="flex items-center gap-2">
-          {rows.length > 0 && (
+          {rows.length > 0 && can(PERMISSIONS.DATA_EXPORT) && (
             <Dropdown align="right"
               trigger={({ toggle }) => (<Tooltip content="Export"><button onClick={toggle} className="btn-outline text-xs"><Download className="h-3.5 w-3.5" /> Export</button></Tooltip>)}
               items={[
                 { label: "Current view — all pages", header: true },
-                { label: "CSV", onClick: () => exportAllUsers("csv") },
+                { label: "CSV", onClick: () => exportServerCsv() },
                 { label: "Excel", onClick: () => exportAllUsers("excel") },
                 { label: "PDF", onClick: () => exportAllUsers("pdf") },
                 { label: `This page only (${rows.length} rows)`, header: true },

@@ -187,6 +187,8 @@ router.get("/me", requireAuth(), async (req, res) => {
       role: session.roleSlug,
       roleName: session.roleName,
       permissions: session.permissions,
+      branchId: session.branchId,
+      branchName: session.branchName,
     },
     roleDefaults: ROLE_PERMISSIONS[session.roleSlug] ?? [],
   });

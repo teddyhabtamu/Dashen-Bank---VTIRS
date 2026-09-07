@@ -9,7 +9,7 @@ import { Dropdown } from "@/components/ui/dropdown";
 import { DOCUMENT_CATEGORY_OPTIONS, IMAGE_CATEGORY_OPTIONS, label } from "@/lib/constants";
 import { formatFileSize, formatDate, formatRelative } from "@/lib/format";
 import { useToast } from "@/lib/toast-context";
-import { exportCsv, exportXlsx, exportPdf, rowsToHtmlTable, reportFilename, type ExportMeta } from "@/lib/export";
+import { exportCsv, exportXlsx, exportPdf, rowsToHtmlTable, downloadServerCsv, reportFilename, type ExportMeta } from "@/lib/export";
 import { useBrand } from "@/lib/brand-context";
 import { Tooltip } from "@/components/ui/tooltip";
 import { useAuth } from "@/components/auth-context";
@@ -258,6 +258,20 @@ export default function DocumentsPage() {
     else exportPdf(rowsToHtmlTable(`Documents (page ${page} of ${totalPages})`, data), `Documents (page ${page} of ${totalPages})`, companyName, toPdfMeta(meta, data.length));
   }
 
+  async function exportServerCsv() {
+    const r = await downloadServerCsv("documents", {
+      search: search || undefined,
+      category: cat || undefined,
+      kind: kind || undefined,
+      expiry: expiry || undefined,
+      branchId: branchId || undefined,
+      vehicleId: vehicleFilter || undefined,
+      view,
+    });
+    if (r.ok) toast("success", `Exported ${r.rows} document(s)`);
+    else toast("error", r.error);
+  }
+
   async function exportAll(format: "csv" | "excel" | "pdf") {
     const allRows: Doc[] = [];
     const qs = new URLSearchParams();
@@ -341,7 +355,7 @@ export default function DocumentsPage() {
               trigger={({ toggle }) => (<Tooltip content="Export"><button onClick={toggle} className="btn-outline text-xs"><Download className="h-3.5 w-3.5" /> Export</button></Tooltip>)}
               items={[
                 { label: "Current view — all pages", header: true },
-                { label: "CSV", onClick: () => exportAll("csv") },
+                { label: "CSV", onClick: () => exportServerCsv() },
                 { label: "Excel", onClick: () => exportAll("excel") },
                 { label: "PDF", onClick: () => exportAll("pdf") },
                 { label: `This page only (${docs.length} rows)`, header: true },

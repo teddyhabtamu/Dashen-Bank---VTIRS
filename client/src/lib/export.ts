@@ -56,7 +56,7 @@ function metaLine(meta: ExportMeta, rowCount: number): string {
   return parts.join("  ·  ");
 }
 
-function triggerDownload(blob: Blob, filename: string) {
+export function triggerDownload(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -65,6 +65,32 @@ function triggerDownload(blob: Blob, filename: string) {
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// Server-side CSV export: single request, permission-checked + audit-logged
+// server-side, branch-scoped like the dashboard. Returns the row count for
+// toasts, or an error message.
+export async function downloadServerCsv(
+  entity: string,
+  params: Record<string, string | undefined>
+): Promise<{ ok: true; rows: number } | { ok: false; error: string }> {
+  const qs = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) if (v) qs.set(k, v);
+  let res: Response;
+  try {
+    res = await fetch(`/api/exports/${entity}?${qs.toString()}`);
+  } catch {
+    return { ok: false, error: "Export request failed" };
+  }
+  if (!res.ok) {
+    const d = await res.json().catch(() => ({} as any));
+    return { ok: false, error: (d as any)?.error ?? `Export failed (${res.status})` };
+  }
+  const blob = await res.blob();
+  const disp = res.headers.get("content-disposition") ?? "";
+  const filename = /filename="([^"]+)"/.exec(disp)?.[1] ?? `${entity}.csv`;
+  triggerDownload(blob, filename);
+  return { ok: true, rows: Number(res.headers.get("x-row-count") ?? 0) };
 }
 
 /* ---------------------------------- CSV ---------------------------------- */

@@ -19,6 +19,8 @@ export interface SessionPayload {
   roleName: string;
   fullName: string;
   permissions: string[];
+  branchId: string | null;
+  branchName: string | null;
 }
 
 export async function signSession(payload: SessionPayload, lifetimeSeconds: number = MAX_JWT_AGE): Promise<string> {
@@ -42,6 +44,8 @@ export async function verifySession(
     const fullName = payload.fullName as string;
     const permissions = (payload.permissions as string[]) ?? [];
     const iat = payload.iat as number | undefined;
+    // Tokens issued before branchId existed won't carry it; they resolve to
+    // unscoped until the next login refreshes the session via resolveSession.
 
     // Dynamic session timeout: check elapsed time against the DB setting.
     const timeoutMinutes = await getSetting("session_timeout_minutes", "480");
@@ -50,7 +54,7 @@ export async function verifySession(
       return null; // session expired per current setting
     }
 
-    return { userId, username, roleSlug, roleName, fullName, permissions };
+    return { userId, username, roleSlug, roleName, fullName, permissions, branchId: (payload.branchId as string) ?? null, branchName: (payload.branchName as string) ?? null };
   } catch {
     return null;
   }

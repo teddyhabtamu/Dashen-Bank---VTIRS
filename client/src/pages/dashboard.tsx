@@ -36,6 +36,7 @@ interface DashboardData {
   activity: ActivityItem[];
   windows: ReminderWindows;
   asOf: string;
+  scope: { branchId: string; branchName: string } | null;
 }
 
 function StatCard({ icon: Icon, label, value, sub, tone = "primary", to, title }: {
@@ -198,7 +199,14 @@ export default function DashboardPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-xl font-semibold text-slate-800">Dashboard</h2>
-          <p className="text-sm text-slate-500">Fleet overview &amp; upcoming document expirations</p>
+          <p className="text-sm text-slate-500">
+            Fleet overview &amp; upcoming document expirations
+            {data.scope && (
+              <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary" title="Your account is assigned to a branch, so every number on this page is scoped to it">
+                Branch: {data.scope.branchName}
+              </span>
+            )}
+          </p>
         </div>
         <div className="flex items-center gap-3 text-xs text-slate-400">
           <span title={formatDateTime(data.asOf)}>As of {formatRelative(data.asOf)}</span>

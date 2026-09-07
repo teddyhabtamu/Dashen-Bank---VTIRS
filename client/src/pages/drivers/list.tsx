@@ -12,7 +12,7 @@ import { Tooltip } from "@/components/ui/tooltip";
 import { useAuth } from "@/components/auth-context";
 import { useToast } from "@/lib/toast-context";
 import { useBrand } from "@/lib/brand-context";
-import { exportCsv, exportXlsx, exportPdf, rowsToHtmlTable, reportFilename, type ExportMeta } from "@/lib/export";
+import { exportCsv, exportXlsx, exportPdf, rowsToHtmlTable, downloadServerCsv, reportFilename, type ExportMeta } from "@/lib/export";
 import { PERMISSIONS } from "@/lib/rbac";
 
 interface DriverRow {
@@ -165,6 +165,19 @@ export default function DriversPage() {
     else exportPdf(rowsToHtmlTable(`Drivers (page ${page} of ${totalPages})`, data), `Drivers (page ${page} of ${totalPages})`, companyName, toPdfMeta(meta, data.length));
   }
 
+  async function exportServerCsv() {
+    const r = await downloadServerCsv("drivers", {
+      search: search || undefined,
+      departmentId: deptFilter || undefined,
+      status: statusFilter || undefined,
+      branchId: branchFilter || undefined,
+      unassigned: unassignedOnly ? "true" : undefined,
+      licenseExpiringWithin: licenseFilter || undefined,
+    });
+    if (r.ok) toast("success", `Exported ${r.rows} driver(s)`);
+    else toast("error", r.error);
+  }
+
   async function exportAll(format: "csv" | "excel" | "pdf") {
     const allRows: DriverRow[] = [];
     const qs = new URLSearchParams();
@@ -312,12 +325,12 @@ export default function DriversPage() {
           <p className="text-sm text-slate-500">Manage drivers, their vehicles &amp; assignments</p>
         </div>
         <div className="flex items-center gap-2">
-          {rows.length > 0 && !loading && (
+          {rows.length > 0 && !loading && can(PERMISSIONS.DATA_EXPORT) && (
             <Dropdown align="right"
               trigger={({ toggle }) => (<Tooltip content="Export"><button onClick={toggle} className="btn-outline text-xs"><Download className="h-3.5 w-3.5" /> Export</button></Tooltip>)}
               items={[
                 { label: "Current view — all pages", header: true },
-                { label: "CSV", onClick: () => exportAll("csv") },
+                { label: "CSV", onClick: () => exportServerCsv() },
                 { label: "Excel", onClick: () => exportAll("excel") },
                 { label: "PDF", onClick: () => exportAll("pdf") },
                 { label: `This page only (${rows.length} rows)`, header: true },

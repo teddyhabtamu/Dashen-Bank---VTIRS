@@ -12,7 +12,7 @@ import { StatusBadge } from "@/components/ui/badge";
 import { useAuth } from "@/components/auth-context";
 import { useBrand } from "@/lib/brand-context";
 import { useToast } from "@/lib/toast-context";
-import { exportCsv, exportXlsx, exportPdf, rowsToHtmlTable, reportFilename, type ExportMeta } from "@/lib/export";
+import { exportCsv, exportXlsx, exportPdf, rowsToHtmlTable, downloadServerCsv, reportFilename, type ExportMeta } from "@/lib/export";
 import { Tooltip } from "@/components/ui/tooltip";
 import { COVERAGE_OPTIONS, label } from "@/lib/constants";
 import { formatDate } from "@/lib/format";
@@ -293,6 +293,21 @@ export default function InsurancesPage() {
     else exportPdf(rowsToHtmlTable(`Insurance Policies (page ${page} of ${totalPages})`, data), `Insurance Policies (page ${page} of ${totalPages})`, companyName, toPdfMeta(meta, data.length));
   }
 
+  async function exportServerCsv() {
+    const r = await downloadServerCsv("insurances", {
+      search: search || undefined,
+      coverage: coverage || undefined,
+      status: status || undefined,
+      from: from || undefined,
+      to: to || undefined,
+      expiringWithin: expiringWithin || undefined,
+      vehicleId: vehicleFilter || undefined,
+      branchId: branchId || undefined,
+    });
+    if (r.ok) toast("success", `Exported ${r.rows} polic${r.rows === 1 ? "y" : "ies"}`);
+    else toast("error", r.error);
+  }
+
   async function exportAll(format: "csv" | "excel" | "pdf") {
     const allRows: InsRow[] = [];
     const qs = new URLSearchParams();
@@ -375,12 +390,12 @@ export default function InsurancesPage() {
           <p className="text-sm text-slate-500">View and manage insurance policies across all vehicles</p>
         </div>
         <div className="flex items-center gap-2">
-          {rows.length > 0 && !loading && (
+          {rows.length > 0 && !loading && can(PERMISSIONS.DATA_EXPORT) && (
             <Dropdown align="right"
               trigger={({ toggle }) => (<Tooltip content="Export"><button onClick={toggle} className="btn-outline text-xs"><Download className="h-3.5 w-3.5" /> Export</button></Tooltip>)}
               items={[
                 { label: "Current view — all pages", header: true },
-                { label: "CSV", onClick: () => exportAll("csv") },
+                { label: "CSV", onClick: () => exportServerCsv() },
                 { label: "Excel", onClick: () => exportAll("excel") },
                 { label: "PDF", onClick: () => exportAll("pdf") },
                 { label: `This page only (${rows.length} rows)`, header: true },

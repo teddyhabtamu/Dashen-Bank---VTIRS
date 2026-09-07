@@ -13,7 +13,7 @@ import { formatCurrency } from "@/lib/format";
 import { useAuth } from "@/components/auth-context";
 import { PERMISSIONS } from "@/lib/rbac";
 import { useToast } from "@/lib/toast-context";
-import { exportCsv, exportXlsx, exportPdf, rowsToHtmlTable, reportFilename, type ExportMeta } from "@/lib/export";
+import { exportCsv, exportXlsx, exportPdf, rowsToHtmlTable, downloadServerCsv, reportFilename, type ExportMeta } from "@/lib/export";
 import { useBrand } from "@/lib/brand-context";
 
 interface DriverRef {
@@ -292,6 +292,22 @@ export function VehicleTable() {
   // Exports the entire filtered registry (all pages), not just the visible
   // slice. The filename carries the active filters so a filtered export is
   // distinguishable from the full one.
+  // Server-side CSV: single permission-checked, audit-logged request that
+  // also enforces branch scoping. Excel/PDF stay client-side (presentation).
+  async function exportServerCsv() {
+    const r = await downloadServerCsv("vehicles", {
+      search: search || undefined,
+      status: status || undefined,
+      branchId: branchId || undefined,
+      type: type || undefined,
+      year: year || undefined,
+      sortBy: sortBy || undefined,
+      sortDir: sortBy ? sortDir : undefined,
+    });
+    if (r.ok) toast("success", `Exported ${r.rows} vehicle(s)`);
+    else toast("error", r.error);
+  }
+
   async function exportAll(format: "csv" | "excel" | "pdf") {
     const allRows: VehicleRow[] = [];
     const qs = new URLSearchParams();
@@ -418,12 +434,12 @@ export function VehicleTable() {
           />
         </div>
         <div className="flex items-center gap-2">
-          {rows.length > 0 && !loading && (
+          {rows.length > 0 && !loading && can(PERMISSIONS.DATA_EXPORT) && (
             <Dropdown align="right"
               trigger={({ toggle }) => (<Tooltip content="Export"><button onClick={toggle} className="btn-outline justify-center text-xs"><Download className="h-3.5 w-3.5" /> Export</button></Tooltip>)}
               items={[
                 { label: "Current view — all pages", header: true },
-                { label: "CSV", onClick: () => exportAll("csv") },
+                { label: "CSV", onClick: () => exportServerCsv() },
                 { label: "Excel", onClick: () => exportAll("excel") },
                 { label: "PDF", onClick: () => exportAll("pdf") },
                 { label: `This page only (${rows.length} rows)`, header: true },

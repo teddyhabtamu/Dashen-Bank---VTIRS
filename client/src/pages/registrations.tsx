@@ -14,7 +14,7 @@ import { useAuth } from "@/components/auth-context";
 import { REGISTRATION_STATUS, REGISTRATION_STATUS_OPTIONS, label } from "@/lib/constants";
 import { formatDate } from "@/lib/format";
 import { useToast } from "@/lib/toast-context";
-import { exportCsv, exportXlsx, exportPdf, rowsToHtmlTable, reportFilename, type ExportMeta } from "@/lib/export";
+import { exportCsv, exportXlsx, exportPdf, rowsToHtmlTable, downloadServerCsv, reportFilename, type ExportMeta } from "@/lib/export";
 import { effectiveRegistrationStatus, type ReminderWindows } from "@/lib/services/reminders";
 import { PERMISSIONS } from "@/lib/rbac";
 import { RegistrationRenewModal } from "@/components/registration-modals";
@@ -335,6 +335,18 @@ export default function RegistrationsPage() {
     else exportPdf(rowsToHtmlTable(`Registrations (page ${page} of ${totalPages})`, data), `Registrations (page ${page} of ${totalPages})`, companyName, toPdfMeta(meta, data.length));
   }
 
+  async function exportServerCsv() {
+    const r = await downloadServerCsv("registrations", {
+      search: search || undefined,
+      status: status || undefined,
+      expiringWithin: expiringWithin || undefined,
+      vehicleId: vehicleFilter || undefined,
+      branchId: branchId || undefined,
+    });
+    if (r.ok) toast("success", `Exported ${r.rows} registration(s)`);
+    else toast("error", r.error);
+  }
+
   async function exportAll(format: "csv" | "excel" | "pdf") {
     const allRows: RegRow[] = [];
     const qs = new URLSearchParams();
@@ -416,12 +428,12 @@ export default function RegistrationsPage() {
           <p className="text-sm text-slate-500">Manage vehicle registrations, renewals &amp; suspensions</p>
         </div>
         <div className="flex items-center gap-2">
-          {rows.length > 0 && !loading && (
+          {rows.length > 0 && !loading && can(PERMISSIONS.DATA_EXPORT) && (
             <Dropdown align="right"
               trigger={({ toggle }) => (<Tooltip content="Export"><button onClick={toggle} className="btn-outline text-xs"><Download className="h-3.5 w-3.5" /> Export</button></Tooltip>)}
               items={[
                 { label: "Current view — all pages", header: true },
-                { label: "CSV", onClick: () => exportAll("csv") },
+                { label: "CSV", onClick: () => exportServerCsv() },
                 { label: "Excel", onClick: () => exportAll("excel") },
                 { label: "PDF", onClick: () => exportAll("pdf") },
                 { label: `This page only (${rows.length} rows)`, header: true },
