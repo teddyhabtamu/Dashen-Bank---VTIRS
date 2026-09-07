@@ -246,8 +246,8 @@ export default function RolesPage() {
               <div className="rounded-md bg-red-50 p-3 text-sm text-red-700">{err}</div>
             </div>
           )}
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[760px] border-collapse text-sm">
+          <div className="overflow-x-auto [overscroll-behavior-x:contain] [-webkit-overflow-scrolling:touch]">
+            <table className="w-full min-w-[820px] border-collapse text-sm">
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50">
                   <th className="sticky left-0 z-10 min-w-[220px] bg-slate-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -274,7 +274,7 @@ export default function RolesPage() {
                           {role.userCount === 0 && role.slug !== "system_admin" && (
                             <button
                               onClick={() => { setDeleteId(role.id); setErr(null); }}
-                              className="rounded p-0.5 text-slate-300 transition-colors hover:bg-red-50 hover:text-red-500"
+                              className="rounded p-1.5 text-slate-300 transition-colors hover:bg-red-50 hover:text-red-500 sm:p-0.5"
                               title={`Delete the ${role.name} role`}
                             >
                               <Trash2 className="h-3.5 w-3.5" />
@@ -329,7 +329,7 @@ export default function RolesPage() {
                                 }
                                 aria-pressed={granted}
                                 aria-label={`${p.name} for ${role.name}: ${locked ? "locked default" : granted ? "granted" : "denied"}`}
-                                className={`inline-flex h-6 w-6 items-center justify-center rounded-md border transition-colors ${
+                                className={`inline-flex h-10 w-10 items-center justify-center rounded-md border transition-colors sm:h-6 sm:w-6 ${
                                   locked
                                     ? "cursor-not-allowed border-primary/30 bg-primary/5 text-primary"
                                     : granted
