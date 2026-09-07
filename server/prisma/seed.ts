@@ -11,13 +11,15 @@ const prisma = new PrismaClient();
 async function main() {
   console.log("Seeding RBAC...");
 
-  // 1. Permissions (all known codes)
+  // 1. Permissions (all known codes). Additive-only: new codes are created,
+  // but existing rows are never touched — an admin may have curated names or
+  // descriptions through the UI, and re-seeding must not clobber that.
   const allCodes = Array.from(new Set(Object.values(PERMISSIONS)));
   for (const code of allCodes) {
     const [resource, action] = code.split(":");
     await prisma.permission.upsert({
       where: { code },
-      update: { name: `${action} ${resource}`, category: resource },
+      update: {},
       create: {
         code,
         name: `${action} ${resource}`,
@@ -42,16 +44,27 @@ async function main() {
   }
   console.log(`  • ${ROLE_DEFINITIONS.length} roles ensured`);
 
-  // 3. Attach permissions to roles (role default set)
+  // 3. Attach permissions to roles (role default set). Additive-only: grant
+  // any missing defaults, but never disconnect links — an admin may have
+  // granted extra permissions through the Roles UI, and re-seeding must not
+  // silently revoke them.
   for (const def of ROLE_DEFINITIONS) {
     const codes = ROLE_PERMISSIONS[def.slug] ?? [];
     const perms = await prisma.permission.findMany({
       where: { code: { in: codes } },
     });
-    await prisma.role.update({
+    const existing = await prisma.role.findUnique({
       where: { slug: def.slug },
-      data: { permissions: { set: perms.map((p) => ({ id: p.id })) } },
+      select: { permissions: { select: { id: true } } },
     });
+    const have = new Set((existing?.permissions ?? []).map((p) => p.id));
+    const missing = perms.filter((p) => !have.has(p.id));
+    if (missing.length > 0) {
+      await prisma.role.update({
+        where: { slug: def.slug },
+        data: { permissions: { connect: missing.map((p) => ({ id: p.id })) } },
+      });
+    }
   }
   console.log("  • role-permission links ensured");
 

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Users, Search, Plus, MoreVertical, Pencil, Trash2, Download } from "lucide-react";
 import { BrandLoader } from "@/components/ui/brand-loader";
 import { Select } from "@/components/ui/select";
@@ -48,7 +49,8 @@ export default function UsersPage() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
-  const [roleFilter, setRoleFilter] = useState("");
+  const [searchParams] = useSearchParams();
+  const [roleFilter, setRoleFilter] = useState(searchParams.get("role") ?? "");
   const [statusFilter, setStatusFilter] = useState("");
   const [loading, setLoading] = useState(true);
   const [roles, setRoles] = useState<RoleOption[]>([]);

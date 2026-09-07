@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { Plus, ChevronDown, ChevronRight, Check, X, Save } from "lucide-react";
 import { BrandLoader } from "@/components/ui/brand-loader";
 import { Modal } from "@/components/ui/modal";
@@ -31,6 +32,8 @@ const PERM_CATEGORY_LABELS: Record<string, string> = {
   insurance: "Insurance",
   document: "Documents",
   report: "Reports",
+  driver: "Drivers",
+  data: "Data Export",
   user: "User Management",
   role: "Roles & Permissions",
   branch: "Branches",
@@ -45,6 +48,7 @@ export default function RolesPage() {
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [editPerms, setEditPerms] = useState<Set<string>>(new Set());
+  const [initialPerms, setInitialPerms] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
 
   const [createOpen, setCreateOpen] = useState(false);
@@ -72,7 +76,9 @@ export default function RolesPage() {
       return;
     }
     setExpanded(role.id);
-    setEditPerms(new Set(role.permissions.map((p) => p.id)));
+    const initial = new Set(role.permissions.map((p) => p.id));
+    setEditPerms(initial);
+    setInitialPerms(new Set(initial));
     setErr(null);
   }
 
@@ -144,6 +150,20 @@ export default function RolesPage() {
     }
   }
 
+  // Effective permissions = explicit DB links ∪ code defaults (what the role
+  // can actually do — mirrors resolveSession server-side).
+  function effectiveCount(role: Role): number {
+    return new Set([...role.permissions.map((p) => p.code), ...role.defaults]).size;
+  }
+
+  function permsDirty(): boolean {
+    if (editPerms.size !== initialPerms.size) return true;
+    for (const id of editPerms) if (!initialPerms.has(id)) return true;
+    return false;
+  }
+
+  const createValid = form.name.trim().length > 0 && form.slug.trim().length > 0;
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -180,8 +200,17 @@ export default function RolesPage() {
                       <p className="mt-0.5 text-xs text-slate-500">{role.description ?? "—"}</p>
                     </div>
                     <div className="flex shrink-0 items-center gap-3 text-xs text-slate-400">
-                      <span>{role.userCount} user(s)</span>
-                      <span>{role.permissions.length} permission(s)</span>
+                      <Link
+                        to={`/admin/users?role=${role.slug}`}
+                        onClick={(e) => e.stopPropagation()}
+                        className="hover:text-primary hover:underline"
+                        title={`View users with the ${role.name} role`}
+                      >
+                        {role.userCount} user(s)
+                      </Link>
+                      <span title="Explicit grants plus built-in defaults — what this role can actually do">
+                        {effectiveCount(role)} effective
+                      </span>
                     </div>
                   </button>
 
@@ -232,7 +261,12 @@ export default function RolesPage() {
                     </div>
 
                     <div className="mt-4 flex items-center gap-3 border-t border-slate-100 pt-4">
-                      <button className="btn-primary text-xs" onClick={() => savePermissions(role.id)} disabled={busy}>
+                      <button
+                        className="btn-primary text-xs"
+                        onClick={() => savePermissions(role.id)}
+                        disabled={busy || !permsDirty()}
+                        title={permsDirty() ? "Save permission changes" : "No changes to save"}
+                      >
                         <Save className="mr-1 h-3.5 w-3.5" /> {busy ? "Saving…" : "Save Permissions"}
                       </button>
                       {role.userCount === 0 && role.slug !== "system_admin" && (
@@ -260,7 +294,14 @@ export default function RolesPage() {
         size="md"
         footer={
           <><button className="btn-outline" onClick={() => setCreateOpen(false)} disabled={busy}>Cancel</button>
-          <button className="btn-primary" onClick={doCreate} disabled={busy}>Create Role</button></>
+          <button
+            className="btn-primary"
+            onClick={doCreate}
+            disabled={busy || !createValid}
+            title={createValid ? "Create role" : "Name and slug are required"}
+          >
+            Create Role
+          </button></>
         }
       >
         <div className="space-y-4">

@@ -49,7 +49,10 @@ router.post(
       return res.status(422).json({ error: "Name and slug are required" });
     }
     try {
-      const role = await createRole(body);
+      const role = await createRole(body, {
+        userId: req.session!.userId,
+        req,
+      });
       res.status(201).json({ role });
     } catch (e: any) {
       if (e?.code === "P2002") {
@@ -66,11 +69,18 @@ router.patch(
   async (req, res) => {
     const body = req.body ?? {};
     try {
-      const role = await updateRole(req.params.id, body);
+      const role = await updateRole(
+        req.params.id,
+        body,
+        { userId: req.session!.userId, req }
+      );
       res.json({ role });
     } catch (e: any) {
       if (e?.code === "P2002") {
         return res.status(409).json({ error: "A role with this name already exists" });
+      }
+      if (typeof e?.message === "string" && e.message.startsWith("Cannot save:")) {
+        return res.status(422).json({ error: e.message });
       }
       throw e;
     }
@@ -82,7 +92,10 @@ router.delete(
   requireAuth(PERMISSIONS.ROLE_MANAGE),
   async (req, res) => {
     try {
-      await deleteRole(req.params.id);
+      await deleteRole(req.params.id, {
+        userId: req.session!.userId,
+        req,
+      });
       res.json({ ok: true });
     } catch (e: any) {
       if (e.message?.includes("Cannot delete")) {

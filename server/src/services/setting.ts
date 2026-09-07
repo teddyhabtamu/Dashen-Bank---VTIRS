@@ -103,9 +103,11 @@ export async function seedDefaultSettings() {
   ];
 
   for (const d of defaults) {
+    // Create-only: re-running must never overwrite values an admin changed
+    // through the Settings UI (reminder windows, company name, ...).
     await prisma.setting.upsert({
       where: { key: d.key },
-      update: { value: d.value, label: d.label, group: d.group },
+      update: {},
       create: d,
     });
   }
