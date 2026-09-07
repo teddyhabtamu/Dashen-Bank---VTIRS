@@ -350,7 +350,7 @@ export default function DocumentsPage() {
               <Inbox className="h-3.5 w-3.5" /> Trash
             </button>
           </div>
-          {docs.length > 0 && !loading && (
+          {docs.length > 0 && !loading && can(PERMISSIONS.DATA_EXPORT) && (
             <Dropdown align="right"
               trigger={({ toggle }) => (<Tooltip content="Export"><button onClick={toggle} className="btn-outline text-xs"><Download className="h-3.5 w-3.5" /> Export</button></Tooltip>)}
               items={[
