@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { History, ChevronDown, ChevronRight, Search, Download } from "lucide-react";
 import { BrandLoader } from "@/components/ui/brand-loader";
 import { useBrand } from "@/lib/brand-context";
@@ -129,8 +129,10 @@ export default function AuditLogsPage() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
+  const [searchParams] = useSearchParams();
   const [action, setAction] = useState("");
-  const [entity, setEntity] = useState("");
+  // Deep-linkable entity filter (e.g. /audit?entity=Setting from System Settings).
+  const [entity, setEntity] = useState(() => searchParams.get("entity") ?? "");
   const [search, setSearch] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
@@ -318,7 +320,9 @@ export default function AuditLogsPage() {
             onChange={(v) => { setEntity(v); setPage(1); }}
             options={[
               { value: "", label: "All Entities" },
-              ...entities.map((e) => ({ value: e, label: e })),
+              // The deep-linked entity may predate the server's distinct list
+              // (or the list may have failed to load) — always offer it.
+              ...Array.from(new Set([...entities, ...(entity ? [entity] : [])])).map((e) => ({ value: e, label: e })),
             ]}
           />
         </div>
