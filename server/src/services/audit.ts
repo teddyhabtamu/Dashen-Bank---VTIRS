@@ -24,19 +24,22 @@ export async function listAuditLogs({
   if (action) where.action = action;
   if (entity) where.entity = entity;
   if (search) {
+    // Case-insensitive like every other list endpoint — "abebe" must match "Abebe".
+    const q = { contains: search, mode: "insensitive" as const };
     where.OR = [
-      { action: { contains: search } },
-      { entity: { contains: search } },
-      { user: { fullName: { contains: search } } },
-      { user: { username: { contains: search } } },
-      { vehicle: { plateNumber: { contains: search } } },
-      { vehicle: { vehicleCode: { contains: search } } },
+      { action: q },
+      { entity: q },
+      { user: { fullName: q } },
+      { user: { username: q } },
+      { vehicle: { plateNumber: q } },
+      { vehicle: { vehicleCode: q } },
     ];
   }
   if (from || to) {
     where.createdAt = {};
     if (from) where.createdAt.gte = new Date(from);
-    if (to) where.createdAt.lte = new Date(to);
+    // `to` is a calendar date: include the whole day, not just its midnight.
+    if (to) where.createdAt.lte = new Date(to + "T23:59:59.999Z");
   }
 
   const [items, total] = await Promise.all([
@@ -47,7 +50,7 @@ export async function listAuditLogs({
       take: ps,
       include: {
         user: { select: { fullName: true, username: true } },
-        vehicle: { select: { plateNumber: true, vehicleCode: true } },
+        vehicle: { select: { id: true, plateNumber: true, vehicleCode: true } },
       },
     }),
     prisma.auditLog.count({ where }),
@@ -59,6 +62,7 @@ export async function listAuditLogs({
       action: a.action,
       entity: a.entity,
       entityId: a.entityId,
+      vehicleId: a.vehicle?.id ?? null,
       vehicleCode: a.vehicle?.vehicleCode ?? null,
       plateNumber: a.vehicle?.plateNumber ?? null,
       user: a.user?.fullName ?? a.user?.username ?? "System",

@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { History, ChevronDown, ChevronRight, Search, Download } from "lucide-react";
 import { BrandLoader } from "@/components/ui/brand-loader";
 import { useBrand } from "@/lib/brand-context";
 import { Select } from "@/components/ui/select";
 import { DatePicker } from "@/components/ui/datepicker";
-import { formatDateTime } from "@/lib/format";
+import { formatDateTime, formatRelative } from "@/lib/format";
 import { exportCsv, exportXlsx, exportPdf, rowsToHtmlTable, downloadServerCsv, reportFilename, type ExportMeta } from "@/lib/export";
 import { Dropdown } from "@/components/ui/dropdown";
 import { Tooltip } from "@/components/ui/tooltip";
@@ -17,6 +18,7 @@ interface AuditRow {
   action: string;
   entity: string;
   entityId: string | null;
+  vehicleId: string | null;
   vehicleCode: string | null;
   plateNumber: string | null;
   user: string;
@@ -35,13 +37,94 @@ const ACTION_COLORS: Record<string, string> = {
   RENEW: "bg-cyan-100 text-cyan-700",
   SUSPEND: "bg-orange-100 text-orange-700",
   UPLOAD: "bg-indigo-100 text-indigo-700",
+  RETURN: "bg-teal-100 text-teal-700",
+  ASSIGN: "bg-sky-100 text-sky-700",
+  ARCHIVE: "bg-stone-100 text-stone-600",
+  RESTORE_TRASH: "bg-lime-100 text-lime-700",
+  PURGE: "bg-red-100 text-red-700",
+  EXPORT: "bg-violet-100 text-violet-700",
+  ACCOUNT_LOCKED: "bg-red-100 text-red-700",
+  CANCELLED: "bg-slate-200 text-slate-600",
 };
+
+function fmtDiffVal(v: unknown): string {
+  if (v === null || v === undefined) return "—";
+  if (typeof v === "object") return JSON.stringify(v, null, 2);
+  return String(v);
+}
+
+// Field-level before→after rendering: changed fields highlighted, unchanged
+// collapsed behind a toggle — far easier to review than two raw JSON blobs.
+function DiffView({ row }: { row: AuditRow }) {
+  const [showAll, setShowAll] = useState(false);
+  const oldObj = row.oldValue && typeof row.oldValue === "object" ? (row.oldValue as Record<string, unknown>) : null;
+  const newObj = row.newValue && typeof row.newValue === "object" ? (row.newValue as Record<string, unknown>) : null;
+
+  if (!oldObj && !newObj) {
+    return (
+      <div className="space-y-2">
+        {row.entityId && (
+          <div className="text-xs text-slate-400">Record ID: <span className="font-mono text-slate-600">{row.entityId}</span></div>
+        )}
+        <p className="text-xs text-slate-400">No field details recorded for this event.</p>
+      </div>
+    );
+  }
+
+  const keys = Array.from(new Set([...Object.keys(oldObj ?? {}), ...Object.keys(newObj ?? {})])).sort();
+  const entries = keys.map((key) => ({
+    key,
+    from: oldObj?.[key],
+    to: newObj?.[key],
+    changed: JSON.stringify(oldObj?.[key] ?? null) !== JSON.stringify(newObj?.[key] ?? null),
+  }));
+  const changed = entries.filter((e) => e.changed);
+  const visible = showAll ? entries : changed;
+
+  return (
+    <div className="space-y-2">
+      {row.entityId && (
+        <div className="text-xs text-slate-400">Record ID: <span className="font-mono text-slate-600">{row.entityId}</span></div>
+      )}
+      {changed.length === 0 ? (
+        <p className="text-xs text-slate-400">No field changes recorded.</p>
+      ) : (
+        <>
+          <ul className="space-y-1.5">
+            {visible.map((e) => (
+              <li
+                key={e.key}
+                className={`rounded-lg border px-3 py-2 ${e.changed ? "border-amber-200 bg-amber-50/60" : "border-slate-100 bg-white"}`}
+              >
+                <div className="font-mono text-xs font-medium text-slate-700">{e.key}</div>
+                <div className="mt-1 grid gap-1 sm:grid-cols-2">
+                  <div className="rounded bg-white/70 px-2 py-1 font-mono text-xs">
+                    <span className="mb-0.5 block font-sans text-[10px] font-medium uppercase tracking-wide text-slate-400">Before</span>
+                    <span className={e.changed ? "text-red-600" : "text-slate-500"}>{fmtDiffVal(e.from)}</span>
+                  </div>
+                  <div className="rounded bg-white/70 px-2 py-1 font-mono text-xs">
+                    <span className="mb-0.5 block font-sans text-[10px] font-medium uppercase tracking-wide text-slate-400">After</span>
+                    <span className={e.changed ? "text-emerald-700" : "text-slate-500"}>{fmtDiffVal(e.to)}</span>
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+          {entries.length > changed.length && (
+            <button onClick={() => setShowAll((s) => !s)} className="text-xs font-medium text-primary hover:underline">
+              {showAll ? "Hide unchanged fields" : `Show ${entries.length - changed.length} unchanged field(s)`}
+            </button>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
 
 export default function AuditLogsPage() {
   const { companyName } = useBrand();
   const { toast } = useToast();
-  const { can } = useAuth();
-  const { user } = useAuth();
+  const { can, user } = useAuth();
   const [rows, setRows] = useState<AuditRow[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -52,6 +135,7 @@ export default function AuditLogsPage() {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [actions, setActions] = useState<string[]>([]);
   const [entities, setEntities] = useState<string[]>([]);
@@ -63,6 +147,7 @@ export default function AuditLogsPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
+    setError(null);
     const qs = new URLSearchParams();
     qs.set("page", String(page));
     if (action) qs.set("action", action);
@@ -70,12 +155,21 @@ export default function AuditLogsPage() {
     if (search) qs.set("search", search);
     if (from) qs.set("from", from);
     if (to) qs.set("to", to);
-    const res = await fetch(`/api/audit?${qs.toString()}`);
-    const data = await res.json();
-    setRows(data.items ?? []);
-    setTotal(data.total ?? 0);
-    if (data.pageSize) setPageSize(data.pageSize);
-    setLoading(false);
+    try {
+      const res = await fetch(`/api/audit?${qs.toString()}`);
+      if (!res.ok) throw new Error(`Request failed (${res.status})`);
+      const data = await res.json();
+      setRows(data.items ?? []);
+      setTotal(data.total ?? 0);
+      if (data.pageSize) setPageSize(data.pageSize);
+    } catch (e) {
+      // A compliance surface must never report "nothing happened" when it
+      // actually failed to look.
+      setError(e instanceof Error ? e.message : "Failed to load audit logs");
+      setRows([]);
+    } finally {
+      setLoading(false);
+    }
   }, [page, action, entity, search, from, to]);
 
   useEffect(() => { load(); }, [load]);
@@ -247,7 +341,14 @@ export default function AuditLogsPage() {
       </div>
 
       <div className="card overflow-hidden">
-        {loading ? (
+        {error ? (
+          <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">
+            <History className="h-10 w-10 text-red-300" />
+            <h3 className="text-base font-semibold text-slate-700">Couldn't load audit logs</h3>
+            <p className="text-sm text-slate-400">{error}</p>
+            <button className="btn-outline mt-1" onClick={() => load()}>Try again</button>
+          </div>
+        ) : loading ? (
           <BrandLoader />
         ) : rows.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
@@ -295,32 +396,25 @@ export default function AuditLogsPage() {
                     <td className="px-3 py-2.5 font-medium text-slate-700">{row.entity}</td>
                     <td className="px-3 py-2.5 text-slate-600">
                       {row.plateNumber || row.vehicleCode ? (
-                        <span className="font-mono text-xs">{row.plateNumber ?? row.vehicleCode}</span>
+                        row.vehicleId ? (
+                          <Link to={`/vehicles/${row.vehicleId}`} className="font-mono text-xs text-blue-600 hover:underline">
+                            {row.plateNumber ?? row.vehicleCode}
+                          </Link>
+                        ) : (
+                          <span className="font-mono text-xs">{row.plateNumber ?? row.vehicleCode}</span>
+                        )
                       ) : (
                         <span className="text-slate-400">—</span>
                       )}
                     </td>
                     <td className="px-3 py-2.5 text-slate-600">{row.user}</td>
                     <td className="px-3 py-2.5 font-mono text-xs text-slate-400">{row.ipAddress ?? "—"}</td>
-                    <td className="px-3 py-2.5 text-right text-xs text-slate-500">{formatDateTime(row.createdAt)}</td>
+                    <td className="px-3 py-2.5 text-right text-xs text-slate-500" title={formatDateTime(row.createdAt)}>{formatRelative(row.createdAt)}</td>
                   </tr>
                   {open && (
                     <tr className="bg-slate-50">
                       <td colSpan={7} className="px-4 py-3">
-                        <div className="grid gap-4 sm:grid-cols-2">
-                          <div>
-                            <h4 className="mb-1 text-xs font-semibold text-slate-500">Previous Value</h4>
-                            <pre className="max-h-48 overflow-auto rounded bg-white p-2 font-mono text-xs text-slate-700">
-                              {row.oldValue ? JSON.stringify(row.oldValue, null, 2) : "—"}
-                            </pre>
-                          </div>
-                          <div>
-                            <h4 className="mb-1 text-xs font-semibold text-slate-500">New Value</h4>
-                            <pre className="max-h-48 overflow-auto rounded bg-white p-2 font-mono text-xs text-slate-700">
-                              {row.newValue ? JSON.stringify(row.newValue, null, 2) : "—"}
-                            </pre>
-                          </div>
-                        </div>
+                        <DiffView row={row} />
                         {row.userAgent && (
                           <p className="mt-2 text-xs text-slate-400">User-Agent: {row.userAgent}</p>
                         )}
@@ -340,16 +434,26 @@ export default function AuditLogsPage() {
             const hasDiff = !!(row.oldValue || row.newValue);
             const open = expanded.has(row.id);
             return (
-              <div key={row.id} className="space-y-2 px-4 py-3 text-sm">
-                <div className="flex items-start justify-between gap-2">
-                  <span className={`badge ${ACTION_COLORS[row.action] ?? "bg-slate-100 text-slate-600"}`}>{row.action}</span>
-                  <span className="whitespace-nowrap text-xs text-slate-400">{formatDateTime(row.createdAt)}</span>
-                </div>
-                <div className="grid grid-cols-2 gap-1 text-xs">
-                  <span className="text-slate-500">Entity:</span>
-                  <span className="text-slate-700">{row.entity}</span>
-                  <span className="text-slate-500">Vehicle:</span>
-                  <span className="text-slate-700">{row.plateNumber ?? row.vehicleCode ?? "—"}</span>
+                <div key={row.id} className="space-y-2 px-4 py-3 text-sm">
+                  <div className="flex items-start justify-between gap-2">
+                    <span className={`badge ${ACTION_COLORS[row.action] ?? "bg-slate-100 text-slate-600"}`}>{row.action}</span>
+                    <span className="whitespace-nowrap text-xs text-slate-400" title={formatDateTime(row.createdAt)}>{formatRelative(row.createdAt)}</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-1 text-xs">
+                    <span className="text-slate-500">Entity:</span>
+                    <span className="text-slate-700">{row.entity}</span>
+                    <span className="text-slate-500">Vehicle:</span>
+                    <span className="text-slate-700">
+                      {row.plateNumber || row.vehicleCode ? (
+                        row.vehicleId ? (
+                          <Link to={`/vehicles/${row.vehicleId}`} className="font-mono text-blue-600 hover:underline">
+                            {row.plateNumber ?? row.vehicleCode}
+                          </Link>
+                        ) : (
+                          <span className="font-mono">{row.plateNumber ?? row.vehicleCode}</span>
+                        )
+                      ) : "—"}
+                    </span>
                   <span className="text-slate-500">User:</span>
                   <span className="text-slate-700">{row.user}</span>
                   <span className="text-slate-500">IP:</span>
@@ -363,18 +467,7 @@ export default function AuditLogsPage() {
                     </button>
                     {open && (
                       <div className="grid gap-3 rounded-lg bg-slate-100 p-3">
-                        <div>
-                          <h4 className="mb-1 text-xs font-semibold text-slate-500">Previous Value</h4>
-                          <pre className="max-h-48 overflow-auto rounded bg-white p-2 font-mono text-xs text-slate-700">
-                            {row.oldValue ? JSON.stringify(row.oldValue, null, 2) : "—"}
-                          </pre>
-                        </div>
-                        <div>
-                          <h4 className="mb-1 text-xs font-semibold text-slate-500">New Value</h4>
-                          <pre className="max-h-48 overflow-auto rounded bg-white p-2 font-mono text-xs text-slate-700">
-                            {row.newValue ? JSON.stringify(row.newValue, null, 2) : "—"}
-                          </pre>
-                        </div>
+                        <DiffView row={row} />
                         {row.userAgent && (
                           <p className="text-xs text-slate-400">User-Agent: {row.userAgent}</p>
                         )}
@@ -391,6 +484,7 @@ export default function AuditLogsPage() {
             <span className="text-sm font-medium text-slate-600">{total} log(s)</span>
             <span className="text-xs text-slate-400">Page {page} / {totalPages}</span>
             <div className="flex gap-2">
+              <button className="btn-outline px-3 py-1" onClick={() => load()} title="Refresh the log">Refresh</button>
               <button className="btn-outline px-3 py-1" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Prev</button>
               <button className="btn-outline px-3 py-1" disabled={page >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>Next</button>
             </div>
