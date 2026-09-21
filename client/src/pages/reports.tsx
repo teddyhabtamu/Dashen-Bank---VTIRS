@@ -1,6 +1,15 @@
-import { useEffect, useState } from "react";
+import React, { Suspense, useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import ReactECharts from "echarts-for-react";
+// Same deferral as dashboard: keep the page shell instant, stream charts in.
+const ReactECharts = React.lazy(() => import("echarts-for-react"));
+
+function LazyChart({ option, height = 360 }: { option: any; height?: number }) {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center text-sm text-slate-400" style={{ height }}>Loading chart…</div>}>
+      <ReactECharts option={option} style={{ height }} />
+    </Suspense>
+  );
+}
 import { Download, CalendarRange, Car, Building2, Users, Clock, TrendingUp, CalendarClock, ShieldCheck, ClipboardList, FileCheck, DollarSign, BarChart3, type LucideIcon } from "lucide-react";
 import { Select } from "@/components/ui/select";
 import { DatePicker } from "@/components/ui/datepicker";
@@ -488,7 +497,7 @@ function PieChart({ rows, nameKey, valueKey }: any) {
       data: rows.map((r: any, i: number) => ({ name: r[nameKey], value: r[valueKey], itemStyle: { color: PALETTE[i % PALETTE.length] } })),
     }],
   };
-  return <ReactECharts option={option} style={{ height: 360 }} />;
+  return <LazyChart option={option} />;
 }
 
 function BarChart({ rows, nameKey, valueKey, horizontal }: any) {
@@ -506,7 +515,7 @@ function BarChart({ rows, nameKey, valueKey, horizontal }: any) {
       : { type: "value" },
     series: [{ type: "bar", data: vals, itemStyle: { color: "#273274", borderRadius: 4 }, barWidth: "55%" }],
   };
-  return <ReactECharts option={option} style={{ height: 360 }} />;
+  return <LazyChart option={option} />;
 }
 
 function CostReport({ data }: { data: { summary: { total: number; average: number; count: number }; top: any[]; byBranch?: any[] } }) {
@@ -624,7 +633,7 @@ function AcquisitionReport({ data }: { data: { summary: { total: number; withAcq
       {data.trend.length === 0 ? <Empty /> : (
         <div>
           <h3 className="mb-2 text-sm font-semibold text-slate-700">Vehicles by Acquisition Year</h3>
-          <ReactECharts option={option} style={{ height: 360 }} />
+          <LazyChart option={option} />
         </div>
       )}
     </div>

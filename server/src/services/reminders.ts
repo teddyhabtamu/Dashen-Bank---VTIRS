@@ -10,12 +10,20 @@ export const DEFAULT_REMINDER_WINDOWS: ReminderWindows = [90, 60, 30, 7];
 
 // Windows ordered as [w90, w60, w30, w7]. If any configured value is missing /
 // invalid we fall back to the corresponding default so bad settings never
-// produce NaN buckets.
+// produce NaN buckets. All four reads run in parallel — sequential awaits
+// here cost 4x round-trips on every dashboard load (this fn is called by
+// KPIs, upcoming lists, and the route itself).
 export async function getReminderWindows(): Promise<ReminderWindows> {
-  const w90 = Number(await getSetting("reminder_days_90", "90")) || 90;
-  const w60 = Number(await getSetting("reminder_days_60", "60")) || 60;
-  const w30 = Number(await getSetting("reminder_days_30", "30")) || 30;
-  const w7 = Number(await getSetting("reminder_days_7", "7")) || 7;
+  const [r90, r60, r30, r7] = await Promise.all([
+    getSetting("reminder_days_90", "90"),
+    getSetting("reminder_days_60", "60"),
+    getSetting("reminder_days_30", "30"),
+    getSetting("reminder_days_7", "7"),
+  ]);
+  const w90 = Number(r90) || 90;
+  const w60 = Number(r60) || 60;
+  const w30 = Number(r30) || 30;
+  const w7 = Number(r7) || 7;
   return [w90, w60, w30, w7];
 }
 

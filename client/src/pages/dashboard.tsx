@@ -1,6 +1,9 @@
-import { useCallback, useEffect, useState } from "react";
+import React, { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import ReactECharts from "echarts-for-react";
+// Defer the 1.1MB echarts bundle until the charts actually render: the
+// dashboard is the landing page, so eager echarts blocked first paint for
+// every login. Lazy + Suspense keeps KPIs/lists instant while charts stream in.
+const ReactECharts = React.lazy(() => import("echarts-for-react"));
 import {
   Car, ClipboardList, ShieldCheck, ShieldAlert, AlertTriangle, ChevronRight, CalendarClock,
   Activity, Gauge, MapPin, Wrench, Ban, Archive, History, RefreshCw, ArrowRight, AlertOctagon,
@@ -381,5 +384,16 @@ export default function DashboardPage() {
 
 function distCharts(rows: DistPoint[], build: (d: DistPoint[]) => any) {
   if (!rows?.length) return <div className="py-10 text-center text-sm text-slate-400">No data.</div>;
-  return <ReactECharts option={build(rows)} style={{ height: 280 }} />;
+  // Memoize the option per data reference so chart instances aren't rebuilt
+  // on unrelated re-renders (e.g. the refresh button toggling state).
+  return <MemoChart rows={rows} build={build} />;
+}
+
+function MemoChart({ rows, build }: { rows: DistPoint[]; build: (d: DistPoint[]) => any }) {
+  const option = useMemo(() => build(rows), [rows, build]);
+  return (
+    <Suspense fallback={<div className="flex h-[280px] items-center justify-center text-sm text-slate-400">Loading chart…</div>}>
+      <ReactECharts option={option} style={{ height: 280 }} />
+    </Suspense>
+  );
 }

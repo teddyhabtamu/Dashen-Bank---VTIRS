@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useDebouncedValue } from "@/lib/use-debounced-value";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { FileText, Search, MoreVertical, Eye, Download, Pencil, Trash2, RotateCcw, Trash, Inbox, X, AlertOctagon, Check } from "lucide-react";
 import { Select } from "@/components/ui/select";
@@ -45,6 +46,7 @@ export default function DocumentsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebouncedValue(search, 350);
   const [cat, setCat] = useState("");
   const [kind, setKind] = useState<"" | "document" | "image">("");
   const [expiry, setExpiry] = useState<"" | "expired" | "expiring" | "valid">("");
@@ -81,7 +83,7 @@ export default function DocumentsPage() {
     const qs = new URLSearchParams();
     qs.set("page", String(page));
     qs.set("pageSize", String(pageSize));
-    if (search) qs.set("search", search);
+    if (debouncedSearch) qs.set("search", debouncedSearch);
     if (cat) qs.set("category", cat);
     if (kind) qs.set("kind", kind);
     if (expiry) qs.set("expiry", expiry);
@@ -101,7 +103,7 @@ export default function DocumentsPage() {
     } finally {
       setLoading(false);
     }
-  }, [view, search, cat, kind, expiry, branchId, vehicleFilter, page, pageSize]);
+  }, [view, debouncedSearch, cat, kind, expiry, branchId, vehicleFilter, page, pageSize]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -276,7 +278,7 @@ export default function DocumentsPage() {
     const allRows: Doc[] = [];
     const qs = new URLSearchParams();
     qs.set("pageSize", "100");
-    if (search) qs.set("search", search);
+    if (debouncedSearch) qs.set("search", debouncedSearch);
     if (cat) qs.set("category", cat);
     if (kind) qs.set("kind", kind);
     if (expiry) qs.set("expiry", expiry);

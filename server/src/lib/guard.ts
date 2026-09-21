@@ -25,10 +25,24 @@ async function readSession(req: Request): Promise<SessionPayload | null> {
 // makes permission/role/status changes take effect immediately without waiting
 // for a token to expire.
 async function resolveSession(userId: string): Promise<SessionPayload | null> {
+  // Slim select: auth runs on every API request, so avoid pulling full user
+  // rows, password hashes, and timestamps — only the fields needed to build
+  // the session payload.
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    include: {
-      role: { include: { permissions: true } },
+    select: {
+      id: true,
+      username: true,
+      fullName: true,
+      status: true,
+      branchId: true,
+      role: {
+        select: {
+          slug: true,
+          name: true,
+          permissions: { select: { code: true } },
+        },
+      },
       branch: { select: { id: true, name: true } },
     },
   });

@@ -35,17 +35,19 @@ router.get("/", requireAuth(), async (req, res) => {
   // every number down to zero while claiming otherwise.
   const scopeBranchId = scopeBranch ? scopeBranch.id : undefined;
 
-  const [kpis, registrations, insurances, distributions, activity, windows] =
+  // Fetch windows once and share with every sub-query: each helper used to
+  // call getReminderWindows() itself (4 sequential settings batches per
+  // dashboard load). Passing the same tuple down keeps tiles, KPIs and lists
+  // consistent and cuts settings round-trips to one batch.
+  const windows = await getReminderWindows();
+
+  const [kpis, registrations, insurances, distributions, activity] =
     await Promise.all([
-      getDashboardKpis(scopeBranchId),
-      getUpcomingRegistrations(undefined, 8, scopeBranchId),
-      getUpcomingInsurances(undefined, 8, scopeBranchId),
+      getDashboardKpis(scopeBranchId, windows),
+      getUpcomingRegistrations(undefined, 8, scopeBranchId, windows),
+      getUpcomingInsurances(undefined, 8, scopeBranchId, windows),
       getVehicleDistributions(scopeBranchId),
       canSeeActivity ? getRecentActivity(8, true, scopeBranchId) : Promise.resolve([]),
-      // Surface the configured windows so the client tiles never drift from
-      // the admin settings (a hardcoded client list showed empty buckets
-      // whenever the admin changed a window).
-      getReminderWindows(),
     ]);
   res.json({
     kpis, registrations, insurances, distributions, activity, windows,

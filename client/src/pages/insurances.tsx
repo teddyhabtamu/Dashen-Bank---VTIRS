@@ -1,6 +1,7 @@
 
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useCallback, useEffect, useState } from "react";
+import { useDebouncedValue } from "@/lib/use-debounced-value";
 import { Download, Plus, Search, ShieldCheck, MoreVertical, CalendarRange, Pencil, Trash2, RefreshCcw, History, X, AlertOctagon } from "lucide-react";
 import { BrandLoader } from "@/components/ui/brand-loader";
 import { Dropdown } from "@/components/ui/dropdown";
@@ -46,6 +47,7 @@ export default function InsurancesPage() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState(searchParams.get("search") ?? "");
+  const debouncedSearch = useDebouncedValue(search, 350);
   const [coverage, setCoverage] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
@@ -88,7 +90,7 @@ export default function InsurancesPage() {
     setError(null);
     const qs = new URLSearchParams();
     qs.set("page", String(page));
-    if (search) qs.set("search", search);
+    if (debouncedSearch) qs.set("search", debouncedSearch);
     if (coverage) qs.set("coverage", coverage);
     if (status) qs.set("status", status);
     if (from) qs.set("from", from);
@@ -109,7 +111,7 @@ export default function InsurancesPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, search, coverage, from, to, expiringWithin, vehicleFilter, branchId, status]);
+  }, [page, debouncedSearch, coverage, from, to, expiringWithin, vehicleFilter, branchId, status]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -312,7 +314,7 @@ export default function InsurancesPage() {
     const allRows: InsRow[] = [];
     const qs = new URLSearchParams();
     qs.set("pageSize", "1000");
-    if (search) qs.set("search", search);
+    if (debouncedSearch) qs.set("search", debouncedSearch);
     if (coverage) qs.set("coverage", coverage);
     if (status) qs.set("status", status);
     if (from) qs.set("from", from);

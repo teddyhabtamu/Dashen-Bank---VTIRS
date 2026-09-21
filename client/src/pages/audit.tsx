@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
+import { useDebouncedValue } from "@/lib/use-debounced-value";
 import { Link, useSearchParams } from "react-router-dom";
 import { History, ChevronDown, ChevronRight, Search, Download } from "lucide-react";
 import { BrandLoader } from "@/components/ui/brand-loader";
@@ -134,6 +135,7 @@ export default function AuditLogsPage() {
   // Deep-linkable entity filter (e.g. /audit?entity=Setting from System Settings).
   const [entity, setEntity] = useState(() => searchParams.get("entity") ?? "");
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebouncedValue(search, 350);
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [loading, setLoading] = useState(true);
@@ -154,7 +156,7 @@ export default function AuditLogsPage() {
     qs.set("page", String(page));
     if (action) qs.set("action", action);
     if (entity) qs.set("entity", entity);
-    if (search) qs.set("search", search);
+    if (debouncedSearch) qs.set("search", debouncedSearch);
     if (from) qs.set("from", from);
     if (to) qs.set("to", to);
     try {
@@ -172,7 +174,7 @@ export default function AuditLogsPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, action, entity, search, from, to]);
+  }, [page, action, entity, debouncedSearch, from, to]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -234,7 +236,7 @@ export default function AuditLogsPage() {
     qs.set("pageSize", "1000");
     if (action) qs.set("action", action);
     if (entity) qs.set("entity", entity);
-    if (search) qs.set("search", search);
+    if (debouncedSearch) qs.set("search", debouncedSearch);
     if (from) qs.set("from", from);
     if (to) qs.set("to", to);
     try {

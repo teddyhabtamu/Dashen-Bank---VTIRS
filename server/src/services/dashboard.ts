@@ -1,6 +1,6 @@
 import { prisma } from "../lib/prisma.js";
 import { REGISTRATION_STATUS, INSURANCE_STATUS, label } from "../lib/constants.js";
-import { daysUntil, getReminderWindows } from "./reminders.js";
+import { daysUntil, getReminderWindows, type ReminderWindows } from "./reminders.js";
 
 export interface DashboardKpis {
   totalVehicles: number;
@@ -60,9 +60,18 @@ export function invalidateDashboardCache(): void {
   windowListsCache.clear();
 }
 
-export async function getUpcomingRegistrations(_withinDays?: number, limit = 8, branchId?: string) {
-  const [w90] = await getReminderWindows();
+export async function getUpcomingRegistrations(_withinDays?: number, limit = 8, branchId?: string, windows?: ReminderWindows) {
+  const w90 = windows?.[0] ?? (await getReminderWindows())[0];
   const withinDays = _withinDays ?? w90;
+  const cacheKey = `upcoming-reg:${branchId ?? "all"}:${withinDays}:${limit}`;
+  const cached = cacheGet(windowListsCache, cacheKey, CACHE_TTL_MS);
+  if (cached) return cached as Awaited<ReturnType<typeof fetchUpcomingRegistrations>>;
+  const value = await fetchUpcomingRegistrations(withinDays, limit, branchId);
+  cacheSet(windowListsCache, cacheKey, value);
+  return value;
+}
+
+async function fetchUpcomingRegistrations(withinDays: number, limit: number, branchId?: string) {
   const horizon = new Date(Date.now() + withinDays * 24 * 60 * 60 * 1000);
   const rows = await prisma.vehicleRegistration.findMany({
     where: {
@@ -86,9 +95,18 @@ export async function getUpcomingRegistrations(_withinDays?: number, limit = 8, 
   }));
 }
 
-export async function getUpcomingInsurances(_withinDays?: number, limit = 8, branchId?: string) {
-  const [w90] = await getReminderWindows();
+export async function getUpcomingInsurances(_withinDays?: number, limit = 8, branchId?: string, windows?: ReminderWindows) {
+  const w90 = windows?.[0] ?? (await getReminderWindows())[0];
   const withinDays = _withinDays ?? w90;
+  const cacheKey = `upcoming-ins:${branchId ?? "all"}:${withinDays}:${limit}`;
+  const cached = cacheGet(windowListsCache, cacheKey, CACHE_TTL_MS);
+  if (cached) return cached as Awaited<ReturnType<typeof fetchUpcomingInsurances>>;
+  const value = await fetchUpcomingInsurances(withinDays, limit, branchId);
+  cacheSet(windowListsCache, cacheKey, value);
+  return value;
+}
+
+async function fetchUpcomingInsurances(withinDays: number, limit: number, branchId?: string) {
   const horizon = new Date(Date.now() + withinDays * 24 * 60 * 60 * 1000);
   const rows = await prisma.vehicleInsurance.findMany({
     where: {
@@ -111,6 +129,15 @@ export async function getUpcomingInsurances(_withinDays?: number, limit = 8, bra
 }
 
 export async function getVehicleDistributions(branchId?: string) {
+  const cacheKey = `dist:${branchId ?? "all"}`;
+  const cached = cacheGet(windowListsCache, cacheKey, CACHE_TTL_MS);
+  if (cached) return cached as Awaited<ReturnType<typeof fetchVehicleDistributions>>;
+  const value = await fetchVehicleDistributions(branchId);
+  cacheSet(windowListsCache, cacheKey, value);
+  return value;
+}
+
+async function fetchVehicleDistributions(branchId?: string) {
   const scoped = branchId ? { branchId } : {};
   const [byType, byStatus, byBranch, byMake, byYear, byFuel] = await Promise.all([
     prisma.vehicle.groupBy({ by: ["type"], where: scoped, _count: { _all: true } }),
@@ -154,7 +181,7 @@ export async function getRecentActivity(limit = 8, includeVehicle = false, branc
   }));
 }
 
-export async function getDashboardKpis(branchId?: string): Promise<DashboardKpis> {
+export async function getDashboardKpis(branchId?: string, windowsOverride?: ReminderWindows): Promise<DashboardKpis> {
   // Cache key includes the scope — a branch view must never serve (or be
   // served) the org-wide numbers.
   const cached = cacheGet(kpiCache, branchId ? `kpis:${branchId}` : "kpis", CACHE_TTL_MS);
@@ -190,8 +217,9 @@ export async function getDashboardKpis(branchId?: string): Promise<DashboardKpis
 
   // All four window counts run in parallel with everything else (they used to
   // be a sequential for-loop after the main batch — the slowest part of the
-  // endpoint).
-  const windows = await getReminderWindows();
+  // endpoint). The route fetches windows once and passes them down so a single
+  // dashboard load does 1 settings batch instead of 4.
+  const windows = windowsOverride ?? (await getReminderWindows());
 
   const windowCount = (days: number, kind: "reg" | "ins") => {
     const to = new Date(Date.now() + days * 24 * 60 * 60 * 1000);

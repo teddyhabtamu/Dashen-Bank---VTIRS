@@ -2,7 +2,12 @@ import fs from "node:fs";
 import path from "node:path";
 import { PrismaClient } from "@prisma/client";
 
+const localEnvPath = path.resolve(process.cwd(), ".env");
 const rootEnvPath = path.resolve(process.cwd(), "..", ".env.local");
+// Same precedence as index.ts: server/.env first, root .env.local fills gaps.
+if (fs.existsSync(localEnvPath)) {
+  process.loadEnvFile(localEnvPath);
+}
 if (fs.existsSync(rootEnvPath)) {
   process.loadEnvFile(rootEnvPath);
 }

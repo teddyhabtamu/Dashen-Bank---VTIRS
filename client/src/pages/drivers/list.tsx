@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useDebouncedValue } from "@/lib/use-debounced-value";
 import { Link, useNavigate } from "react-router-dom";
 import { Users, Search, Plus, MoreVertical, Pencil, Trash2, Download, UserRound, X, AlertOctagon } from "lucide-react";
 import { BrandLoader } from "@/components/ui/brand-loader";
@@ -62,6 +63,7 @@ export default function DriversPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebouncedValue(search, 350);
   const [deptFilter, setDeptFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [branchFilter, setBranchFilter] = useState("");
@@ -105,7 +107,7 @@ export default function DriversPage() {
     const qs = new URLSearchParams();
     qs.set("page", String(page));
     qs.set("pageSize", String(pageSize));
-    if (search) qs.set("search", search);
+    if (debouncedSearch) qs.set("search", debouncedSearch);
     if (deptFilter) qs.set("departmentId", deptFilter);
     if (statusFilter) qs.set("status", statusFilter);
     if (branchFilter) qs.set("branchId", branchFilter);
@@ -124,7 +126,7 @@ export default function DriversPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, search, deptFilter, statusFilter, branchFilter, unassignedOnly, licenseFilter]);
+  }, [page, pageSize, debouncedSearch, deptFilter, statusFilter, branchFilter, unassignedOnly, licenseFilter]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -182,7 +184,7 @@ export default function DriversPage() {
     const allRows: DriverRow[] = [];
     const qs = new URLSearchParams();
     qs.set("pageSize", "1000");
-    if (search) qs.set("search", search);
+    if (debouncedSearch) qs.set("search", debouncedSearch);
     if (deptFilter) qs.set("departmentId", deptFilter);
     if (statusFilter) qs.set("status", statusFilter);
     if (branchFilter) qs.set("branchId", branchFilter);

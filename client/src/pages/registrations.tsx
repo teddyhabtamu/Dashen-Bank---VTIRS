@@ -1,5 +1,6 @@
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useCallback, useEffect, useState } from "react";
+import { useDebouncedValue } from "@/lib/use-debounced-value";
 import { Plus, Search, MoreVertical, History, RotateCcw, AlertCircle, Archive, RefreshCw, Download, ClipboardList, Pencil, Play, Trash2, X, AlertOctagon } from "lucide-react";
 import { StatusBadge } from "@/components/ui/badge";
 import { BrandLoader } from "@/components/ui/brand-loader";
@@ -42,6 +43,9 @@ export default function RegistrationsPage() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState(searchParams.get("search") ?? "");
+  // Debounced so typing doesn't fire a request per keystroke (see
+  // lib/use-debounced-value.ts). Input stays instant; only the query waits.
+  const debouncedSearch = useDebouncedValue(search, 350);
   const [status, setStatus] = useState(searchParams.get("status") ?? CURRENT);
   // Deep-link window from the dashboard (?expiringWithin=30). Persisted so the
   // user's own filter clicks don't fight the incoming link.
@@ -89,7 +93,7 @@ export default function RegistrationsPage() {
     setError(null);
     const qs = new URLSearchParams();
     qs.set("page", String(page));
-    if (search) qs.set("search", search);
+    if (debouncedSearch) qs.set("search", debouncedSearch);
     if (status) qs.set("status", status);
     if (expiringWithin) qs.set("expiringWithin", expiringWithin);
     if (vehicleFilter) qs.set("vehicleId", vehicleFilter);
@@ -107,7 +111,7 @@ export default function RegistrationsPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, search, status, expiringWithin, vehicleFilter, branchId]);
+  }, [page, debouncedSearch, status, expiringWithin, vehicleFilter, branchId]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -351,7 +355,7 @@ export default function RegistrationsPage() {
     const allRows: RegRow[] = [];
     const qs = new URLSearchParams();
     qs.set("pageSize", "1000");
-    if (search) qs.set("search", search);
+    if (debouncedSearch) qs.set("search", debouncedSearch);
     if (status) qs.set("status", status);
     if (expiringWithin) qs.set("expiringWithin", expiringWithin);
     if (vehicleFilter) qs.set("vehicleId", vehicleFilter);

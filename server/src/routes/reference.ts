@@ -7,6 +7,22 @@ import { ETHIOPIAN_PHONE_PATTERN } from "../validation/driver.js";
 
 const router = Router();
 
+// Short-lived in-process cache for the lookups payload (see GET /lookups).
+const LOOKUPS_TTL_MS = 60_000;
+let lookupsCache: { at: number; value: unknown } | null = null;
+
+function invalidateLookupsCache(): void {
+  lookupsCache = null;
+}
+
+// Any mutation in this router may change the lookups payload — drop the
+// cached copy up front so the next GET rebuilds it. Clearing on failed
+// requests too is harmless (just one extra rebuild).
+router.use((req, _res, next) => {
+  if (req.method !== "GET") invalidateLookupsCache();
+  next();
+});
+
 // ── Branches ──────────────────────────────────────────────────────
 
 router.get(
@@ -248,24 +264,37 @@ router.get(
   "/lookups",
   requireAuth(PERMISSIONS.VEHICLE_VIEW),
   async (_req, res) => {
+    // Lookups are read on nearly every page mount (registry filters, search,
+    // vehicle form). Cache the assembled payload for 60s — reference data
+    // changes via admin actions, so brief staleness is acceptable and saves
+    // 6 parallel queries per mount.
+    const now = Date.now();
+    const cached = lookupsCache;
+    if (cached && now - cached.at < LOOKUPS_TTL_MS) {
+      res.set("Cache-Control", "private, max-age=30");
+      return res.json(cached.value);
+    }
     const [branches, departments, drivers, manufacturers, types, categories] =
       await Promise.all([
         prisma.branch.findMany({
           where: { isActive: true },
           orderBy: { name: "asc" },
+          select: { id: true, name: true },
         }),
         prisma.department.findMany({
           where: { isActive: true },
           orderBy: { name: "asc" },
+          select: { id: true, name: true },
         }),
         prisma.driver.findMany({
           where: { isActive: true },
           orderBy: { fullName: "asc" },
-          include: { _count: { select: { vehicles: true } } },
+          select: { id: true, fullName: true, phone: true, _count: { select: { vehicles: true } } },
         }),
         prisma.manufacturer.findMany({
           where: { isActive: true },
           orderBy: { name: "asc" },
+          select: { id: true, name: true },
         }),
         prisma.vehicle.findMany({
           select: { type: true },
@@ -279,7 +308,7 @@ router.get(
         }),
       ]);
 
-    res.json({
+    const payload = {
       branches: branches.map((b) => ({ value: b.id, label: b.name })),
       departments: departments.map((d) => ({ value: d.id, label: d.name })),
       drivers: drivers.map((d) => ({ value: d.id, label: d.fullName, phone: d.phone, occupied: d._count.vehicles > 0 })),
@@ -289,7 +318,10 @@ router.get(
         value: c.category,
         label: c.category,
       })),
-    });
+    };
+    lookupsCache = { at: now, value: payload };
+    res.set("Cache-Control", "private, max-age=30");
+    res.json(payload);
   }
 );
 

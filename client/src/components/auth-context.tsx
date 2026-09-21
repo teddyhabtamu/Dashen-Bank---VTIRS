@@ -48,15 +48,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     refresh();
   }, []);
 
-  // Periodically validate the session to catch expired JWTs.
+  // Periodically validate the session to catch expired JWTs. 60s (was 30s)
+  // halves background auth load; hidden tabs skip the check entirely.
   useEffect(() => {
     const interval = setInterval(async () => {
+      if (document.visibilityState === "hidden") return;
       const res = await fetch("/api/auth/me");
       if (!res.ok && window.location.pathname !== "/login") {
         setUser(null);
         window.location.href = "/login";
       }
-    }, 30_000);
+    }, 60_000);
     return () => clearInterval(interval);
   }, []);
 

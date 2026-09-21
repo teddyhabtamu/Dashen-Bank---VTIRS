@@ -16,6 +16,7 @@ import { prisma } from "../lib/prisma.js";
 const router = Router();
 
 // Public endpoint — no auth required. Returns branding info used by the UI.
+// Short cache: fetched on every app boot and by the search page.
 router.get("/public", async (_req, res) => {
   const [companyName, systemName, defaultOwnerName, reminderWindows] = await Promise.all([
     getSetting("company_name", "Dashen Bank"),
@@ -23,6 +24,7 @@ router.get("/public", async (_req, res) => {
     getSetting("default_owner_name", "Dashen Bank"),
     getReminderWindows(),
   ]);
+  res.set("Cache-Control", "public, max-age=60");
   res.json({
     companyName,
     systemName,

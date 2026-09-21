@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useDebouncedValue } from "@/lib/use-debounced-value";
 import { useSearchParams } from "react-router-dom";
 import { Users, Search, Plus, MoreVertical, Pencil, Trash2, Download } from "lucide-react";
 import { BrandLoader } from "@/components/ui/brand-loader";
@@ -49,6 +50,7 @@ export default function UsersPage() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebouncedValue(search, 350);
   const [searchParams] = useSearchParams();
   const [roleFilter, setRoleFilter] = useState(searchParams.get("role") ?? "");
   const [statusFilter, setStatusFilter] = useState("");
@@ -86,7 +88,7 @@ export default function UsersPage() {
     setLoading(true);
     const qs = new URLSearchParams();
     qs.set("page", String(page));
-    if (search) qs.set("search", search);
+    if (debouncedSearch) qs.set("search", debouncedSearch);
     if (roleFilter) qs.set("role", roleFilter);
     if (statusFilter) qs.set("status", statusFilter);
     const res = await fetch(`/api/users?${qs.toString()}`);
@@ -95,7 +97,7 @@ export default function UsersPage() {
     setTotal(data.total ?? 0);
     if (data.pageSize) setPageSize(data.pageSize);
     setLoading(false);
-  }, [page, search, roleFilter, statusFilter]);
+  }, [page, debouncedSearch, roleFilter, statusFilter]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -158,7 +160,7 @@ export default function UsersPage() {
     const allRows: typeof rows = [];
     const qs = new URLSearchParams();
     qs.set("pageSize", "1000");
-    if (search) qs.set("search", search);
+    if (debouncedSearch) qs.set("search", debouncedSearch);
     if (roleFilter) qs.set("role", roleFilter);
     if (statusFilter) qs.set("status", statusFilter);
     try {

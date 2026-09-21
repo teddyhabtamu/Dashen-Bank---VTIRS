@@ -1,5 +1,6 @@
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { useDebouncedValue } from "@/lib/use-debounced-value";
 import { Plus, Search, Car, Eye, Pencil, Trash2, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, MoreVertical, Download, X, ArrowRight } from "lucide-react";
 import { Tooltip } from "@/components/ui/tooltip";
 import { StatusBadge } from "@/components/ui/badge";
@@ -73,6 +74,10 @@ export function VehicleTable() {
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Debounce free-text search: without this every keystroke fired a full
+  // registry request + full-page loader. The input stays instant; only the
+  // query waits for a pause.
+  const debouncedSearch = useDebouncedValue(search, 350);
   const [driverDetail, setDriverDetail] = useState<DriverRef | (DriverRef & { licenseNo?: string | null; phone?: string | null; department?: { name: string } | null }) | null>(null);
   const [driverLoading, setDriverLoading] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -109,7 +114,7 @@ export function VehicleTable() {
     const qs = new URLSearchParams();
     qs.set("page", String(page));
     qs.set("pageSize", String(pageSize));
-    if (search) qs.set("search", search);
+    if (debouncedSearch) qs.set("search", debouncedSearch);
     if (status) qs.set("status", status);
     if (branchId) qs.set("branchId", branchId);
     if (type) qs.set("type", type);
@@ -127,14 +132,15 @@ export function VehicleTable() {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, search, status, branchId, type, year, sortBy, sortDir]);
+  }, [page, pageSize, debouncedSearch, status, branchId, type, year, sortBy, sortDir]);
 
   useEffect(() => { load(); }, [load]);
 
   // Selection hygiene: filters, sorting and pagination all change which rows
   // the ids refer to — drop the selection so bulk actions can never target
-  // rows the user cannot currently see.
-  useEffect(() => { setSelectedIds(new Set()); }, [search, status, branchId, type, year, sortBy, sortDir, page, pageSize]);
+  // rows the user cannot currently see. Uses the debounced query so typing
+  // doesn't wipe the selection on every keystroke.
+  useEffect(() => { setSelectedIds(new Set()); }, [debouncedSearch, status, branchId, type, year, sortBy, sortDir, page, pageSize]);
 
   useEffect(() => { localStorage.setItem("vtirs:vehicles:pageSize", String(pageSize)); }, [pageSize]);
 
@@ -266,7 +272,7 @@ export function VehicleTable() {
   // block and the PDF cover strip instead of living only on screen.
   function buildExportMeta(scope: string): ExportMeta {
     const parts: string[] = [];
-    if (search) parts.push(`Search: "${search}"`);
+    if (debouncedSearch) parts.push(`Search: "${debouncedSearch}"`);
     if (status) parts.push(`Status: ${label(status)}`);
     if (branchId) parts.push(`Branch: ${branches.find((b) => b.value === branchId)?.label ?? branchId}`);
     if (type) parts.push(`Type: ${type}`);
@@ -296,7 +302,7 @@ export function VehicleTable() {
   // also enforces branch scoping. Excel/PDF stay client-side (presentation).
   async function exportServerCsv() {
     const r = await downloadServerCsv("vehicles", {
-      search: search || undefined,
+      search: debouncedSearch || undefined,
       status: status || undefined,
       branchId: branchId || undefined,
       type: type || undefined,
@@ -312,7 +318,7 @@ export function VehicleTable() {
     const allRows: VehicleRow[] = [];
     const qs = new URLSearchParams();
     qs.set("pageSize", "1000");
-    if (search) qs.set("search", search);
+    if (debouncedSearch) qs.set("search", debouncedSearch);
     if (status) qs.set("status", status);
     if (branchId) qs.set("branchId", branchId);
     if (type) qs.set("type", type);
@@ -512,7 +518,7 @@ export function VehicleTable() {
           <p className="text-sm text-slate-400">{error}</p>
           <button className="btn-outline mt-1" onClick={() => load()}>Try again</button>
         </div>
-      ) : loading ? (
+      ) : loading && rows.length === 0 ? (
         <BrandLoader className="py-20" />
       ) : rows.length === 0 ? (
         <div className="card flex flex-col items-center justify-center py-16 text-center">
@@ -675,6 +681,12 @@ export function VehicleTable() {
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-4 py-3 text-sm text-slate-500">
             <div className="flex items-center gap-3">
               <span>{total} vehicle(s){hasFilters ? ` · filtered from registry` : ""}</span>
+              {loading && (
+                <span className="inline-flex items-center gap-1.5 text-xs text-slate-400" aria-live="polite">
+                  <span className="h-3 w-3 animate-spin rounded-full border-2 border-slate-300 border-t-primary" />
+                  Updating…
+                </span>
+              )}
               <span className="hidden items-center gap-1.5 sm:flex">
                 Rows per page
                 <Select

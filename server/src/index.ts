@@ -10,6 +10,14 @@ import path from "node:path";
 import fs from "node:fs";
 
 const rootEnvPath = path.resolve(process.cwd(), "..", ".env.local");
+const localEnvPath = path.resolve(process.cwd(), ".env");
+// Load server/.env first so local dev config (docker Postgres, JWT secret,
+// CLIENT_ORIGIN) takes precedence; root .env.local (Neon-managed) only fills
+// gaps such as AWS storage keys. loadEnvFile never overrides existing vars,
+// so real environment values (Render/production) always win over both files.
+if (fs.existsSync(localEnvPath)) {
+  process.loadEnvFile(localEnvPath);
+}
 if (fs.existsSync(rootEnvPath)) {
   process.loadEnvFile(rootEnvPath);
 }

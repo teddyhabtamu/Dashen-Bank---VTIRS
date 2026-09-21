@@ -67,17 +67,21 @@ export function Topbar({
       })?.[1] ??
     systemName;
 
+  // Unread badge: poll on a fixed interval only. The old [pathname] dep
+  // refetched on every navigation (each doing auth + count queries), and
+  // skipped fetch when the tab is hidden to avoid waking the API pointlessly.
   useEffect(() => {
     function fetchUnread() {
+      if (document.visibilityState === "hidden") return;
       fetch("/api/notifications/unread-count")
         .then((r) => r.json())
         .then((d) => setUnread(d.count ?? 0))
         .catch(() => {});
     }
     fetchUnread();
-    const id = setInterval(fetchUnread, 30_000);
+    const id = setInterval(fetchUnread, 60_000);
     return () => clearInterval(id);
-  }, [pathname]);
+  }, []);
 
   useEffect(() => {
     if (!panelOpen) return;
@@ -88,7 +92,7 @@ export function Topbar({
         .catch(() => {});
     }
     fetchNotifs();
-    const id = setInterval(fetchNotifs, 15_000);
+    const id = setInterval(fetchNotifs, 30_000);
     return () => clearInterval(id);
   }, [panelOpen]);
 

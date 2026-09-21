@@ -75,17 +75,75 @@ router.get("/years", requireAuth(PERMISSIONS.VEHICLE_VIEW), async (_req, res) =>
 router.get("/:id", requireAuth(PERMISSIONS.VEHICLE_VIEW), async (req, res) => {
   const vehicle = await prisma.vehicle.findUnique({
     where: { id: req.params.id },
-    include: {
-      branch: true,
-      department: true,
-      currentDriver: true,
+    // Slim selects + bounded takes: the old `branch: true / currentDriver: true`
+    // pulled entire rows, and documents/images/assignments were unbounded —
+    // a vehicle with hundreds of files produced a multi-MB payload that
+    // blocked first paint of the detail page.
+    select: {
+      id: true,
+      vehicleCode: true,
+      plateNumber: true,
+      prevPlateNo: true,
+      category: true,
+      type: true,
+      make: true,
+      model: true,
+      trim: true,
+      year: true,
+      color: true,
+      engineNo: true,
+      chassisNo: true,
+      engineCC: true,
+      fuelType: true,
+      transmission: true,
+      driveType: true,
+      odometer: true,
+      ownerName: true,
+      departmentId: true,
+      branchId: true,
+      currentDriverId: true,
+      acquisitionDate: true,
+      purchaseCost: true,
+      supplier: true,
+      status: true,
+      createdAt: true,
+      updatedAt: true,
+      branch: { select: { id: true, code: true, name: true, region: true, address: true } },
+      department: { select: { id: true, code: true, name: true } },
+      currentDriver: { select: { id: true, fullName: true, employeeId: true, licenseNo: true, phone: true, isActive: true } },
       registrations: { orderBy: { createdAt: "desc" }, take: 5 },
       insurances: { orderBy: { endDate: "desc" }, take: 5 },
-      documents: { where: { deletedAt: null }, orderBy: { createdAt: "desc" }, include: { uploadedBy: { select: { fullName: true } } } },
-      images: { where: { deletedAt: null }, orderBy: { createdAt: "desc" }, include: { uploadedBy: { select: { fullName: true } } } },
+      documents: {
+        where: { deletedAt: null },
+        orderBy: { createdAt: "desc" },
+        take: 100,
+        select: {
+          id: true, vehicleId: true, category: true, title: true, fileName: true,
+          originalName: true, mimeType: true, sizeBytes: true, version: true,
+          createdAt: true, expiresAt: true,
+          uploadedBy: { select: { fullName: true } },
+        },
+      },
+      images: {
+        where: { deletedAt: null },
+        orderBy: { createdAt: "desc" },
+        take: 50,
+        select: {
+          id: true, vehicleId: true, category: true, fileName: true,
+          originalName: true, mimeType: true, sizeBytes: true, version: true,
+          createdAt: true,
+          uploadedBy: { select: { fullName: true } },
+        },
+      },
       assignments: {
         orderBy: { assignedAt: "desc" },
-        include: { driver: true, branch: true },
+        take: 50,
+        select: {
+          id: true, vehicleId: true, driverId: true, branchId: true,
+          assignedAt: true, returnedAt: true, note: true,
+          driver: { select: { id: true, fullName: true, employeeId: true } },
+          branch: { select: { id: true, name: true } },
+        },
       },
     },
   });
