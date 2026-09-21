@@ -230,8 +230,14 @@ export async function autoTransitionVehicleStatus(): Promise<{ transitioned: num
 // vehicle deletion cascades DB rows without touching storage — this sweep is the
 // safety net for anything the app misses. It never touches keys that still exist
 // in the DB. Returns the number of stale objects removed.
-export async function sweepOrphanStorage(): Promise<{ removed: number; examined: number }> {
-  if (!storageEnabled()) return { removed: 0, examined: 0 };
+//
+// SAFETY: deletes are opt-in via STORAGE_SWEEP_ENABLED=true. Without it the
+// sweep only logs what it WOULD delete (dry-run). This exists because the
+// comparison is only valid when the app is connected to the database that owns
+// the bucket — a server wired to the wrong/empty database would otherwise
+// classify every live object as an orphan and empty the whole bucket.
+export async function sweepOrphanStorage(): Promise<{ removed: number; examined: number; dryRun: boolean }> {
+  if (!storageEnabled()) return { removed: 0, examined: 0, dryRun: false };
 
   const [stored, docPaths, imgPaths] = await Promise.all([
     listObjects(),
@@ -241,6 +247,32 @@ export async function sweepOrphanStorage(): Promise<{ removed: number; examined:
 
   const known = new Set(docPaths.map((d) => d.path).concat(imgPaths.map((i) => i.path)));
   const orphans = stored.objects.filter((key) => !known.has(key));
-  if (orphans.length > 0) await deleteFiles(orphans);
-  return { removed: orphans.length, examined: stored.objects.length };
+
+  // The database holds zero file references but the bucket is non-empty: the
+  // app is almost certainly pointed at the wrong database (e.g. a fresh local
+  // DB with production storage credentials). Deleting here would wipe live
+  // files, so abort loudly instead.
+  if (known.size === 0 && stored.objects.length > 0) {
+    console.warn(
+      `[storage-sweep] ABORTED: database references 0 files but bucket holds ${stored.objects.length} object(s). ` +
+        `Refusing to delete — the app is likely connected to the wrong database.`
+    );
+    return { removed: 0, examined: stored.objects.length, dryRun: true };
+  }
+
+  if (process.env.STORAGE_SWEEP_ENABLED !== "true") {
+    if (orphans.length > 0) {
+      console.warn(
+        `[storage-sweep] dry-run: would delete ${orphans.length} orphan(s) of ${stored.objects.length} examined. ` +
+          `Set STORAGE_SWEEP_ENABLED=true to enable deletions.`
+      );
+    }
+    return { removed: 0, examined: stored.objects.length, dryRun: true };
+  }
+
+  if (orphans.length > 0) {
+    console.warn(`[storage-sweep] deleting ${orphans.length} orphan(s) of ${stored.objects.length} examined.`);
+    await deleteFiles(orphans);
+  }
+  return { removed: orphans.length, examined: stored.objects.length, dryRun: false };
 }

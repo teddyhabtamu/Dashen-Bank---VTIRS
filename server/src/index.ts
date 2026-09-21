@@ -102,6 +102,21 @@ app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
 app.listen(PORT, () => {
   console.log(`VTIRS API listening on http://localhost:${PORT}`);
 
+  // Production must persist uploads in object storage: without S3 credentials
+  // files land on the host's ephemeral disk and vanish on the next deploy
+  // (Render has no persistent disk configured). Fail obvious, not silent.
+  if (process.env.NODE_ENV === "production") {
+    import("./lib/storage.js").then(({ storageEnabled }) => {
+      if (!storageEnabled()) {
+        console.warn(
+          "[storage] WARNING: running in production WITHOUT object storage — " +
+            "uploads will be written to the ephemeral disk and LOST on redeploy. " +
+            "Set AWS_ENDPOINT_URL_S3, AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY."
+        );
+      }
+    }).catch(() => undefined);
+  }
+
   // Run once on startup to catch anything missed while the app was down.
   runScheduledJob("registration-transition", () => autoTransitionRegistrations().then(() => undefined));
   runScheduledJob("vehicle-status-transition", () => autoTransitionVehicleStatus().then(() => undefined));

@@ -29,5 +29,10 @@ services:
         value: us-east-2
       - key: STORAGE_BUCKET
         value: documents
+      # Opt-in to DELETING unreferenced blobs in the nightly orphan sweep.
+      # Leave unset/false until the DB/bucket pairing is verified — otherwise
+      # the sweep only logs. See sweepOrphanStorage().
+      - key: STORAGE_SWEEP_ENABLED
+        sync: false
       - key: UPLOAD_DIR
         value: /var/data/uploads

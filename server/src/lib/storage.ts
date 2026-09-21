@@ -38,6 +38,11 @@ function s3() {
 }
 
 export function storageEnabled() {
+  // STORAGE_MODE=local forces local-disk storage even when S3 credentials are
+  // present (local dev .env files inherit Neon AWS keys from the root
+  // .env.local — without this kill-switch a local server would read/write
+  // the PRODUCTION bucket).
+  if (process.env.STORAGE_MODE === "local") return false;
   return s3() !== null;
 }
 
